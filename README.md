@@ -6,6 +6,8 @@ Roll previous Ashes squads, lock one player at a time into your XI, then simulat
 
 ## Run locally
 
+Last updated for the Ashes XI test-match simulation.
+
 Serve the `site/` directory with any static server:
 
 ```bash
