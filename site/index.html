@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ashes XI</title>
+    <meta
+      name="description"
+      content="Roll previous Ashes squads, build a Test XI, and simulate a series against an all-star XI."
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <script type="module" src="./app.js"></script>
+  </head>
+  <body>
+    <div class="background glow-a"></div>
+    <div class="background glow-b"></div>
+
+    <main class="shell">
+      <section class="view home-view" data-home-view>
+        <header class="hero">
+          <div>
+            <p class="eyebrow">Ashes XI</p>
+            <h1>Roll an Ashes squad. Lock one player. Build your Test XI.</h1>
+            <p class="lede">
+              Each roll gives you a previous Ashes squad. Pick one player from the squad, place
+              them into the right role, and keep going until your eleven is complete.
+            </p>
+          </div>
+          <div class="hero-card">
+            <div class="stat">
+              <span>Sample squads</span>
+              <strong data-total-squads>0</strong>
+            </div>
+            <div class="stat">
+              <span>Sample players</span>
+              <strong data-total-players>0</strong>
+            </div>
+            <div class="stat">
+              <span>Series format</span>
+              <strong>5 Tests</strong>
+            </div>
+          </div>
+        </header>
+
+        <section class="panel config-panel">
+          <div class="panel-header">
+            <div>
+              <p class="panel-kicker">How it works</p>
+              <h2>Cricket version of the squad roller</h2>
+            </div>
+            <p class="panel-subtitle">Example data is included so you can start playing immediately.</p>
+          </div>
+
+          <div class="config-grid">
+            <label class="control">
+              <span>Mode</span>
+              <select data-home-mode>
+                <option value="classic">Classic</option>
+                <option value="memory">Memory</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="rules-grid">
+            <article class="rule-card">
+              <strong>1</strong>
+              <span>Roll a previous Ashes squad.</span>
+            </article>
+            <article class="rule-card">
+              <strong>2</strong>
+              <span>Pick one player and lock them into a valid XI slot.</span>
+            </article>
+            <article class="rule-card">
+              <strong>3</strong>
+              <span>Repeat until your XI is full, then simulate the series.</span>
+            </article>
+          </div>
+
+          <button class="primary play-button" data-play-game type="button">Start rolling</button>
+        </section>
+      </section>
+
+      <section class="view game-view" data-game-view hidden>
+        <header class="topbar">
+          <button class="ghost" data-back-home type="button">Home</button>
+          <div class="meta-badges">
+            <span data-game-squad-count>0 squads</span>
+            <span data-game-player-count>0 players</span>
+            <span data-game-mode>Classic</span>
+          </div>
+        </header>
+
+        <header class="hero hero-game">
+          <div>
+            <p class="eyebrow">XI builder</p>
+            <h1>Roll a squad. Choose one player. Place them in the XI.</h1>
+            <p class="lede">
+              Roles matter. Openers and top-order players fit the top of the card, while pace
+              bowlers, spinners, and all-rounders fill out the lower half of the side.
+            </p>
+          </div>
+          <div class="hero-card">
+            <div class="stat">
+              <span>Current squad</span>
+              <strong data-current-squad>Roll a squad</strong>
+            </div>
+            <div class="stat">
+              <span>XI status</span>
+              <strong data-lineup-status>0 / 11 locked</strong>
+            </div>
+          </div>
+        </header>
+
+        <section class="controls">
+          <button class="primary" data-roll-squad type="button">Roll Ashes squad</button>
+          <button class="secondary" data-start-series type="button" hidden>Simulate the series</button>
+        </section>
+
+        <section class="content">
+          <section class="panel roster-panel">
+            <div class="panel-header">
+              <div>
+                <p class="panel-kicker">Squad pool</p>
+                <h2 data-roster-title>No squad rolled yet</h2>
+              </div>
+              <p class="panel-subtitle" data-roster-summary>Roll a squad to see the players.</p>
+            </div>
+            <div class="roster-grid" data-roster-grid></div>
+          </section>
+
+          <section class="panel board-panel">
+            <div class="panel-header">
+              <div>
+                <p class="panel-kicker">XI board</p>
+                <h2>Your Test side</h2>
+              </div>
+              <p class="panel-subtitle">Click a player first, then click a valid slot.</p>
+            </div>
+            <div class="board" data-board></div>
+          </section>
+        </section>
+      </section>
+
+      <section class="view series-view" data-series-view hidden>
+        <header class="topbar">
+          <button class="ghost" data-back-builder type="button">Back to XI</button>
+          <div class="meta-badges">
+            <span data-series-progress>0 / 5 Tests</span>
+            <span data-series-status>Simulation ready</span>
+          </div>
+        </header>
+
+        <header class="hero hero-series">
+          <div>
+            <p class="eyebrow">Test series</p>
+            <h1>Your XI takes on an all-star Ashes XI.</h1>
+            <p class="lede">
+              The simulator compares your side with the best sample players from the previous
+              Ashes squads and plays through a five-Test series.
+            </p>
+          </div>
+          <div class="hero-card">
+            <div class="stat">
+              <span>Your XI</span>
+              <strong data-series-user-strength>0</strong>
+            </div>
+            <div class="stat">
+              <span>All-star XI</span>
+              <strong data-series-star-strength>0</strong>
+            </div>
+          </div>
+        </header>
+
+        <section class="season-layout">
+          <article class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="panel-kicker">Live feed</p>
+                <h2>Match-by-match results</h2>
+              </div>
+              <p class="panel-subtitle">Each Test appears in order.</p>
+            </div>
+            <div class="feed" data-series-feed></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="panel-kicker">Series table</p>
+                <h2>Final tally</h2>
+              </div>
+              <p class="panel-subtitle">Revealed when the five Tests are done.</p>
+            </div>
+            <div class="table-wrap" data-series-table-wrap>
+              <div class="placeholder">The series table will appear here.</div>
+            </div>
+          </article>
+        </section>
+
+        <section class="panel all-stars-panel">
+          <div class="panel-header">
+            <div>
+              <p class="panel-kicker">Opposition XI</p>
+              <h2>All-star Ashes XI</h2>
+            </div>
+            <p class="panel-subtitle">Built from the strongest players in the sample data.</p>
+          </div>
+          <div class="lineup-list" data-star-lineup></div>
+        </section>
+
+        <section class="panel actions-panel" data-series-actions hidden>
+          <div class="panel-header">
+            <div>
+              <p class="panel-kicker">Series complete</p>
+              <h2>What next?</h2>
+            </div>
+            <p class="panel-subtitle">Play again or go back and rebuild the side.</p>
+          </div>
+          <div class="controls">
+            <button class="primary" data-play-again type="button">Play again</button>
+            <button class="secondary" data-share-result type="button">Share to X</button>
+            <button class="secondary" data-reset-builder type="button">Reset builder</button>
+          </div>
+        </section>
+
+        <section class="panel memory-reveal" data-series-reveal hidden>
+          <div class="panel-header">
+            <div>
+              <p class="panel-kicker">Memory reveal</p>
+              <h2>Your XI</h2>
+            </div>
+            <p class="panel-subtitle">The hidden ratings are shown after the series.</p>
+          </div>
+          <div class="lineup-list" data-series-reveal-grid></div>
+        </section>
+      </section>
+    </main>
+  </body>
+</html>

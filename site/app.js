@@ -1,0 +1,866 @@
+import { ASHES_SQUADS } from "./data/ashes-squads.js";
+
+const XI_SLOTS = [
+  { label: "Opener", accepts: ["Opener", "Top Order", "All-rounder"], focus: "batting", row: 5, col: 2 },
+  { label: "Opener", accepts: ["Opener", "Top Order", "All-rounder"], focus: "batting", row: 5, col: 4 },
+  { label: "#3", accepts: ["Top Order", "Middle Order", "Opener"], focus: "batting", row: 4, col: 3 },
+  { label: "#4", accepts: ["Middle Order", "Top Order", "All-rounder"], focus: "batting", row: 3, col: 2 },
+  { label: "#5", accepts: ["Middle Order", "All-rounder", "Top Order"], focus: "batting", row: 3, col: 4 },
+  { label: "WK", accepts: ["Wicketkeeper"], focus: "fielding", row: 2, col: 3 },
+  { label: "AR", accepts: ["All-rounder", "Middle Order", "Spinner", "Fast Bowler"], focus: "mixed", row: 3, col: 1 },
+  { label: "Spin", accepts: ["Spinner", "All-rounder"], focus: "bowling", row: 2, col: 1 },
+  { label: "Pace", accepts: ["Fast Bowler", "Pace Bowler", "Seam Bowler", "All-rounder"], focus: "bowling", row: 1, col: 1 },
+  { label: "Pace", accepts: ["Fast Bowler", "Pace Bowler", "Seam Bowler", "All-rounder"], focus: "bowling", row: 1, col: 3 },
+  { label: "Pace", accepts: ["Fast Bowler", "Pace Bowler", "Seam Bowler", "All-rounder"], focus: "bowling", row: 1, col: 5 },
+];
+
+const STATE = {
+  view: "home",
+  squads: ASHES_SQUADS,
+  catalog: [],
+  lineup: new Map(),
+  currentSquad: null,
+  selectedPlayerId: null,
+  mode: "classic",
+  series: null,
+  timer: null,
+};
+
+const els = {};
+
+function bindElements() {
+  const selectors = {
+    homeView: "[data-home-view]",
+    gameView: "[data-game-view]",
+    seriesView: "[data-series-view]",
+    totalSquads: "[data-total-squads]",
+    totalPlayers: "[data-total-players]",
+    homeMode: "[data-home-mode]",
+    gameSquadCount: "[data-game-squad-count]",
+    gamePlayerCount: "[data-game-player-count]",
+    gameMode: "[data-game-mode]",
+    currentSquad: "[data-current-squad]",
+    lineupStatus: "[data-lineup-status]",
+    rosterTitle: "[data-roster-title]",
+    rosterSummary: "[data-roster-summary]",
+    rosterGrid: "[data-roster-grid]",
+    board: "[data-board]",
+    rollSquad: "[data-roll-squad]",
+    startSeries: "[data-start-series]",
+    playGame: "[data-play-game]",
+    backHome: "[data-back-home]",
+    backBuilder: "[data-back-builder]",
+    seriesProgress: "[data-series-progress]",
+    seriesStatus: "[data-series-status]",
+    seriesUserStrength: "[data-series-user-strength]",
+    seriesStarStrength: "[data-series-star-strength]",
+    seriesFeed: "[data-series-feed]",
+    seriesTableWrap: "[data-series-table-wrap]",
+    starLineup: "[data-star-lineup]",
+    seriesActions: "[data-series-actions]",
+    seriesReveal: "[data-series-reveal]",
+    seriesRevealGrid: "[data-series-reveal-grid]",
+    playAgain: "[data-play-again]",
+    shareResult: "[data-share-result]",
+    resetBuilder: "[data-reset-builder]",
+  };
+
+  for (const [key, selector] of Object.entries(selectors)) {
+    els[key] = document.querySelector(selector);
+  }
+
+  const missing = Object.entries(els)
+    .filter(([, value]) => !value)
+    .map(([key]) => key);
+
+  if (missing.length) {
+    throw new Error(`Missing required DOM nodes: ${missing.join(", ")}`);
+  }
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function average(values) {
+  if (!values.length) return 0;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function randomChoice(values) {
+  if (!values.length) return null;
+  return values[Math.floor(Math.random() * values.length)];
+}
+
+function shuffle(values) {
+  const copy = [...values];
+  for (let index = copy.length - 1; index > 0; index -= 1) {
+    const swap = Math.floor(Math.random() * (index + 1));
+    [copy[index], copy[swap]] = [copy[swap], copy[index]];
+  }
+  return copy;
+}
+
+function normalizeName(name) {
+  return String(name).trim().toLowerCase();
+}
+
+function addCatalogMetadata() {
+  STATE.catalog = STATE.squads.flatMap((squad) =>
+    squad.players.map((player, index) => ({
+      ...player,
+      id: `${squad.id}:${index}`,
+      squadId: squad.id,
+      squadLabel: squad.label,
+      squadTeam: squad.team,
+      squadYear: squad.year,
+    })),
+  );
+}
+
+function decorateSquad(squad) {
+  return {
+    ...squad,
+    players: squad.players.map((player, index) => ({
+      ...player,
+      id: `${squad.id}:${index}`,
+      squadId: squad.id,
+      squadLabel: squad.label,
+      squadTeam: squad.team,
+      squadYear: squad.year,
+    })),
+  };
+}
+
+function slotAcceptsPlayer(slot, player) {
+  return player.roles.some((role) => slot.accepts.includes(role));
+}
+
+function lineupContainsName(name) {
+  const key = normalizeName(name);
+  return [...STATE.lineup.values()].some((player) => normalizeName(player.name) === key);
+}
+
+function squadHasAvailablePlayer(squad) {
+  return squad.players.some((player) => {
+    if (lineupContainsName(player.name)) return false;
+    return XI_SLOTS.some((slot, index) => !STATE.lineup.has(index) && slotAcceptsPlayer(slot, player));
+  });
+}
+
+function playerCanPlay(player) {
+  if (lineupContainsName(player.name)) return false;
+  return XI_SLOTS.some((slot, index) => !STATE.lineup.has(index) && slotAcceptsPlayer(slot, player));
+}
+
+function seriesComplete() {
+  return Boolean(STATE.series) && STATE.series.revealed >= STATE.series.matches.length;
+}
+
+function ratingLabel(value) {
+  return STATE.mode === "memory" && !seriesComplete() ? "??" : String(value);
+}
+
+function ratingPairLabel(player) {
+  return `Bat ${ratingLabel(player.batting)} / Bowl ${ratingLabel(player.bowling)}`;
+}
+
+function playerOverall(player) {
+  return Math.round(player.batting * 0.4 + player.bowling * 0.3 + player.fielding * 0.2 + player.experience * 0.1);
+}
+
+function playerSlotScore(player, slot) {
+  const roleBonus = slotAcceptsPlayer(slot, player) ? 22 : 0;
+  const batting = player.batting * 0.35;
+  const bowling = player.bowling * 0.35;
+  const fielding = player.fielding * 0.2;
+  const experience = player.experience * 0.1;
+
+  if (slot.focus === "batting") return batting + fielding + experience + roleBonus;
+  if (slot.focus === "bowling") return bowling + fielding + experience + roleBonus;
+  return batting * 0.35 + bowling * 0.35 + fielding * 0.2 + experience * 0.1 + roleBonus;
+}
+
+function lineupScore(lineup) {
+  const batting = average(lineup.slice(0, 7).map((player) => player.batting));
+  const bowling = average(lineup.slice(7).map((player) => player.bowling));
+  const fielding = average(lineup.map((player) => player.fielding));
+  const experience = average(lineup.map((player) => player.experience));
+  return {
+    batting,
+    bowling,
+    fielding,
+    experience,
+    power: batting * 0.48 + bowling * 0.34 + fielding * 0.1 + experience * 0.08,
+  };
+}
+
+function buildLineupFromMap(lineupMap) {
+  return XI_SLOTS.map((_, index) => lineupMap.get(index)).filter(Boolean);
+}
+
+function buildBestLineup(players) {
+  const chosen = new Set();
+  const lineup = new Map();
+
+  XI_SLOTS.forEach((slot, index) => {
+    const pool = players.filter((player) => !chosen.has(player.id) && slotAcceptsPlayer(slot, player));
+    const fallback = pool.length ? pool : players.filter((player) => !chosen.has(player.id));
+    const pick = shuffle(fallback).sort((a, b) => playerSlotScore(b, slot) - playerSlotScore(a, slot))[0] ?? null;
+    if (pick) {
+      lineup.set(index, pick);
+      chosen.add(pick.id);
+    }
+  });
+
+  return buildLineupFromMap(lineup);
+}
+
+function buildAllStarXI() {
+  const byName = new Map();
+  for (const player of STATE.catalog) {
+    const key = normalizeName(player.name);
+    const existing = byName.get(key);
+    if (!existing || playerOverall(player) > playerOverall(existing)) {
+      byName.set(key, player);
+    }
+  }
+
+  const pool = [...byName.values()];
+  const chosen = new Set();
+  const lineup = [];
+
+  XI_SLOTS.forEach((slot) => {
+    const eligible = pool.filter((player) => !chosen.has(player.id) && slotAcceptsPlayer(slot, player));
+    const fallback = eligible.length ? eligible : pool.filter((player) => !chosen.has(player.id));
+    const pick = [...fallback].sort((a, b) => {
+      const scoreDelta = playerSlotScore(b, slot) - playerSlotScore(a, slot);
+      return scoreDelta !== 0 ? scoreDelta : playerOverall(b) - playerOverall(a);
+    })[0];
+    if (pick) {
+      lineup.push(pick);
+      chosen.add(pick.id);
+    }
+  });
+
+  return lineup;
+}
+
+function teamLabelFromSquad(squad) {
+  return `${squad.team} ${squad.year}`;
+}
+
+function currentSquadLabel() {
+  return STATE.currentSquad ? STATE.currentSquad.label : "Roll a squad";
+}
+
+function lineupComplete() {
+  return STATE.lineup.size === XI_SLOTS.length;
+}
+
+function userLineup() {
+  return buildLineupFromMap(STATE.lineup);
+}
+
+function teamStrengthFromLineup(lineup) {
+  return lineupScore(lineup);
+}
+
+function renderStats() {
+  els.totalSquads.textContent = String(STATE.squads.length);
+  els.totalPlayers.textContent = String(STATE.catalog.length);
+  els.gameSquadCount.textContent = `${STATE.squads.length} squads`;
+  els.gamePlayerCount.textContent = `${STATE.catalog.length} players`;
+  els.homeMode.value = STATE.mode;
+}
+
+function renderView() {
+  els.homeView.hidden = STATE.view !== "home";
+  els.gameView.hidden = STATE.view !== "game";
+  els.seriesView.hidden = STATE.view !== "series";
+  document.body.dataset.view = STATE.view;
+}
+
+function renderGameMeta() {
+  els.gameMode.textContent = STATE.mode === "memory" ? "Memory" : "Classic";
+  els.currentSquad.textContent = currentSquadLabel();
+  els.lineupStatus.textContent = `${STATE.lineup.size} / ${XI_SLOTS.length} locked`;
+  els.startSeries.hidden = !lineupComplete() || STATE.view !== "game";
+  els.rollSquad.disabled = STATE.view !== "game" || lineupComplete() || Boolean(STATE.currentSquad);
+}
+
+function renderRoster() {
+  const players = STATE.currentSquad?.players ?? [];
+  const selected = STATE.catalog.find((player) => player.id === STATE.selectedPlayerId) ?? null;
+
+  els.rosterTitle.textContent = STATE.currentSquad ? STATE.currentSquad.label : "No squad rolled yet";
+  if (!STATE.currentSquad) {
+    els.rosterSummary.textContent = lineupComplete()
+      ? "Your XI is complete. Start the series."
+      : STATE.lineup.size
+        ? "A player has been locked. Roll another squad to continue."
+        : "Roll an Ashes squad to begin.";
+  } else if (selected) {
+    els.rosterSummary.textContent = `${selected.name} is selected. Pick a valid slot to lock them in.`;
+  } else {
+    els.rosterSummary.textContent = `${players.length} players available. Click one, then choose a slot.`;
+  }
+
+  if (!players.length) {
+    els.rosterGrid.innerHTML = `
+      <div class="placeholder">
+        ${
+          lineupComplete()
+            ? "XI complete. Simulate the series."
+            : STATE.lineup.size
+              ? "Player locked. Roll another squad."
+              : "Roll a squad to see its players."
+        }
+      </div>
+    `;
+    return;
+  }
+
+  els.rosterGrid.innerHTML = players
+    .map((player) => {
+      const locked = lineupContainsName(player.name);
+      const selectedClass = player.id === STATE.selectedPlayerId ? "selected" : "";
+      const unavailable = locked || !playerCanPlay(player);
+      const subtitle = `${player.roles[0]} · ${ratingPairLabel(player)}`;
+      return `
+        <button
+          class="player-card ${selectedClass} ${unavailable ? "unavailable" : ""}"
+          type="button"
+          data-player-id="${player.id}"
+          ${unavailable ? "disabled" : ""}
+          aria-disabled="${unavailable ? "true" : "false"}"
+        >
+          <span class="player-name">${escapeHtml(player.name)}</span>
+          <span class="player-meta">${escapeHtml(subtitle)}</span>
+        </button>
+      `;
+    })
+    .join("");
+
+  els.rosterGrid.querySelectorAll("[data-player-id]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const playerId = button.dataset.playerId;
+      STATE.selectedPlayerId = STATE.selectedPlayerId === playerId ? null : playerId;
+      renderRoster();
+      renderBoard();
+    });
+  });
+}
+
+function renderBoard() {
+  const selected = STATE.catalog.find((player) => player.id === STATE.selectedPlayerId) ?? null;
+
+  els.board.innerHTML = `
+    <div class="board-grid">
+      ${XI_SLOTS.map((slot, index) => {
+        const player = STATE.lineup.get(index) ?? null;
+        const canAccept = selected ? slotAcceptsPlayer(slot, selected) : false;
+        const canClick = Boolean(selected && canAccept && !player);
+        return `
+          <button
+            class="slot ${player ? "filled" : "empty"} ${canClick ? "target" : ""}"
+            type="button"
+            style="grid-row: ${slot.row}; grid-column: ${slot.col};"
+            data-slot-index="${index}"
+            ${canClick ? "" : "disabled"}
+          >
+            <span class="slot-label">${escapeHtml(slot.label)}</span>
+            ${
+              player
+                ? `<span class="slot-name">${escapeHtml(player.name)}</span><span class="slot-sub">${escapeHtml(player.roles[0])}</span>`
+                : `<span class="slot-sub">${selected ? "Can fit here" : "Waiting for a player"}</span>`
+            }
+          </button>
+        `;
+      }).join("")}
+    </div>
+  `;
+
+  els.board.querySelectorAll("[data-slot-index]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const index = Number(button.dataset.slotIndex);
+      const slot = XI_SLOTS[index];
+      const player = STATE.catalog.find((candidate) => candidate.id === STATE.selectedPlayerId);
+      if (!player || !slot || STATE.lineup.has(index) || !slotAcceptsPlayer(slot, player)) return;
+      if (lineupContainsName(player.name)) return;
+
+      STATE.lineup.set(index, player);
+      STATE.selectedPlayerId = null;
+      STATE.currentSquad = null;
+      renderAll();
+    });
+  });
+}
+
+function renderSeriesSummary() {
+  if (!STATE.series) return;
+  const completed = seriesComplete();
+  els.seriesProgress.textContent = `${STATE.series.revealed} / ${STATE.series.matches.length} Tests`;
+  els.seriesStatus.textContent = completed ? "Series complete" : "Series in progress";
+  els.seriesUserStrength.textContent = String(Math.round(STATE.series.userTeam.power));
+  els.seriesStarStrength.textContent = String(Math.round(STATE.series.starTeam.power));
+  els.seriesActions.hidden = !completed;
+}
+
+function renderSeriesFeed() {
+  if (!STATE.series) return;
+  const visible = STATE.series.matches.slice(0, STATE.series.revealed);
+  els.seriesFeed.innerHTML = visible
+    .map((match) => {
+      const resultClass =
+        match.result === "win" ? "result-win" : match.result === "loss" ? "result-loss" : "result-draw";
+      return `
+        <article class="match-card ${resultClass}">
+          <div class="match-meta">Test ${match.testNumber} · ${match.venue}</div>
+          <div class="match-row">
+            <span class="match-team">Your XI</span>
+            <strong class="match-score">${escapeHtml(match.scoreline)}</strong>
+            <span class="match-team">All-star XI</span>
+          </div>
+          <div class="match-summary">${escapeHtml(match.summary)}</div>
+          <div class="innings-grid">
+            ${match.innings
+              .map(
+                (innings) => `
+                  <div class="innings-chip">
+                    <span>${escapeHtml(innings.label)}</span>
+                    <strong>${escapeHtml(innings.score)}</strong>
+                  </div>
+                `,
+              )
+              .join("")}
+          </div>
+          <div class="box-score">
+            <div class="box-team">
+              <span class="box-heading">Your XI</span>
+              <span>Top bat: ${escapeHtml(match.userBox.batter.name)} ${escapeHtml(String(match.userBox.batter.runs))}</span>
+              <span>Top bowl: ${escapeHtml(match.userBox.bowler.name)} ${escapeHtml(match.userBox.bowler.figures)}</span>
+            </div>
+            <div class="box-team">
+              <span class="box-heading">All-star XI</span>
+              <span>Top bat: ${escapeHtml(match.starBox.batter.name)} ${escapeHtml(String(match.starBox.batter.runs))}</span>
+              <span>Top bowl: ${escapeHtml(match.starBox.bowler.name)} ${escapeHtml(match.starBox.bowler.figures)}</span>
+            </div>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+}
+
+function renderSeriesTable() {
+  if (!STATE.series) return;
+  if (STATE.series.revealed < STATE.series.matches.length) {
+    els.seriesTableWrap.innerHTML = `<div class="placeholder">The table will appear when the series ends.</div>`;
+    return;
+  }
+
+  const { userWins, starWins, draws } = STATE.series;
+  const winner =
+    userWins > starWins ? "Your XI" : starWins > userWins ? "All-star XI" : "Series drawn";
+
+  els.seriesTableWrap.innerHTML = `
+    <table class="series-table">
+      <thead>
+        <tr>
+          <th>Side</th>
+          <th>Won</th>
+          <th>Drawn</th>
+          <th>Lost</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="${winner === "Your XI" ? "highlight" : ""}">
+          <td>Your XI</td>
+          <td>${userWins}</td>
+          <td>${draws}</td>
+          <td>${starWins}</td>
+        </tr>
+        <tr class="${winner === "All-star XI" ? "highlight" : ""}">
+          <td>All-star XI</td>
+          <td>${starWins}</td>
+          <td>${draws}</td>
+          <td>${userWins}</td>
+        </tr>
+      </tbody>
+    </table>
+  `;
+}
+
+function renderStarLineup() {
+  if (!STATE.series) return;
+  const revealRatings = seriesComplete() || STATE.mode !== "memory";
+  els.starLineup.innerHTML = STATE.series.starLineup
+    .map(
+      (player, index) => `
+        <article class="x11-card">
+          <div class="role">${escapeHtml(XI_SLOTS[index].label)}</div>
+          <div class="name">${escapeHtml(player.name)}</div>
+          <div class="rating">Bat ${revealRatings ? player.batting : "??"} / Bowl ${revealRatings ? player.bowling : "??"}</div>
+        </article>
+      `,
+    )
+    .join("");
+}
+
+function renderSeriesReveal() {
+  if (!STATE.series || !els.seriesReveal || !els.seriesRevealGrid) return;
+  const showReveal = STATE.mode === "memory" && seriesComplete();
+  els.seriesReveal.hidden = !showReveal;
+
+  if (!showReveal) {
+    els.seriesRevealGrid.innerHTML = "";
+    return;
+  }
+
+  els.seriesRevealGrid.innerHTML = STATE.series.userLineup
+    .map(
+      (player, index) => `
+        <article class="season-reveal-card">
+          <div class="season-reveal-slot">${escapeHtml(XI_SLOTS[index].label)}</div>
+          <div class="season-reveal-name">${escapeHtml(player.name)}</div>
+          <div class="season-reveal-rating">Bat ${escapeHtml(String(player.batting))} / Bowl ${escapeHtml(String(player.bowling))}</div>
+        </article>
+      `,
+    )
+    .join("");
+}
+
+function renderSeries() {
+  renderSeriesSummary();
+  renderSeriesFeed();
+  renderSeriesTable();
+  renderStarLineup();
+  renderSeriesReveal();
+}
+
+function renderAll() {
+  renderStats();
+  renderView();
+  renderGameMeta();
+  renderRoster();
+  renderBoard();
+  renderSeries();
+}
+
+function rollSquad() {
+  if (STATE.view !== "game" || STATE.currentSquad || lineupComplete()) return;
+  const pool = STATE.squads.filter(squadHasAvailablePlayer);
+  const chosen = randomChoice(pool.length ? pool : STATE.squads);
+  STATE.currentSquad = chosen ? decorateSquad(chosen) : null;
+  STATE.selectedPlayerId = null;
+  renderAll();
+}
+
+function sampleOutcome(userTeam, starTeam) {
+  const edge = userTeam.power - starTeam.power;
+  const drawChance = clamp(0.22 - Math.abs(edge) / 400, 0.08, 0.25);
+  const winChance = (1 - drawChance) * (1 / (1 + Math.exp(-edge / 10)));
+  const roll = Math.random();
+
+  if (roll < winChance) return "win";
+  if (roll < winChance + drawChance) return "draw";
+  return "loss";
+}
+
+function pluralize(value, singular, plural = `${singular}s`) {
+  return value === 1 ? singular : plural;
+}
+
+function resultSummary(result, edge) {
+  if (result === "draw") {
+    return "drawn";
+  }
+
+  const closer = Math.abs(edge) < 3 ? 1 : Math.round(clamp(2 + Math.abs(edge) / 8, 2, 8));
+  const byRuns = Math.random() < 0.55;
+
+  if (result === "win") {
+    return byRuns
+      ? `won by ${Math.max(1, Math.round(16 + closer * 10))} ${pluralize(Math.max(1, Math.round(16 + closer * 10)), "run")}`
+      : `won by ${closer} ${pluralize(closer, "wicket")}`;
+  }
+
+  return byRuns
+    ? `lost by ${Math.max(1, Math.round(16 + closer * 10))} ${pluralize(Math.max(1, Math.round(16 + closer * 10)), "run")}`
+    : `lost by ${closer} ${pluralize(closer, "wicket")}`;
+}
+
+function inningsScoreLabel(innings) {
+  return `${innings.runs}/${innings.wickets}${innings.declared ? "d" : ""}`;
+}
+
+function simulateInnings(lineup, opposition, inningsIndex) {
+  const battingStrength = lineupScore(lineup).batting;
+  const bowlingStrength = lineupScore(opposition).bowling;
+  const phaseModifier = [26, 10, -6, -14][inningsIndex - 1] ?? 0;
+  const rawRuns =
+    165 + battingStrength * 1.9 - bowlingStrength * 1.05 + phaseModifier + (Math.random() - 0.5) * 85;
+  const runs = clamp(Math.round(rawRuns), 60, 560);
+  const wicketPressure = inningsIndex === 4 ? 0.4 : inningsIndex === 3 ? 0.2 : 0;
+  const wickets = clamp(Math.round(10 - runs / 72 + Math.random() * 2.4 + wicketPressure), 0, 10);
+  const declared = inningsIndex === 1 || inningsIndex === 3 ? Math.random() < 0.2 : false;
+  return { runs, wickets, declared };
+}
+
+function teamBattingRanking(lineup, teamEdge = 0) {
+  return [...lineup]
+    .map((player) => {
+      const roleBoost = player.roles.includes("Opener")
+        ? 8
+        : player.roles.includes("Top Order")
+          ? 6
+          : player.roles.includes("Middle Order")
+            ? 3
+            : 0;
+      const noise = Math.random() * 16;
+      return {
+        player,
+        value: player.batting * 1.15 + player.experience * 0.18 + roleBoost + teamEdge * 0.8 + noise,
+      };
+    })
+    .sort((a, b) => b.value - a.value);
+}
+
+function teamBowlingRanking(lineup, teamEdge = 0) {
+  return [...lineup]
+    .map((player) => {
+      const roleBoost = player.roles.includes("Fast Bowler")
+        ? 8
+        : player.roles.includes("Spinner")
+          ? 7
+          : player.roles.includes("All-rounder")
+            ? 4
+            : 0;
+      const noise = Math.random() * 16;
+      return {
+        player,
+        value: player.bowling * 1.2 + player.experience * 0.16 + roleBoost + teamEdge * 0.9 + noise,
+      };
+    })
+    .sort((a, b) => b.value - a.value);
+}
+
+function formatBowlingFigures(player, teamEdge = 0) {
+  const wickets = clamp(Math.round(1 + player.bowling / 18 + Math.random() * 3 + teamEdge / 10), 1, 7);
+  const runs = clamp(Math.round(28 + (100 - player.bowling) * 0.65 + Math.random() * 22 - teamEdge), 18, 180);
+  return `${wickets}/${runs}`;
+}
+
+function simulateBoxScore(lineup, teamEdge = 0) {
+  const batters = teamBattingRanking(lineup, teamEdge);
+  const bowlers = teamBowlingRanking(lineup, teamEdge);
+  const topBatter = batters[0]?.player ?? lineup[0];
+  const topBowler = bowlers[0]?.player ?? lineup[lineup.length - 1];
+
+  return {
+    batter: {
+      name: topBatter?.name ?? "Unknown",
+      runs: clamp(Math.round((topBatter?.batting ?? 50) * 0.85 + Math.random() * 45 + teamEdge * 1.2), 18, 165),
+    },
+    bowler: {
+      name: topBowler?.name ?? "Unknown",
+      figures: formatBowlingFigures(topBowler ?? { bowling: 50 }, teamEdge),
+    },
+  };
+}
+
+function buildSeries() {
+  const userLine = userLineup();
+  const starLine = buildAllStarXI();
+  const userTeam = teamStrengthFromLineup(userLine);
+  const starTeam = teamStrengthFromLineup(starLine);
+  const matches = [];
+  let userWins = 0;
+  let starWins = 0;
+  let draws = 0;
+
+  for (let testNumber = 1; testNumber <= 5; testNumber += 1) {
+    const edge = userTeam.power - starTeam.power;
+    const userInnings1 = simulateInnings(userLine, starLine, 1);
+    const starInnings1 = simulateInnings(starLine, userLine, 2);
+    const userInnings2 = simulateInnings(userLine, starLine, 3);
+    const starInnings2 = simulateInnings(starLine, userLine, 4);
+    const userTotal = userInnings1.runs + userInnings2.runs;
+    const starTotal = starInnings1.runs + starInnings2.runs;
+
+    const margin = userTotal - starTotal;
+    let outcome = "draw";
+    if (!(Math.abs(margin) <= 18 && Math.random() < 0.35)) {
+      if (margin > 0) outcome = "win";
+      if (margin < 0) outcome = "loss";
+    }
+
+    if (outcome === "win") userWins += 1;
+    else if (outcome === "loss") starWins += 1;
+    else draws += 1;
+
+    const userBox = simulateBoxScore(userLine, edge);
+    const starBox = simulateBoxScore(starLine, -edge);
+
+    matches.push({
+      testNumber,
+      venue: testNumber % 2 === 1 ? "Home conditions" : "Balanced conditions",
+      result: outcome,
+      summary: outcome === "draw" ? "drawn" : resultSummary(outcome, edge),
+      innings: [
+        { label: "Your XI 1st inns", score: inningsScoreLabel(userInnings1) },
+        { label: "All-star XI 1st inns", score: inningsScoreLabel(starInnings1) },
+        { label: "Your XI 2nd inns", score: inningsScoreLabel(userInnings2) },
+        { label: "All-star XI 2nd inns", score: inningsScoreLabel(starInnings2) },
+      ],
+      scoreline: `${inningsScoreLabel(userInnings1)} & ${inningsScoreLabel(userInnings2)} | ${inningsScoreLabel(starInnings1)} & ${inningsScoreLabel(starInnings2)}`,
+      userBox,
+      starBox,
+    });
+  }
+
+  return {
+    userLineup: userLine,
+    starLineup: starLine,
+    userTeam,
+    starTeam,
+    matches,
+    revealed: 0,
+    userWins,
+    starWins,
+    draws,
+  };
+}
+
+function clearTimer() {
+  if (STATE.timer) {
+    clearTimeout(STATE.timer);
+    STATE.timer = null;
+  }
+}
+
+function startSeries() {
+  if (!lineupComplete()) return;
+  clearTimer();
+  STATE.series = buildSeries();
+  STATE.view = "series";
+  renderAll();
+  animateSeries();
+}
+
+function animateSeries() {
+  if (!STATE.series) return;
+  clearTimer();
+  STATE.series.revealed = 0;
+  els.seriesFeed.innerHTML = "";
+  els.seriesTableWrap.innerHTML = `<div class="placeholder">The series table will appear when the series ends.</div>`;
+  renderSeries();
+
+  const tick = () => {
+    if (!STATE.series || STATE.view !== "series") return;
+    STATE.series.revealed += 1;
+    renderSeries();
+
+    if (STATE.series.revealed >= STATE.series.matches.length) {
+      clearTimer();
+      renderSeries();
+      return;
+    }
+
+    STATE.timer = setTimeout(tick, 700);
+  };
+
+  STATE.timer = setTimeout(tick, 500);
+}
+
+function goHome() {
+  clearTimer();
+  STATE.view = "home";
+  STATE.lineup.clear();
+  STATE.currentSquad = null;
+  STATE.selectedPlayerId = null;
+  STATE.series = null;
+  renderAll();
+}
+
+function goBuilder() {
+  clearTimer();
+  STATE.view = "game";
+  STATE.series = null;
+  renderAll();
+}
+
+function resetBuilder() {
+  clearTimer();
+  STATE.lineup.clear();
+  STATE.currentSquad = null;
+  STATE.selectedPlayerId = null;
+  STATE.series = null;
+  STATE.view = "game";
+  renderAll();
+}
+
+function wireControls() {
+  els.playGame.addEventListener("click", () => {
+    STATE.view = "game";
+    renderAll();
+  });
+  els.backHome.addEventListener("click", goHome);
+  els.backBuilder.addEventListener("click", goBuilder);
+  els.rollSquad.addEventListener("click", rollSquad);
+  els.startSeries.addEventListener("click", startSeries);
+  els.playAgain.addEventListener("click", goHome);
+  els.shareResult.addEventListener("click", () => {
+    if (!STATE.series) return;
+    window.open(
+      `https://x.com/intent/post?text=${encodeURIComponent(formatShareText())}`,
+      "_blank",
+      "noopener,noreferrer",
+    );
+  });
+  els.resetBuilder.addEventListener("click", resetBuilder);
+
+  els.homeMode.addEventListener("change", () => {
+    STATE.mode = els.homeMode.value === "memory" ? "memory" : "classic";
+    renderAll();
+  });
+}
+
+function shareUrl() {
+  const url = new URL(window.location.href);
+  url.hash = "";
+  return url.toString();
+}
+
+function formatShareText() {
+  if (!STATE.series) {
+    return `I just played Ashes XI. ${shareUrl()}`;
+  }
+
+  const seriesResult =
+    STATE.series.userWins > STATE.series.starWins
+      ? "won"
+      : STATE.series.userWins < STATE.series.starWins
+        ? "lost"
+        : "drew";
+  const modeLabel = STATE.mode === "memory" ? "Memory" : "Classic";
+  return `I just finished an ${modeLabel} Ashes XI series and ${seriesResult} the 5-Test set ${STATE.series.userWins}-${STATE.series.starWins}-${STATE.series.draws}. ${shareUrl()}`;
+}
+
+function init() {
+  bindElements();
+  addCatalogMetadata();
+  wireControls();
+  renderAll();
+}
+
+init();
