@@ -1,6 +1,6 @@
 # Ashes XI
 
-A cricket version of the viral 7-0 style squad game.
+A Squad Roller version of the viral 7-0 style squad game.
 
 Roll previous Ashes squads, lock one player at a time into your XI, then simulate a five-Test series against an all-star XI built from the same sample pool.
 
@@ -18,4 +18,3 @@ Open `http://localhost:4173`.
 ## Data
 
 Starter sample data lives in [`site/data/ashes-squads.js`](site/data/ashes-squads.js). It is intentionally lightweight example data, not a complete historical dataset.
-
