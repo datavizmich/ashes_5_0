@@ -565,10 +565,6 @@ function rollSquad() {
   renderAll();
 }
 
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
-}
-
 function normalRandom() {
   return (
     Math.random() +
