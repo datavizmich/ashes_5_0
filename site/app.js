@@ -1,14 +1,14 @@
 import { ASHES_SQUADS } from "./data/ashes-squads.js";
 
 const XI_SLOTS = [
-  { label: "Opener", accepts: ["Opener", "Top Order", "All-rounder"], focus: "batting", row: 5, col: 2 },
-  { label: "Opener", accepts: ["Opener", "Top Order", "All-rounder"], focus: "batting", row: 5, col: 4 },
-  { label: "#3", accepts: ["Top Order", "Middle Order", "Opener"], focus: "batting", row: 4, col: 3 },
+  { label: "Opener", accepts: ["Opener"], focus: "batting", row: 5, col: 2 },
+  { label: "Opener", accepts: ["Opener"], focus: "batting", row: 5, col: 4 },
+  { label: "#3", accepts: ["Top Order", "Middle Order"], focus: "batting", row: 4, col: 3 },
   { label: "#4", accepts: ["Middle Order", "Top Order", "All-rounder"], focus: "batting", row: 3, col: 2 },
   { label: "#5", accepts: ["Middle Order", "All-rounder", "Top Order"], focus: "batting", row: 3, col: 4 },
   { label: "WK", accepts: ["Wicketkeeper"], focus: "fielding", row: 2, col: 3 },
   { label: "AR", accepts: ["All-rounder", "Middle Order", "Spinner", "Fast Bowler"], focus: "mixed", row: 3, col: 1 },
-  { label: "Spin", accepts: ["Spinner", "All-rounder"], focus: "bowling", row: 2, col: 1 },
+  { label: "Spin", accepts: ["Spinner"], focus: "bowling", row: 2, col: 1 },
   { label: "Pace", accepts: ["Fast Bowler", "Pace Bowler", "Seam Bowler", "All-rounder"], focus: "bowling", row: 1, col: 1 },
   { label: "Pace", accepts: ["Fast Bowler", "Pace Bowler", "Seam Bowler", "All-rounder"], focus: "bowling", row: 1, col: 3 },
   { label: "Pace", accepts: ["Fast Bowler", "Pace Bowler", "Seam Bowler", "All-rounder"], focus: "bowling", row: 1, col: 5 },
@@ -565,10 +565,42 @@ function rollSquad() {
   renderAll();
 }
 
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function normalRandom() {
+  return (
+    Math.random() +
+    Math.random() +
+    Math.random() +
+    Math.random() +
+    Math.random() +
+    Math.random()
+  ) / 6 - 0.5;
+}
+
+function weightedPick(items, getWeight) {
+  const total = items.reduce((sum, item) => sum + Math.max(0, getWeight(item)), 0);
+  let roll = Math.random() * total;
+
+  for (const item of items) {
+    roll -= Math.max(0, getWeight(item));
+    if (roll <= 0) return item;
+  }
+
+  return items[items.length - 1];
+}
+
 function sampleOutcome(userTeam, starTeam) {
   const edge = userTeam.power - starTeam.power;
-  const drawChance = clamp(0.22 - Math.abs(edge) / 400, 0.08, 0.25);
-  const winChance = (1 - drawChance) * (1 / (1 + Math.exp(-edge / 10)));
+
+  const drawChance = clamp(0.24 - Math.abs(edge) / 500, 0.08, 0.27);
+
+  const winChance =
+    (1 - drawChance) *
+    (1 / (1 + Math.exp(-edge / 40)));
+
   const roll = Math.random();
 
   if (roll < winChance) return "win";
@@ -603,16 +635,63 @@ function inningsScoreLabel(innings) {
   return `${innings.runs}/${innings.wickets}${innings.declared ? "d" : ""}`;
 }
 
-function simulateInnings(lineup, opposition, inningsIndex) {
+function simulateInnings(lineup, opposition, inningsIndex, conditions = {}) {
   const battingStrength = lineupScore(lineup).batting;
   const bowlingStrength = lineupScore(opposition).bowling;
-  const phaseModifier = [26, 10, -6, -14][inningsIndex - 1] ?? 0;
+
+  const pitch = conditions.pitch ?? "balanced";
+
+  const pitchRunModifier = {
+    flat: 45,
+    balanced: 0,
+    green: -25,
+    turning: -15,
+    deteriorating: -35,
+  }[pitch] ?? 0;
+
+  const pitchWicketModifier = {
+    flat: -0.7,
+    balanced: 0,
+    green: 0.8,
+    turning: 0.6,
+    deteriorating: 1.2,
+  }[pitch] ?? 0;
+
+  const phaseModifier = [26, 10, -6, -18][inningsIndex - 1] ?? 0;
+
   const rawRuns =
-    165 + battingStrength * 1.9 - bowlingStrength * 1.05 + phaseModifier + (Math.random() - 0.5) * 85;
+    165 +
+    battingStrength * 1.9 -
+    bowlingStrength * 1.05 +
+    phaseModifier +
+    pitchRunModifier +
+    normalRandom() * 140;
+
   const runs = clamp(Math.round(rawRuns), 60, 560);
-  const wicketPressure = inningsIndex === 4 ? 0.4 : inningsIndex === 3 ? 0.2 : 0;
-  const wickets = clamp(Math.round(10 - runs / 72 + Math.random() * 2.4 + wicketPressure), 0, 10);
-  const declared = inningsIndex === 1 || inningsIndex === 3 ? Math.random() < 0.2 : false;
+
+  const inningsPressure =
+    inningsIndex === 4 ? 0.8 :
+    inningsIndex === 3 ? 0.35 :
+    0;
+
+  const wicketMean =
+    6.4 +
+    (bowlingStrength - battingStrength) / 18 +
+    inningsPressure +
+    pitchWicketModifier;
+
+  const wickets = clamp(
+    Math.round(wicketMean + normalRandom() * 4),
+    0,
+    10
+  );
+
+  const declared =
+    (inningsIndex === 1 || inningsIndex === 3) &&
+    runs >= 330 &&
+    wickets <= 8 &&
+    Math.random() < 0.22;
+
   return { runs, wickets, declared };
 }
 
@@ -626,10 +705,17 @@ function teamBattingRanking(lineup, teamEdge = 0) {
           : player.roles.includes("Middle Order")
             ? 3
             : 0;
-      const noise = Math.random() * 16;
+
+      const noise = normalRandom() * 22;
+
       return {
         player,
-        value: player.batting * 1.15 + player.experience * 0.18 + roleBoost + teamEdge * 0.8 + noise,
+        value:
+          player.batting * 1.15 +
+          player.experience * 0.18 +
+          roleBoost +
+          teamEdge * 0.45 +
+          noise,
       };
     })
     .sort((a, b) => b.value - a.value);
@@ -645,36 +731,122 @@ function teamBowlingRanking(lineup, teamEdge = 0) {
           : player.roles.includes("All-rounder")
             ? 4
             : 0;
-      const noise = Math.random() * 16;
+
+      const noise = normalRandom() * 22;
+
       return {
         player,
-        value: player.bowling * 1.2 + player.experience * 0.16 + roleBoost + teamEdge * 0.9 + noise,
+        value:
+          player.bowling * 1.2 +
+          player.experience * 0.16 +
+          roleBoost +
+          teamEdge * 0.45 +
+          noise,
       };
     })
     .sort((a, b) => b.value - a.value);
 }
 
 function formatBowlingFigures(player, teamEdge = 0) {
-  const wickets = clamp(Math.round(1 + player.bowling / 18 + Math.random() * 3 + teamEdge / 10), 1, 7);
-  const runs = clamp(Math.round(28 + (100 - player.bowling) * 0.65 + Math.random() * 22 - teamEdge), 18, 180);
+  const bowling = player?.bowling ?? 50;
+
+  const wickets = clamp(
+    Math.round(0.5 + bowling / 22 + Math.random() * 3 + teamEdge / 20),
+    0,
+    7
+  );
+
+  const runs = clamp(
+    Math.round(
+      35 +
+      (100 - bowling) * 0.5 +
+      Math.random() * 35 -
+      wickets * 4 -
+      teamEdge * 0.5
+    ),
+    12,
+    140
+  );
+
   return `${wickets}/${runs}`;
 }
 
 function simulateBoxScore(lineup, teamEdge = 0) {
-  const batters = teamBattingRanking(lineup, teamEdge);
-  const bowlers = teamBowlingRanking(lineup, teamEdge);
-  const topBatter = batters[0]?.player ?? lineup[0];
-  const topBowler = bowlers[0]?.player ?? lineup[lineup.length - 1];
+  const topBatter = weightedPick(lineup, (player) => {
+    const roleBoost = player.roles.includes("Opener")
+      ? 1.15
+      : player.roles.includes("Top Order")
+        ? 1.12
+        : player.roles.includes("Middle Order")
+          ? 1.08
+          : 1;
+
+    return Math.max(1, player.batting ** 2 * roleBoost);
+  });
+
+  const topBowler = weightedPick(lineup, (player) => {
+    const roleBoost = player.roles.includes("Fast Bowler")
+      ? 1.2
+      : player.roles.includes("Spinner")
+        ? 1.15
+        : player.roles.includes("All-rounder")
+          ? 0.85
+          : 0.25;
+
+    return Math.max(1, player.bowling ** 2 * roleBoost);
+  });
 
   return {
     batter: {
       name: topBatter?.name ?? "Unknown",
-      runs: clamp(Math.round((topBatter?.batting ?? 50) * 0.85 + Math.random() * 45 + teamEdge * 1.2), 18, 165),
+      runs: clamp(
+        Math.round(
+          (topBatter?.batting ?? 50) * 0.85 +
+          normalRandom() * 75 +
+          teamEdge * 0.8
+        ),
+        18,
+        190
+      ),
     },
     bowler: {
       name: topBowler?.name ?? "Unknown",
       figures: formatBowlingFigures(topBowler ?? { bowling: 50 }, teamEdge),
     },
+  };
+}
+
+function simulateMatch(userLineup, starLineup, conditions = {}) {
+  const user1 = simulateInnings(userLineup, starLineup, 1, conditions);
+  const star1 = simulateInnings(starLineup, userLineup, 2, conditions);
+  const user2 = simulateInnings(userLineup, starLineup, 3, conditions);
+  const star2 = simulateInnings(starLineup, userLineup, 4, conditions);
+
+  const userTotal = user1.runs + user2.runs;
+  const starTotal = star1.runs + star2.runs;
+
+  let result;
+
+  if (star2.wickets < 10 && starTotal <= userTotal) {
+    result = "draw";
+  } else if (userTotal > starTotal) {
+    result = "win";
+  } else if (starTotal > userTotal) {
+    result = "loss";
+  } else {
+    result = "draw";
+  }
+
+  return {
+    result,
+    innings: {
+      user1,
+      star1,
+      user2,
+      star2,
+    },
+    userTotal,
+    starTotal,
   };
 }
 
@@ -690,23 +862,23 @@ function buildSeries() {
 
   for (let testNumber = 1; testNumber <= 5; testNumber += 1) {
     const edge = userTeam.power - starTeam.power;
-    const userInnings1 = simulateInnings(userLine, starLine, 1);
-    const starInnings1 = simulateInnings(starLine, userLine, 2);
-    const userInnings2 = simulateInnings(userLine, starLine, 3);
-    const starInnings2 = simulateInnings(starLine, userLine, 4);
-    const userTotal = userInnings1.runs + userInnings2.runs;
-    const starTotal = starInnings1.runs + starInnings2.runs;
 
-    const margin = userTotal - starTotal;
-    let outcome = "draw";
-    if (!(Math.abs(margin) <= 18 && Math.random() < 0.35)) {
-      if (margin > 0) outcome = "win";
-      if (margin < 0) outcome = "loss";
-    }
+    const conditions = {
+      pitch: testNumber % 2 === 1 ? "green" : "balanced",
+    };
+
+    const match = simulateMatch(userLine, starLine, conditions);
+
+    const outcome = match.result;
 
     if (outcome === "win") userWins += 1;
     else if (outcome === "loss") starWins += 1;
     else draws += 1;
+
+    const userInnings1 = match.innings.user1;
+    const starInnings1 = match.innings.star1;
+    const userInnings2 = match.innings.user2;
+    const starInnings2 = match.innings.star2;
 
     const userBox = simulateBoxScore(userLine, edge);
     const starBox = simulateBoxScore(starLine, -edge);
