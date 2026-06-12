@@ -7,11 +7,11 @@ const XI_SLOTS = [
   { label: "#4", accepts: ["Middle Order", "Top Order", "All-rounder"], focus: "batting", row: 3, col: 2 },
   { label: "#5", accepts: ["Middle Order", "All-rounder", "Top Order"], focus: "batting", row: 3, col: 4 },
   { label: "WK", accepts: ["Wicketkeeper"], focus: "fielding", row: 2, col: 3 },
-  { label: "AR", accepts: ["All-rounder", "Middle Order", "Spinner", "Fast Bowler"], focus: "mixed", row: 3, col: 1 },
+  { label: "AR", accepts: ["All-rounder"], focus: "mixed", row: 3, col: 1 },
   { label: "Spin", accepts: ["Spinner"], focus: "bowling", row: 2, col: 1 },
-  { label: "Pace", accepts: ["Fast Bowler", "Pace Bowler", "Seam Bowler", "All-rounder"], focus: "bowling", row: 1, col: 1 },
-  { label: "Pace", accepts: ["Fast Bowler", "Pace Bowler", "Seam Bowler", "All-rounder"], focus: "bowling", row: 1, col: 3 },
-  { label: "Pace", accepts: ["Fast Bowler", "Pace Bowler", "Seam Bowler", "All-rounder"], focus: "bowling", row: 1, col: 5 },
+  { label: "Pace", accepts: ["Fast Bowler", "Pace Bowler", "Seam Bowler"], focus: "bowling", row: 1, col: 1 },
+  { label: "Pace", accepts: ["Fast Bowler", "Pace Bowler", "Seam Bowler"], focus: "bowling", row: 1, col: 3 },
+  { label: "Pace", accepts: ["Fast Bowler", "Pace Bowler", "Seam Bowler"], focus: "bowling", row: 1, col: 5 },
 ];
 
 const STATE = {
@@ -628,93 +628,8 @@ function resultSummary(result, edge) {
 }
 
 function inningsScoreLabel(innings) {
+  if (innings.didNotBat) return "DNB";
   return `${innings.runs}/${innings.wickets}${innings.declared ? "d" : ""}`;
-}
-
-function simulateInnings(lineup, opposition, inningsIndex, conditions = {}) {
-  const battingStrength = lineupScore(lineup).batting;
-  const bowlingStrength = lineupScore(opposition).bowling;
-
-  const pitch = conditions.pitch ?? "balanced";
-
-  const pitchRunModifier = {
-    flat: 45,
-    balanced: 0,
-    green: -25,
-    turning: -15,
-    deteriorating: -35,
-  }[pitch] ?? 0;
-
-  const pitchWicketModifier = {
-    flat: -0.7,
-    balanced: 0,
-    green: 0.8,
-    turning: 0.6,
-    deteriorating: 1.2,
-  }[pitch] ?? 0;
-
-  const phaseModifier = [26, 10, -6, -18][inningsIndex - 1] ?? 0;
-
-  const rawRuns =
-    165 +
-    battingStrength * 1.9 -
-    bowlingStrength * 1.05 +
-    phaseModifier +
-    pitchRunModifier +
-    normalRandom() * 140;
-
-  const runs = clamp(Math.round(rawRuns), 60, 560);
-
-  const inningsPressure =
-    inningsIndex === 4 ? 0.8 :
-    inningsIndex === 3 ? 0.35 :
-    0;
-
-  const wicketMean =
-    6.4 +
-    (bowlingStrength - battingStrength) / 18 +
-    inningsPressure +
-    pitchWicketModifier;
-
-  const wickets = clamp(
-    Math.round(wicketMean + normalRandom() * 4),
-    0,
-    10
-  );
-
-  const declared =
-    (inningsIndex === 1 || inningsIndex === 3) &&
-    runs >= 330 &&
-    wickets <= 8 &&
-    Math.random() < 0.22;
-
-  return { runs, wickets, declared };
-}
-
-function teamBattingRanking(lineup, teamEdge = 0) {
-  return [...lineup]
-    .map((player) => {
-      const roleBoost = player.roles.includes("Opener")
-        ? 8
-        : player.roles.includes("Top Order")
-          ? 6
-          : player.roles.includes("Middle Order")
-            ? 3
-            : 0;
-
-      const noise = normalRandom() * 22;
-
-      return {
-        player,
-        value:
-          player.batting * 1.15 +
-          player.experience * 0.18 +
-          roleBoost +
-          teamEdge * 0.45 +
-          noise,
-      };
-    })
-    .sort((a, b) => b.value - a.value);
 }
 
 function teamBowlingRanking(lineup, teamEdge = 0) {
@@ -815,32 +730,50 @@ function simulateBoxScore(lineup, teamEdge = 0) {
 function simulateMatch(userLineup, starLineup, conditions = {}) {
   const user1 = simulateInnings(userLineup, starLineup, 1, conditions);
   const star1 = simulateInnings(starLineup, userLineup, 2, conditions);
-  const user2 = simulateInnings(userLineup, starLineup, 3, conditions);
-  const star2 = simulateInnings(starLineup, userLineup, 4, conditions);
+
+  const userLead = user1.runs - star1.runs;
+
+  const user2 = simulateInnings(
+    userLineup,
+    starLineup,
+    3,
+    conditions,
+    null,
+    userLead
+  );
+
+  const target = user1.runs + user2.runs - star1.runs + 1;
+
+  let star2;
+
+  if (target <= 0) {
+    // All-star XI already won by an innings
+    star2 = { runs: 0, wickets: 0, declared: false, chaseComplete: true, didNotBat: true };
+  } else {
+    star2 = simulateInnings(starLineup, userLineup, 4, conditions, target);
+  }
 
   const userTotal = user1.runs + user2.runs;
   const starTotal = star1.runs + star2.runs;
 
   let result;
 
-  if (star2.wickets < 10 && starTotal <= userTotal) {
-    result = "draw";
-  } else if (userTotal > starTotal) {
+  if (star2.chaseComplete && starTotal > userTotal) {
+    result = "loss";
+  } else if (star2.wickets >= 10 && starTotal < userTotal) {
     result = "win";
+  } else if (starTotal === userTotal) {
+    result = "draw";
   } else if (starTotal > userTotal) {
     result = "loss";
   } else {
+    // Fourth innings not all out and target not reached = draw
     result = "draw";
   }
 
   return {
     result,
-    innings: {
-      user1,
-      star1,
-      user2,
-      star2,
-    },
+    innings: { user1, star1, user2, star2 },
     userTotal,
     starTotal,
   };
