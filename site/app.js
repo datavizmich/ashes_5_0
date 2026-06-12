@@ -608,23 +608,46 @@ function pluralize(value, singular, plural = `${singular}s`) {
   return value === 1 ? singular : plural;
 }
 
-function resultSummary(result, edge) {
-  if (result === "draw") {
-    return "drawn";
-  }
+function resultSummaryFromMatch(result, match) {
+  const { user1, star1, user2, star2 } = match.innings;
+  const userTotal = match.userTotal;
+  const starTotal = match.starTotal;
 
-  const closer = Math.abs(edge) < 3 ? 1 : Math.round(clamp(2 + Math.abs(edge) / 8, 2, 8));
-  const byRuns = Math.random() < 0.55;
+  if (result === "draw") return "drawn";
 
   if (result === "win") {
-    return byRuns
-      ? `won by ${Math.max(1, Math.round(16 + closer * 10))} ${pluralize(Math.max(1, Math.round(16 + closer * 10)), "run")}`
-      : `won by ${closer} ${pluralize(closer, "wicket")}`;
+    const wonByInnings = star2.didNotBat && userTotal > starTotal;
+
+    if (wonByInnings) {
+      return `won by an innings and ${userTotal - star1.runs} ${pluralize(userTotal - star1.runs, "run")}`;
+    }
+
+    if (star2.wickets < 10 && starTotal > userTotal) {
+      const wicketsLeft = 10 - star2.wickets;
+      return `lost by ${wicketsLeft} ${pluralize(wicketsLeft, "wicket")}`;
+    }
+
+    const runsMargin = userTotal - starTotal;
+    return `won by ${runsMargin} ${pluralize(runsMargin, "run")}`;
   }
 
-  return byRuns
-    ? `lost by ${Math.max(1, Math.round(16 + closer * 10))} ${pluralize(Math.max(1, Math.round(16 + closer * 10)), "run")}`
-    : `lost by ${closer} ${pluralize(closer, "wicket")}`;
+  if (result === "loss") {
+    const lostByInnings = star2.didNotBat && starTotal > userTotal;
+
+    if (lostByInnings) {
+      return `lost by an innings and ${star1.runs - userTotal} ${pluralize(star1.runs - userTotal, "run")}`;
+    }
+
+    if (star2.chaseComplete) {
+      const wicketsLeft = 10 - star2.wickets;
+      return `lost by ${wicketsLeft} ${pluralize(wicketsLeft, "wicket")}`;
+    }
+
+    const runsMargin = starTotal - userTotal;
+    return `lost by ${runsMargin} ${pluralize(runsMargin, "run")}`;
+  }
+
+  return "drawn";
 }
 
 function inningsScoreLabel(innings) {
@@ -943,7 +966,7 @@ function buildSeries() {
       testNumber,
       venue: testNumber % 2 === 1 ? "Home conditions" : "Balanced conditions",
       result: outcome,
-      summary: outcome === "draw" ? "drawn" : resultSummary(outcome, edge),
+      summary: resultSummaryFromMatch(outcome, match),
       innings: [
         { label: "Your XI 1st inns", score: inningsScoreLabel(userInnings1) },
         { label: "All-star XI 1st inns", score: inningsScoreLabel(starInnings1) },
