@@ -762,8 +762,8 @@ function simulateBoxScore(lineup, teamEdge = 0) {
   };
 }
 
-function battingOrder(lineup) {
-  return [...lineup];
+function battingOrder(lineup, teamEdge = 0) {
+  return teamBattingRanking(lineup, teamEdge).map((item) => item.player);
 }
 
 function sampleBatterScore(player, bowlingStrength, pitch, inningsIndex) {
