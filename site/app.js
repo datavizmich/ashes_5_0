@@ -658,6 +658,41 @@ function teamBowlingRanking(lineup, teamEdge = 0) {
     .sort((a, b) => b.value - a.value);
 }
 
+function teamBattingRanking(lineup, teamEdge = 0) {
+  return [...lineup]
+    .map((player) => {
+      const roleBoost = player.roles.includes("Opener")
+        ? 14
+        : player.roles.includes("Top Order")
+          ? 10
+          : player.roles.includes("Middle Order")
+            ? 6
+            : player.roles.includes("All-rounder")
+              ? 3
+              : player.roles.includes("Wicketkeeper")
+                ? 2
+                : 0;
+
+      const bowlingPenalty = player.roles.includes("Fast Bowler") || player.roles.includes("Spinner")
+        ? -8
+        : 0;
+
+      const noise = normalRandom() * 18;
+
+      return {
+        player,
+        value:
+          player.batting * 1.25 +
+          player.experience * 0.18 +
+          roleBoost +
+          bowlingPenalty +
+          teamEdge * 0.35 +
+          noise,
+      };
+    })
+    .sort((a, b) => b.value - a.value);
+}
+
 function formatBowlingFigures(player, teamEdge = 0) {
   const bowling = player?.bowling ?? 50;
 
@@ -724,6 +759,98 @@ function simulateBoxScore(lineup, teamEdge = 0) {
       name: topBowler?.name ?? "Unknown",
       figures: formatBowlingFigures(topBowler ?? { bowling: 50 }, teamEdge),
     },
+  };
+}
+
+function battingOrder(lineup, teamEdge = 0) {
+  return teamBattingRanking(lineup, teamEdge).map((item) => item.player);
+}
+
+function sampleBatterScore(player, bowlingStrength, pitch, inningsIndex) {
+  const batting = player?.batting ?? 45;
+  const experience = player?.experience ?? 50;
+
+  const pitchDifficulty = {
+    flat: -10,
+    balanced: 0,
+    green: 12,
+    turning: 8,
+    deteriorating: 18,
+  }[pitch] ?? 0;
+
+  const inningsDifficulty = [0, 3, 6, 14][inningsIndex - 1] ?? 0;
+
+  const mean = clamp(
+    22 + batting * 0.55 + experience * 0.12 - bowlingStrength * 0.35 - pitchDifficulty - inningsDifficulty,
+    4,
+    95
+  );
+
+  const duckChance = clamp(0.16 - batting / 900 + pitchDifficulty / 220, 0.04, 0.25);
+
+  if (Math.random() < duckChance) {
+    return Math.floor(Math.random() * 6);
+  }
+
+  const volatility = 0.95;
+  const logMean = Math.log(mean) - (volatility * volatility) / 2;
+  const score = Math.exp(logMean + normalRandom() * 6 * volatility);
+
+  return clamp(Math.round(score), 0, 260);
+}
+
+function shouldDeclare(runs, wickets, inningsIndex, lead = 0) {
+  if (!(inningsIndex === 1 || inningsIndex === 3)) return false;
+  if (wickets >= 9) return false;
+
+  if (inningsIndex === 1) {
+    return runs >= 500 && Math.random() < 0.25;
+  }
+
+  if (inningsIndex === 3) {
+    return runs + lead >= 380 && wickets <= 8 && Math.random() < 0.45;
+  }
+
+  return false;
+}
+
+function simulateInnings(lineup, opposition, inningsIndex, conditions = {}, chaseTarget = null, firstInningsLead = 0) {
+  const order = battingOrder(lineup);
+  const bowlingStrength = lineupScore(opposition).bowling;
+  const pitch = conditions.pitch ?? "balanced";
+
+  let runs = 0;
+  let wickets = 0;
+  let declared = false;
+
+  for (let i = 0; i < order.length; i += 1) {
+    runs += sampleBatterScore(order[i], bowlingStrength, pitch, inningsIndex);
+    runs += Math.round(Math.random() * 7); // extras
+
+    if (chaseTarget !== null && runs >= chaseTarget) {
+      return {
+        runs,
+        wickets,
+        declared: false,
+        chaseComplete: true,
+      };
+    }
+
+    wickets += 1;
+
+    if (shouldDeclare(runs, wickets, inningsIndex, firstInningsLead)) {
+      declared = true;
+      break;
+    }
+
+    if (wickets >= 10) break;
+  }
+
+  return {
+    runs,
+    wickets,
+    declared,
+    chaseComplete: false,
   };
 }
 
