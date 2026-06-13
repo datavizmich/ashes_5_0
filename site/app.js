@@ -2019,7 +2019,7 @@ function formatShareText() {
         ? "lost"
         : "drew";
   const modeLabel = STATE.mode === "memory" ? "Memory" : "Classic";
-  return `I just finished an ${modeLabel} Ashes XI series and ${seriesResult} the 5-Test set ${STATE.series.userWins}-${STATE.series.starWins}-${STATE.series.draws}. ${shareUrl()}`;
+  return `I just finished an ${modeLabel} Ashes XI series and ${seriesResult} the 5-Test series ${STATE.series.userWins}-${STATE.series.starWins}-${STATE.series.draws}. ${shareUrl()}`;
 }
 
 function init() {

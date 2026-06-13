@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://www.ashes-5-0.co.uk/sitemap.xml
