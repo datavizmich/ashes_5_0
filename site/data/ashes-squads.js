@@ -1,4 +1,31 @@
-export const ASHES_SQUADS = [
+const ROLE_ORDER = ["Opener", "Top Order", "Middle Order", "Wicketkeeper", "All-rounder", "Spinner", "Fast Bowler"];
+
+function roleRank(player) {
+  if (!player?.roles?.length) return ROLE_ORDER.length;
+  const ranks = player.roles.map((role) => ROLE_ORDER.indexOf(role)).filter((index) => index >= 0);
+  return ranks.length ? Math.min(...ranks) : ROLE_ORDER.length;
+}
+
+function sortSquadPlayers(players) {
+  return [...players].sort((a, b) => {
+    const roleDelta = roleRank(a) - roleRank(b);
+    if (roleDelta !== 0) return roleDelta;
+    const battingDelta = b.batting - a.batting;
+    if (battingDelta !== 0) return battingDelta;
+    const bowlingDelta = b.bowling - a.bowling;
+    if (bowlingDelta !== 0) return bowlingDelta;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+function normalizeSquad(squad) {
+  return {
+    ...squad,
+    players: sortSquadPlayers(squad.players),
+  };
+}
+
+const RAW_ASHES_SQUADS = [
   {
     id: "eng-2005",
     label: "England 2005 Ashes squad",
@@ -500,3 +527,5 @@ export const ASHES_SQUADS = [
     ],
   },
 ];
+
+export const ASHES_SQUADS = RAW_ASHES_SQUADS.map(normalizeSquad);

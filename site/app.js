@@ -24,6 +24,24 @@ const STATE = {
   mode: "classic",
   series: null,
   timer: null,
+  achievementDetail: null,
+  achievementPinned: false,
+  achievementHelpBound: false,
+};
+
+const ACHIEVEMENT_DEFS = {
+  "The Invincibles": {
+    description: "Win all five Tests in the series.",
+  },
+  Bodyline: {
+    description: "Take 40 or more wickets across the series.",
+  },
+  "The Don": {
+    description: "Score 700 or more runs across the series.",
+  },
+  "Great Escape": {
+    description: "Win the series after trailing 0-2.",
+  },
 };
 
 const els = {};
@@ -69,6 +87,13 @@ function bindElements() {
     playAgain: "[data-play-again]",
     shareResult: "[data-share-result]",
     resetBuilder: "[data-reset-builder]",
+    feedbackToggle: "[data-feedback-toggle]",
+    feedbackPanel: "[data-feedback-panel]",
+    feedbackForm: "[data-feedback-form]",
+    feedbackMessage: "[data-feedback-message]",
+    feedbackHoneypot: "[data-feedback-honeypot]",
+    feedbackStatus: "[data-feedback-status]",
+    feedbackSubmit: "[data-feedback-submit]",
   };
 
   for (const [key, selector] of Object.entries(selectors)) {
@@ -573,6 +598,28 @@ function buildInningsSummary(teamLabel, batting, bowling) {
   };
 }
 
+function bestBattersFromInnings(inningsList) {
+  const batters = inningsList.flatMap((innings) => innings?.batting?.batters ?? []);
+  return batters.filter((card) => !card.dnb).sort((a, b) => b.runs - a.runs || b.balls - a.balls)[0] ?? null;
+}
+
+function bestBowlerFromInnings(inningsList) {
+  const bowlers = inningsList.flatMap((innings) => innings?.bowling ?? []).filter((bowler) => bowler && bowler.overs !== "0");
+  return bowlers.sort((a, b) => b.wickets - a.wickets || a.runs - b.runs)[0] ?? null;
+}
+
+function buildMatchBoxScore(sideInnings) {
+  const batter = bestBattersFromInnings(sideInnings.batting) ?? { name: "Unknown", runs: 0 };
+  const bowler = bestBowlerFromInnings(sideInnings.bowling) ?? { name: "Unknown", wickets: 0, runs: 0, overs: "0" };
+  return {
+    batter,
+    bowler: {
+      ...bowler,
+      figures: `${bowler.wickets}/${bowler.runs}`,
+    },
+  };
+}
+
 function summariseResult(match) {
   const { user1, star1, user2, star2 } = match.innings;
   const userTotal = user1.total + user2.total;
@@ -588,7 +635,7 @@ function summariseResult(match) {
   const winnerTotal = userWon ? userTotal : starTotal;
   const loserTotal = userWon ? starTotal : userTotal;
 
-  if (winningSecond.chaseComplete) {
+  if ((userWon && user2.chaseComplete) || (!userWon && star2.chaseComplete)) {
     const wicketsLeft = 10 - winningSecond.wickets;
     return `${userWon ? "Your XI" : "All-star XI"} won by ${wicketsLeft} ${pluralize(wicketsLeft, "wicket")}`;
   }
@@ -648,8 +695,8 @@ function matchMarginText(match) {
   if (match.result === "draw") return "Match drawn";
 
   if (match.result === "win") {
-    if (star2.chaseComplete) {
-      return `Won by ${10 - star2.wickets} ${pluralize(10 - star2.wickets, "wicket")}`;
+    if (user2.chaseComplete) {
+      return `Won by ${10 - user2.wickets} ${pluralize(10 - user2.wickets, "wicket")}`;
     }
     if (star2.wickets >= 10 && userTotal > starTotal) {
       return `Won by ${userTotal - starTotal} ${pluralize(userTotal - starTotal, "run")}`;
@@ -658,8 +705,8 @@ function matchMarginText(match) {
       return `Won by an innings and ${user1.total - (star1.total + star2.total)} ${pluralize(user1.total - (star1.total + star2.total), "run")}`;
     }
   } else if (match.result === "loss") {
-    if (user2.chaseComplete) {
-      return `Lost by ${10 - user2.wickets} ${pluralize(10 - user2.wickets, "wicket")}`;
+    if (star2.chaseComplete) {
+      return `Lost by ${10 - star2.wickets} ${pluralize(10 - star2.wickets, "wicket")}`;
     }
     if (user2.wickets >= 10 && starTotal > userTotal) {
       return `Lost by ${starTotal - userTotal} ${pluralize(starTotal - userTotal, "run")}`;
@@ -751,6 +798,61 @@ function buildAchievementList(series, leaders) {
   return achievements;
 }
 
+function achievementMeta(name) {
+  return ACHIEVEMENT_DEFS[name] ?? {
+    description: "Achievement unlocked.",
+  };
+}
+
+function setAchievementDetail(name, pinned = false) {
+  STATE.achievementDetail = name;
+  STATE.achievementPinned = pinned;
+
+  const detail = els.seriesInsights?.querySelector("[data-achievement-detail]");
+  if (!detail) return;
+
+  if (!name) {
+    detail.hidden = true;
+    return;
+  }
+
+  const meta = achievementMeta(name);
+  const title = detail.querySelector("[data-achievement-title]");
+  const copy = detail.querySelector("[data-achievement-copy]");
+  if (title) title.textContent = name;
+  if (copy) copy.textContent = meta.description;
+  detail.dataset.pinned = pinned ? "true" : "false";
+  detail.hidden = false;
+}
+
+function clearAchievementDetail() {
+  if (STATE.achievementPinned) return;
+  setAchievementDetail(null, false);
+}
+
+function setFeedbackStatus(message, kind = "idle") {
+  if (!els.feedbackStatus) return;
+  els.feedbackStatus.textContent = message;
+  els.feedbackStatus.dataset.kind = kind;
+}
+
+function toggleFeedbackPanel(forceOpen) {
+  if (!els.feedbackPanel || !els.feedbackToggle) return;
+  const shouldOpen = typeof forceOpen === "boolean" ? forceOpen : els.feedbackPanel.hidden;
+  els.feedbackPanel.hidden = !shouldOpen;
+  els.feedbackToggle.setAttribute("aria-expanded", String(shouldOpen));
+  els.feedbackToggle.textContent = shouldOpen ? "Hide feedback" : "Feedback";
+  if (shouldOpen) {
+    els.feedbackMessage?.focus();
+  } else {
+    setFeedbackStatus("");
+  }
+}
+
+function closeFeedbackPanel() {
+  toggleFeedbackPanel(false);
+}
+
 function renderDraftMeter() {
   const metrics = draftMetricsFromLineup(userLineup());
   els.draftBatting.textContent = String(metrics.batting);
@@ -803,11 +905,25 @@ function renderSeriesInsights() {
     <div class="badge-row">
       ${
         completed && achievements.length
-          ? achievements.map((name) => `<span class="achievement-badge">${escapeHtml(name)}</span>`).join("")
+          ? achievements
+              .map(
+                (name) =>
+                  `<button type="button" class="achievement-badge" data-achievement-key="${escapeHtml(name)}" title="${escapeHtml(achievementMeta(name).description)}">${escapeHtml(name)}</button>`,
+              )
+              .join("")
           : `<span class="achievement-badge muted">Keep playing to unlock achievements</span>`
       }
     </div>
+    <div class="achievement-detail" data-achievement-detail hidden>
+      <span class="achievement-detail-label">Achievement detail</span>
+      <strong data-achievement-title></strong>
+      <p data-achievement-copy></p>
+    </div>
   `;
+
+  if (STATE.achievementDetail) {
+    setAchievementDetail(STATE.achievementDetail, STATE.achievementPinned);
+  }
 }
 
 function renderDetailedInnings(match, innings, label) {
@@ -844,9 +960,6 @@ function renderDetailedInnings(match, innings, label) {
               <th>Batter</th>
               <th>R</th>
               <th>B</th>
-              <th>4s</th>
-              <th>6s</th>
-              <th>Dismissal</th>
             </tr>
           </thead>
           <tbody>
@@ -857,9 +970,6 @@ function renderDetailedInnings(match, innings, label) {
                     <td>${escapeHtml(card.name)}</td>
                     <td>${card.dnb ? "DNB" : card.runs}</td>
                     <td>${card.dnb ? "0" : card.balls}</td>
-                    <td>${card.dnb ? "-" : card.fours}</td>
-                    <td>${card.dnb ? "-" : card.sixes}</td>
-                    <td>${escapeHtml(formatDismissal(card))}</td>
                   </tr>
                 `,
               )
@@ -871,9 +981,8 @@ function renderDetailedInnings(match, innings, label) {
             <tr>
               <th>Bowler</th>
               <th>O</th>
-              <th>M</th>
-              <th>R</th>
               <th>W</th>
+              <th>R</th>
             </tr>
           </thead>
           <tbody>
@@ -883,9 +992,8 @@ function renderDetailedInnings(match, innings, label) {
                   <tr>
                     <td>${escapeHtml(bowler.name)}</td>
                     <td>${escapeHtml(bowler.overs)}</td>
-                    <td>${bowler.maidens}</td>
-                    <td>${bowler.runs}</td>
                     <td>${bowler.wickets}</td>
+                    <td>${bowler.runs}</td>
                   </tr>
                 `,
               )
@@ -1282,9 +1390,9 @@ function resultSummaryFromMatch(result, match) {
       return `won by an innings and ${userTotal - star1.runs} ${pluralize(userTotal - star1.runs, "run")}`;
     }
 
-    if (star2.wickets < 10 && starTotal > userTotal) {
-      const wicketsLeft = 10 - star2.wickets;
-      return `lost by ${wicketsLeft} ${pluralize(wicketsLeft, "wicket")}`;
+    if (user2.chaseComplete) {
+      const wicketsLeft = 10 - user2.wickets;
+      return `won by ${wicketsLeft} ${pluralize(wicketsLeft, "wicket")}`;
     }
 
     const runsMargin = userTotal - starTotal;
@@ -1618,8 +1726,6 @@ function buildSeries() {
   let draws = 0;
 
   for (let testNumber = 1; testNumber <= 5; testNumber += 1) {
-    const edge = userTeam.overall - starTeam.overall;
-
     const conditions = {
       pitch: testNumber % 2 === 1 ? "green" : "balanced",
     };
@@ -1637,9 +1743,6 @@ function buildSeries() {
     const userInnings2 = match.innings.user2;
     const starInnings2 = match.innings.star2;
 
-    const userBox = simulateBoxScore(userLine, edge);
-    const starBox = simulateBoxScore(starLine, -edge);
-
     matches.push({
       testNumber,
       venue: testNumber % 2 === 1 ? "Home conditions" : "Balanced conditions",
@@ -1653,14 +1756,22 @@ function buildSeries() {
         { label: "All-star XI 2nd inns", score: inningsScoreLabel(starInnings2) },
       ],
       scoreline: `${inningsScoreLabel(userInnings1)} & ${inningsScoreLabel(userInnings2)} | ${inningsScoreLabel(starInnings1)} & ${inningsScoreLabel(starInnings2)}`,
-      userBox,
-      starBox,
       inningsData: {
         user1: buildInningsSummary("Your XI 1st innings", userInnings1, match.innings.user1.bowling),
         star1: buildInningsSummary("All-star XI 1st innings", starInnings1, match.innings.star1.bowling),
         user2: buildInningsSummary("Your XI 2nd innings", userInnings2, match.innings.user2.bowling),
         star2: buildInningsSummary("All-star XI 2nd innings", starInnings2, match.innings.star2.bowling),
       },
+    });
+
+    const matchRecord = matches[matches.length - 1];
+    matchRecord.userBox = buildMatchBoxScore({
+      batting: [matchRecord.inningsData.user1, matchRecord.inningsData.user2],
+      bowling: [matchRecord.inningsData.star1, matchRecord.inningsData.star2],
+    });
+    matchRecord.starBox = buildMatchBoxScore({
+      batting: [matchRecord.inningsData.star1, matchRecord.inningsData.star2],
+      bowling: [matchRecord.inningsData.user1, matchRecord.inningsData.user2],
     });
   }
 
@@ -1694,6 +1805,8 @@ function startSeries() {
   if (!lineupComplete()) return;
   clearTimer();
   try {
+    STATE.achievementDetail = null;
+    STATE.achievementPinned = false;
     STATE.series = buildSeries();
     STATE.view = "series";
     renderAll();
@@ -1740,6 +1853,8 @@ function goHome() {
   STATE.currentSquad = null;
   STATE.selectedPlayerId = null;
   STATE.series = null;
+  STATE.achievementDetail = null;
+  STATE.achievementPinned = false;
   renderAll();
 }
 
@@ -1747,6 +1862,8 @@ function goBuilder() {
   clearTimer();
   STATE.view = "game";
   STATE.series = null;
+  STATE.achievementDetail = null;
+  STATE.achievementPinned = false;
   renderAll();
 }
 
@@ -1757,6 +1874,8 @@ function resetBuilder() {
   STATE.selectedPlayerId = null;
   STATE.series = null;
   STATE.view = "game";
+  STATE.achievementDetail = null;
+  STATE.achievementPinned = false;
   renderAll();
 }
 
@@ -1784,6 +1903,102 @@ function wireControls() {
     STATE.mode = els.homeMode.value === "memory" ? "memory" : "classic";
     renderAll();
   });
+
+  els.feedbackToggle.addEventListener("click", () => {
+    toggleFeedbackPanel();
+  });
+
+  els.feedbackForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const message = els.feedbackMessage.value.trim();
+    const trap = els.feedbackHoneypot.value.trim();
+
+    if (trap) {
+      setFeedbackStatus("Thanks for the feedback.", "success");
+      els.feedbackForm.reset();
+      toggleFeedbackPanel(false);
+      return;
+    }
+
+    if (message.length < 5) {
+      setFeedbackStatus("Please enter a longer message.", "error");
+      return;
+    }
+
+    els.feedbackSubmit.disabled = true;
+    setFeedbackStatus("Sending...", "pending");
+
+    try {
+      const response = await fetch("/api/feedback", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message,
+          pageUrl: window.location.href,
+          mode: STATE.mode,
+        }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error || "Could not send feedback.");
+      }
+
+      setFeedbackStatus("Thanks. Your message has been sent.", "success");
+      els.feedbackForm.reset();
+      els.feedbackHoneypot.value = "";
+      window.setTimeout(() => {
+        if (els.feedbackStatus?.dataset.kind === "success") {
+          closeFeedbackPanel();
+        }
+      }, 1400);
+    } catch (error) {
+      console.error("Feedback submission failed:", error);
+      setFeedbackStatus(
+        error instanceof Error ? error.message : "Could not send feedback.",
+        "error",
+      );
+    } finally {
+      els.feedbackSubmit.disabled = false;
+    }
+  });
+
+  if (!STATE.achievementHelpBound) {
+    STATE.achievementHelpBound = true;
+
+    els.seriesInsights.addEventListener("mouseover", (event) => {
+      const badge = event.target.closest("[data-achievement-key]");
+      if (!badge) return;
+      setAchievementDetail(badge.dataset.achievementKey, false);
+    });
+
+    els.seriesInsights.addEventListener("mouseout", (event) => {
+      const badge = event.target.closest("[data-achievement-key]");
+      if (!badge || STATE.achievementPinned) return;
+      const related = event.relatedTarget;
+      if (related && badge.contains(related)) return;
+      if (related && els.seriesInsights.contains(related) && related.closest?.("[data-achievement-key]")) return;
+      clearAchievementDetail();
+    });
+
+    els.seriesInsights.addEventListener("click", (event) => {
+      const badge = event.target.closest("[data-achievement-key]");
+      if (!badge) return;
+      const name = badge.dataset.achievementKey;
+      const isPinned = STATE.achievementPinned && STATE.achievementDetail === name;
+      setAchievementDetail(isPinned ? null : name, !isPinned);
+      event.preventDefault();
+    });
+
+    document.addEventListener("click", (event) => {
+      if (!STATE.achievementPinned) return;
+      if (els.seriesInsights.contains(event.target)) return;
+      clearAchievementDetail();
+    });
+  }
 }
 
 function shareUrl() {

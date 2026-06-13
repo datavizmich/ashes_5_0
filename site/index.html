@@ -7,10 +7,10 @@
     <link rel="manifest" href="/site.webmanifest">
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Ashes XI</title>
+    <title>Ashes XI Cricket Game | Roll Squads &amp; Build a Test XI</title>
     <meta
       name="description"
-      content="Roll previous Ashes squads, build a Test XI, and simulate a series against an all-star XI."
+      content="Roll historic Ashes cricket squads, build your Test XI, and simulate a five-Test series against an all-star XI."
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -32,8 +32,9 @@
             <p class="eyebrow">Ashes XI</p>
             <h1>Roll an Ashes squad. Lock one player. Build your Test XI.</h1>
             <p class="lede">
-              Each roll gives you a previous Ashes squad. Pick one player from the squad, place
-              them into the right role, and keep going until your eleven is complete.
+              Each roll produces a historic Ashes squad. Pick one player from the squad to lock
+              into your XI. Keep going until your dream Ashes line-up is complete and you
+              are ready to take on the All-Star XI.
             </p>
           </div>
           <div class="hero-card">
@@ -58,7 +59,6 @@
               <p class="panel-kicker">How it works</p>
               <h2>Squad Roller</h2>
             </div>
-            <p class="panel-subtitle">Example data is included so you can start playing immediately.</p>
           </div>
 
           <div class="config-grid">
@@ -91,23 +91,22 @@
       </section>
 
       <section class="view game-view" data-game-view hidden>
-        <header class="topbar">
+        <header class="topbar topbar-home">
           <button class="ghost" data-back-home type="button">Home</button>
+        </header>
+
+        <section class="panel game-meta">
           <div class="meta-badges">
             <span data-game-squad-count>0 squads</span>
             <span data-game-player-count>0 players</span>
             <span data-game-mode>Classic</span>
           </div>
-        </header>
+        </section>
 
         <header class="hero hero-game">
           <div>
             <p class="eyebrow">XI builder</p>
             <h1>Roll a squad. Choose one player. Place them in the XI.</h1>
-            <p class="lede">
-              Roles matter. Openers and top-order players fit the top of the card, while pace
-              bowlers, spinners, and all-rounders fill out the lower half of the side.
-            </p>
           </div>
           <div class="hero-card">
             <div class="stat">
@@ -122,7 +121,7 @@
         </header>
 
         <section class="controls">
-          <button class="primary" data-roll-squad type="button">Roll Ashes squad</button>
+          <button class="primary roll-action" data-roll-squad type="button">Roll Ashes squad</button>
           <button class="secondary" data-start-series type="button" hidden>Simulate the series</button>
         </section>
 
@@ -192,10 +191,6 @@
           <div>
             <p class="eyebrow">Test series</p>
             <h1>Your XI takes on an all-star Ashes XI.</h1>
-            <p class="lede">
-              The simulator compares your side with the best sample players from the previous
-              Ashes squads and plays through a five-Test series.
-            </p>
           </div>
           <div class="hero-card">
             <div class="stat">
@@ -216,7 +211,6 @@
                 <p class="panel-kicker">Live feed</p>
                 <h2>Match-by-match results</h2>
               </div>
-              <p class="panel-subtitle">Each Test appears in order.</p>
             </div>
             <div class="feed" data-series-feed></div>
           </article>
@@ -227,7 +221,6 @@
                 <p class="panel-kicker">Series table</p>
                 <h2>Final tally</h2>
               </div>
-              <p class="panel-subtitle">Revealed when the five Tests are done.</p>
             </div>
             <div class="table-wrap" data-series-table-wrap>
               <div class="placeholder">The series table will appear here.</div>
@@ -241,7 +234,7 @@
               <p class="panel-kicker">Opposition XI</p>
               <h2>All-star Ashes XI</h2>
             </div>
-            <p class="panel-subtitle">Built from the strongest players in the sample data.</p>
+            <p class="panel-subtitle">Built from the strongest players in our dataset.</p>
           </div>
           <div class="lineup-list" data-star-lineup></div>
         </section>
@@ -254,7 +247,6 @@
               <p class="panel-kicker">Series complete</p>
               <h2>What next?</h2>
             </div>
-            <p class="panel-subtitle">Play again or go back and rebuild the side.</p>
           </div>
           <div class="controls">
             <button class="primary" data-play-again type="button">Play again</button>
@@ -269,11 +261,43 @@
               <p class="panel-kicker">Memory reveal</p>
               <h2>Both XIs</h2>
             </div>
-            <p class="panel-subtitle">The hidden ratings are shown after the series.</p>
           </div>
           <div class="compare-grid" data-series-reveal-grid></div>
         </section>
       </section>
     </main>
+
+    <footer class="site-footer">
+      <div class="footer-rule">---------------ashes-5-0---------------</div>
+      <button class="secondary feedback-toggle" data-feedback-toggle type="button" aria-expanded="false">
+        Feedback
+      </button>
+      <div class="feedback-panel" data-feedback-panel hidden>
+        <form class="feedback-form" data-feedback-form>
+          <label class="feedback-label" for="feedback-message">Send a note</label>
+          <textarea
+            id="feedback-message"
+            data-feedback-message
+            name="message"
+            rows="4"
+            placeholder="Share feedback, bugs, or ideas..."
+            required
+            maxlength="2000"
+          ></textarea>
+          <input
+            class="feedback-honeypot"
+            data-feedback-honeypot
+            name="website"
+            autocomplete="off"
+            tabindex="-1"
+            aria-hidden="true"
+          />
+          <div class="feedback-actions">
+            <button class="primary" data-feedback-submit type="submit">Submit</button>
+            <p class="feedback-status" data-feedback-status aria-live="polite"></p>
+          </div>
+        </form>
+      </div>
+    </footer>
   </body>
 </html>
