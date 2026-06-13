@@ -77,7 +77,9 @@ export async function onRequestPost(context) {
     return json(
       {
         ok: false,
-        error: text || "Google Sheets feedback endpoint failed.",
+        error: text
+          ? `Google Sheets feedback endpoint failed (${response.status}). ${text.slice(0, 300)}`
+          : `Google Sheets feedback endpoint failed (${response.status}).`,
       },
       502,
     );

@@ -52,4 +52,14 @@ function doPost(e) {
 }
 ```
 
+If this is a standalone script rather than one bound to the sheet, replace `getActiveSpreadsheet()` with `SpreadsheetApp.openById("YOUR_SHEET_ID")`.
+
+When deploying:
+
+- `Execute as` should be `Me`
+- `Who has access` should be `Anyone` or `Anyone with Google account`
+- use the `/exec` URL from the web app deployment, not the `/dev` URL
+
+If you see a Google authorization prompt, open the Apps Script editor once and run a script function from there to grant access, then redeploy.
+
 You only need to replace the sheet name if you want something different, then deploy the script as a web app and paste that URL into `GOOGLE_APPS_SCRIPT_URL`.
