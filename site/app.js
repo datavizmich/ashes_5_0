@@ -1,5 +1,7 @@
 import { ASHES_SQUADS } from "./data/ashes-squads.js";
 
+const CANONICAL_SITE_URL = "https://ashes-5-0.co.uk/";
+
 const XI_SLOTS = [
   { label: "Opener", accepts: ["Opener"], focus: "batting", row: 5, col: 2 },
   { label: "Opener", accepts: ["Opener"], focus: "batting", row: 5, col: 4 },
@@ -27,6 +29,8 @@ const STATE = {
   achievementDetail: null,
   achievementPinned: false,
   achievementHelpBound: false,
+  seriesShareAsset: null,
+  seriesShareAssetPromise: null,
 };
 
 const ACHIEVEMENT_DEFS = {
@@ -86,6 +90,9 @@ function bindElements() {
     seriesRevealGrid: "[data-series-reveal-grid]",
     playAgain: "[data-play-again]",
     shareResult: "[data-share-result]",
+    copyLink: "[data-copy-link]",
+    downloadShare: "[data-download-share]",
+    shareStatus: "[data-share-status]",
     resetBuilder: "[data-reset-builder]",
     feedbackToggle: "[data-feedback-toggle]",
     feedbackPanel: "[data-feedback-panel]",
@@ -1807,7 +1814,11 @@ function startSeries() {
   try {
     STATE.achievementDetail = null;
     STATE.achievementPinned = false;
+    STATE.seriesShareAsset = null;
+    STATE.seriesShareAssetPromise = null;
     STATE.series = buildSeries();
+    prepareSeriesShareAsset(STATE.series, STATE.mode);
+    setShareStatus("");
     STATE.view = "series";
     renderAll();
     animateSeries();
@@ -1853,6 +1864,9 @@ function goHome() {
   STATE.currentSquad = null;
   STATE.selectedPlayerId = null;
   STATE.series = null;
+  STATE.seriesShareAsset = null;
+  STATE.seriesShareAssetPromise = null;
+  setShareStatus("");
   STATE.achievementDetail = null;
   STATE.achievementPinned = false;
   renderAll();
@@ -1862,6 +1876,9 @@ function goBuilder() {
   clearTimer();
   STATE.view = "game";
   STATE.series = null;
+  STATE.seriesShareAsset = null;
+  STATE.seriesShareAssetPromise = null;
+  setShareStatus("");
   STATE.achievementDetail = null;
   STATE.achievementPinned = false;
   renderAll();
@@ -1873,6 +1890,9 @@ function resetBuilder() {
   STATE.currentSquad = null;
   STATE.selectedPlayerId = null;
   STATE.series = null;
+  STATE.seriesShareAsset = null;
+  STATE.seriesShareAssetPromise = null;
+  setShareStatus("");
   STATE.view = "game";
   STATE.achievementDetail = null;
   STATE.achievementPinned = false;
@@ -1889,13 +1909,64 @@ function wireControls() {
   els.rollSquad.addEventListener("click", rollSquad);
   els.startSeries.addEventListener("click", startSeries);
   els.playAgain.addEventListener("click", goHome);
-  els.shareResult.addEventListener("click", () => {
+  els.shareResult.addEventListener("click", async () => {
     if (!STATE.series) return;
+    const text = formatShareText();
+    const title = "Ashes XI";
+    const file = await ensureSeriesShareAsset();
+
+    if (file && navigator.share && navigator.canShare?.({ files: [file] })) {
+      try {
+        await navigator.share({
+          title,
+          text,
+          files: [file],
+        });
+        return;
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === "AbortError")) {
+          console.warn("Native share with image failed:", error);
+        } else {
+          return;
+        }
+      }
+    }
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title,
+          text,
+          url: shareUrl(),
+        });
+        return;
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        console.warn("Native share failed:", error);
+      }
+    }
+
     window.open(
-      `https://x.com/intent/post?text=${encodeURIComponent(formatShareText())}`,
+      `https://x.com/intent/post?text=${encodeURIComponent(text)}`,
       "_blank",
       "noopener,noreferrer",
     );
+  });
+  els.copyLink.addEventListener("click", async () => {
+    try {
+      await copySeriesLink();
+    } catch (error) {
+      console.error("Copy link failed:", error);
+      setShareStatus("Could not copy the link.");
+    }
+  });
+  els.downloadShare.addEventListener("click", async () => {
+    try {
+      await downloadSeriesShareImage();
+    } catch (error) {
+      console.error("Download image failed:", error);
+      setShareStatus("Could not download the image.");
+    }
   });
   els.resetBuilder.addEventListener("click", resetBuilder);
 
@@ -2002,9 +2073,262 @@ function wireControls() {
 }
 
 function shareUrl() {
-  const url = new URL(window.location.href);
-  url.hash = "";
-  return url.toString();
+  return CANONICAL_SITE_URL;
+}
+
+function roundRectPath(ctx, x, y, width, height, radius) {
+  const r = Math.min(radius, width / 2, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + width, y, x + width, y + height, r);
+  ctx.arcTo(x + width, y + height, x, y + height, r);
+  ctx.arcTo(x, y + height, x, y, r);
+  ctx.arcTo(x, y, x + width, y, r);
+  ctx.closePath();
+}
+
+function fitCanvasText(ctx, text, maxWidth, maxSize, minSize, weight = 700, family = "Inter") {
+  let size = maxSize;
+  while (size > minSize) {
+    ctx.font = `${weight} ${size}px ${family}`;
+    if (ctx.measureText(text).width <= maxWidth) break;
+    size -= 1;
+  }
+  ctx.font = `${weight} ${size}px ${family}`;
+}
+
+async function createSeriesShareFile(series, modeLabel) {
+  if (!series) return null;
+  if (document.fonts?.ready) {
+    try {
+      await document.fonts.ready;
+    } catch {
+      // Ignore font load failures and fall back to system fonts.
+    }
+  }
+
+  const width = 1600;
+  const height = 1520;
+  const scale = Math.min(2, Math.max(1, Math.floor(window.devicePixelRatio || 1)));
+  const canvas = document.createElement("canvas");
+  canvas.width = width * scale;
+  canvas.height = height * scale;
+  canvas.style.width = `${width}px`;
+  canvas.style.height = `${height}px`;
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.scale(scale, scale);
+
+  const bg = ctx.createLinearGradient(0, 0, width, height);
+  bg.addColorStop(0, "#123524");
+  bg.addColorStop(0.55, "#0f2d1f");
+  bg.addColorStop(1, "#08150f");
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.fillStyle = "rgba(212, 175, 55, 0.18)";
+  ctx.beginPath();
+  ctx.arc(width - 180, 150, 220, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "rgba(245, 240, 230, 0.08)";
+  ctx.beginPath();
+  ctx.arc(140, height - 180, 260, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(24, 24, width - 48, height - 48);
+
+  ctx.fillStyle = "#f8f8f8";
+  fitCanvasText(ctx, "Ashes XI", 700, 66, 42, 800, "Oswald");
+  ctx.fillText("Ashes XI", 80, 118);
+
+  const modeText = `${modeLabel} series complete`;
+  ctx.fillStyle = "rgba(248, 248, 248, 0.82)";
+  fitCanvasText(ctx, modeText, 560, 28, 18, 600, "Inter");
+  ctx.fillText(modeText, 80, 155);
+
+  const resultText =
+    series.userWins > series.starWins
+      ? `Your XI won the series ${series.userWins}-${series.starWins}-${series.draws}`
+      : series.userWins < series.starWins
+        ? `Your XI lost the series ${series.userWins}-${series.starWins}-${series.draws}`
+        : `The series finished level ${series.userWins}-${series.starWins}-${series.draws}`;
+  ctx.fillStyle = "#d4af37";
+  fitCanvasText(ctx, resultText, 900, 30, 18, 700, "Inter");
+  ctx.fillText(resultText, 80, 192);
+
+  const metrics = teamMetricsFromLineup(series.userLineup);
+  const metricCards = [
+    { label: "Batting", value: metrics.batting },
+    { label: "Bowling", value: metrics.bowling },
+    { label: "Fielding", value: metrics.fielding },
+    { label: "Overall", value: `${metrics.overall} · ${metrics.grade}` },
+  ];
+
+  const cardY = 242;
+  const cardW = 344;
+  const cardH = 112;
+  const gap = 20;
+
+  metricCards.forEach((card, index) => {
+    const x = 80 + index * (cardW + gap);
+    ctx.fillStyle = "rgba(245, 240, 230, 0.94)";
+    roundRectPath(ctx, x, cardY, cardW, cardH, 24);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(31, 31, 31, 0.08)";
+    ctx.stroke();
+
+    ctx.fillStyle = "#b8860b";
+    fitCanvasText(ctx, card.label, cardW - 36, 18, 14, 800, "Inter");
+    ctx.fillText(card.label, x + 18, cardY + 34);
+
+    ctx.fillStyle = "#1f1f1f";
+    fitCanvasText(ctx, String(card.value), cardW - 36, 38, 24, 800, "Oswald");
+    ctx.fillText(String(card.value), x + 18, cardY + 84);
+  });
+
+  ctx.fillStyle = "#d4af37";
+  fitCanvasText(ctx, "Your XI", 380, 28, 18, 800, "Inter");
+  ctx.fillText("Your XI", 80, 430);
+
+  ctx.fillStyle = "rgba(248, 248, 248, 0.7)";
+  fitCanvasText(ctx, "Player ratings", 360, 16, 12, 600, "Inter");
+  ctx.fillText("Player ratings", 185, 430);
+
+  const rowsTop = 462;
+  const rowHeight = 80;
+  const rowGap = 10;
+  const rowWidth = width - 160;
+
+  series.userLineup.forEach((player, index) => {
+    const y = rowsTop + index * (rowHeight + rowGap);
+    const slot = XI_SLOTS[index];
+    ctx.fillStyle = index % 2 === 0 ? "rgba(245, 240, 230, 0.94)" : "rgba(236, 228, 210, 0.94)";
+    roundRectPath(ctx, 80, y, rowWidth, rowHeight, 22);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(31, 31, 31, 0.08)";
+    ctx.stroke();
+
+    ctx.fillStyle = "#b8860b";
+    fitCanvasText(ctx, slot.label, 110, 18, 13, 800, "Inter");
+    ctx.fillText(slot.label, 104, y + 28);
+
+    ctx.fillStyle = "#1f1f1f";
+    fitCanvasText(ctx, player.name, 470, 28, 18, 800, "Inter");
+    ctx.fillText(player.name, 104, y + 58);
+
+    ctx.fillStyle = "#5f5d56";
+    fitCanvasText(ctx, `Bat ${player.batting}  Bowl ${player.bowling}  Field ${player.fielding}`, 310, 16, 12, 600, "Roboto Mono");
+    ctx.fillText(`Bat ${player.batting}  Bowl ${player.bowling}  Field ${player.fielding}`, 1120, y + 33);
+
+    ctx.fillStyle = "#123524";
+    fitCanvasText(ctx, `Overall ${playerOverall(player)}`, 170, 22, 14, 800, "Oswald");
+    ctx.fillText(`Overall ${playerOverall(player)}`, 1290, y + 58);
+  });
+
+  ctx.fillStyle = "rgba(248, 248, 248, 0.75)";
+  fitCanvasText(ctx, "ashes-5-0.co.uk", 300, 18, 13, 600, "Roboto Mono");
+  ctx.fillText("ashes-5-0.co.uk", 80, height - 52);
+
+  const blob = await new Promise((resolve, reject) => {
+    canvas.toBlob((value) => {
+      if (!value) {
+        reject(new Error("Could not render share image."));
+        return;
+      }
+      resolve(value);
+    }, "image/png");
+  });
+
+  return new File([blob], "ashes-xi-team.png", { type: "image/png" });
+}
+
+function prepareSeriesShareAsset(series, modeLabel) {
+  if (!series || STATE.seriesShareAsset || STATE.seriesShareAssetPromise) return;
+  const seriesRef = series;
+  STATE.seriesShareAssetPromise = createSeriesShareFile(seriesRef, modeLabel)
+    .then((file) => {
+      if (STATE.series === seriesRef) {
+        STATE.seriesShareAsset = file;
+      }
+      return file;
+    })
+    .catch((error) => {
+      console.error("Share image generation failed:", error);
+      return null;
+    })
+    .finally(() => {
+      if (STATE.series === seriesRef) {
+        STATE.seriesShareAssetPromise = null;
+      }
+    });
+}
+
+function setShareStatus(message) {
+  if (!els.shareStatus) return;
+  els.shareStatus.textContent = message;
+}
+
+async function ensureSeriesShareAsset() {
+  if (!STATE.series) return null;
+  if (STATE.seriesShareAsset) return STATE.seriesShareAsset;
+  if (!STATE.seriesShareAssetPromise) {
+    prepareSeriesShareAsset(STATE.series, STATE.mode);
+  }
+
+  try {
+    const file = await STATE.seriesShareAssetPromise;
+    return file ?? STATE.seriesShareAsset ?? null;
+  } catch {
+    return STATE.seriesShareAsset ?? null;
+  }
+}
+
+async function copySeriesLink() {
+  const url = shareUrl();
+
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(url);
+    setShareStatus("Link copied.");
+    return;
+  }
+
+  const input = document.createElement("input");
+  input.value = url;
+  input.setAttribute("readonly", "readonly");
+  input.style.position = "fixed";
+  input.style.left = "-9999px";
+  document.body.appendChild(input);
+  input.select();
+  const copied = document.execCommand("copy");
+  input.remove();
+
+  if (!copied) {
+    throw new Error("Could not copy link.");
+  }
+
+  setShareStatus("Link copied.");
+}
+
+async function downloadSeriesShareImage() {
+  const file = await ensureSeriesShareAsset();
+  if (!file) {
+    setShareStatus("Image is still generating. Try again in a moment.");
+    return;
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+  const link = document.createElement("a");
+  link.href = objectUrl;
+  link.download = file.name || "ashes-xi-team.png";
+  link.rel = "noopener";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+  setShareStatus("Download started.");
 }
 
 function formatShareText() {
@@ -2019,7 +2343,7 @@ function formatShareText() {
         ? "lost"
         : "drew";
   const modeLabel = STATE.mode === "memory" ? "Memory" : "Classic";
-  return `I just finished an ${modeLabel} Ashes XI series and ${seriesResult} the 5-Test series ${STATE.series.userWins}-${STATE.series.starWins}-${STATE.series.draws}. ${shareUrl()}`;
+  return `I just finished a ${modeLabel} Ashes XI series and ${seriesResult} the 5-Test series ${STATE.series.userWins}-${STATE.series.starWins}-${STATE.series.draws}. ${shareUrl()}`;
 }
 
 function init() {

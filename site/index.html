@@ -125,6 +125,30 @@
           <button class="secondary" data-start-series type="button" hidden>Simulate the series</button>
         </section>
 
+        <section class="content">
+          <section class="panel roster-panel">
+            <div class="panel-header">
+              <div>
+                <p class="panel-kicker">Squad pool</p>
+                <h2 data-roster-title>No squad rolled yet</h2>
+              </div>
+              <p class="panel-subtitle" data-roster-summary>Roll a squad to see the players.</p>
+            </div>
+            <div class="roster-grid" data-roster-grid></div>
+          </section>
+
+          <section class="panel board-panel">
+            <div class="panel-header">
+              <div>
+                <p class="panel-kicker">XI board</p>
+                <h2>Your Test side</h2>
+              </div>
+              <p class="panel-subtitle">Click a player first, then click a valid slot.</p>
+            </div>
+            <div class="board" data-board></div>
+          </section>
+        </section>
+
         <section class="panel draft-meter" data-draft-meter>
           <div class="panel-header">
             <div>
@@ -151,30 +175,6 @@
               <strong data-draft-overall>0</strong>
             </div>
           </div>
-        </section>
-
-        <section class="content">
-          <section class="panel roster-panel">
-            <div class="panel-header">
-              <div>
-                <p class="panel-kicker">Squad pool</p>
-                <h2 data-roster-title>No squad rolled yet</h2>
-              </div>
-              <p class="panel-subtitle" data-roster-summary>Roll a squad to see the players.</p>
-            </div>
-            <div class="roster-grid" data-roster-grid></div>
-          </section>
-
-          <section class="panel board-panel">
-            <div class="panel-header">
-              <div>
-                <p class="panel-kicker">XI board</p>
-                <h2>Your Test side</h2>
-              </div>
-              <p class="panel-subtitle">Click a player first, then click a valid slot.</p>
-            </div>
-            <div class="board" data-board></div>
-          </section>
         </section>
       </section>
 
@@ -251,8 +251,11 @@
           <div class="controls">
             <button class="primary" data-play-again type="button">Play again</button>
             <button class="secondary" data-share-result type="button">Share to X</button>
+            <button class="secondary" data-copy-link type="button">Copy link</button>
+            <button class="secondary" data-download-share type="button">Download image</button>
             <button class="secondary" data-reset-builder type="button">Reset builder</button>
           </div>
+          <p class="share-status" data-share-status aria-live="polite"></p>
         </section>
 
         <section class="panel memory-reveal" data-series-reveal hidden>

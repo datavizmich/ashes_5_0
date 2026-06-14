@@ -185,6 +185,13 @@ body::before {
   color: var(--accent-2);
 }
 
+.share-status {
+  margin: 0.25rem 0 0;
+  color: rgba(248, 248, 248, 0.8);
+  font-size: 0.95rem;
+  min-height: 1.2em;
+}
+
 .view[hidden] {
   display: none !important;
 }
@@ -1154,13 +1161,53 @@ button.achievement-badge:focus-visible {
     top: 0.75rem;
   }
 
+  .board {
+    padding: 0.75rem;
+  }
+
   .board-grid {
-    min-height: 480px;
+    min-height: 0;
+    grid-template-columns: 1fr;
+    grid-template-rows: none;
     gap: 0.55rem;
   }
 
+  .board-grid::before {
+    display: none;
+  }
+
   .slot {
-    min-height: 68px;
+    grid-column: auto !important;
+    grid-row: auto !important;
+    min-height: 0;
+    padding: 0.85rem 0.9rem;
+    align-content: start;
+    justify-items: start;
+    text-align: left;
+    gap: 0.15rem;
+  }
+
+  .slot .slot-label,
+  .slot .slot-sub,
+  .slot .slot-name {
+    width: 100%;
+  }
+
+  .slot .slot-label {
+    font-size: 0.68rem;
+    letter-spacing: 0.12em;
+  }
+
+  .slot .slot-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .slot .slot-sub {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .topbar {
