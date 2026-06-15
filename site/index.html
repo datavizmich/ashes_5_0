@@ -7,10 +7,10 @@
     <link rel="manifest" href="/site.webmanifest">
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Ashes XI Cricket Game | Roll Squads &amp; Build a Test XI</title>
+    <title>Cricket XI Game | Roll Squads &amp; Build a Team</title>
     <meta
       name="description"
-      content="Roll historic Ashes cricket squads, build your Test XI, and simulate a five-Test series against an all-star XI."
+      content="Roll historic cricket squads, build your XI, and simulate a series against an all-star XI."
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -29,25 +29,25 @@
       <section class="view home-view" data-home-view>
         <header class="hero">
           <div>
-            <p class="eyebrow">Ashes XI</p>
-            <h1>Roll an Ashes squad. Lock one player. Build your Test XI.</h1>
-            <p class="lede">
-              Each roll produces a historic Ashes squad. Pick one player from the squad to lock
-              into your XI. Keep going until your dream Ashes line-up is complete and you
+            <p class="eyebrow" data-home-eyebrow>Cricket XI</p>
+            <h1 data-home-title>Roll a squad. Lock one player. Build your XI.</h1>
+            <p class="lede" data-home-lede>
+              Each roll produces a historic squad. Pick one player from the squad to lock
+              into your XI. Keep going until your dream line-up is complete and you
               are ready to take on the All-Star XI.
             </p>
           </div>
           <div class="hero-card">
             <div class="stat">
-              <span>Ashes squads</span>
+              <span data-home-squads-label>Squads</span>
               <strong data-total-squads>0</strong>
             </div>
             <div class="stat">
-              <span>Total players</span>
+              <span data-home-players-label>Total players</span>
               <strong data-total-players>0</strong>
             </div>
             <div class="stat">
-              <span>Series format</span>
+              <span data-home-format-label>Series format</span>
               <strong>5 Tests</strong>
             </div>
           </div>
@@ -74,7 +74,7 @@
           <div class="rules-grid">
             <article class="rule-card">
               <strong>1</strong>
-              <span>Roll a previous Ashes squad.</span>
+              <span data-home-rule-one>Roll a previous squad.</span>
             </article>
             <article class="rule-card">
               <strong>2</strong>
@@ -86,7 +86,10 @@
             </article>
           </div>
 
+          <div class="controls home-controls">
           <button class="primary play-button" data-play-game type="button">Start rolling</button>
+            <button class="secondary" data-home-competition type="button">World Cup mode</button>
+          </div>
         </section>
       </section>
 
@@ -105,8 +108,8 @@
 
         <header class="hero hero-game">
           <div>
-            <p class="eyebrow">XI builder</p>
-            <h1>Roll a squad. Choose one player. Place them in the XI.</h1>
+            <p class="eyebrow" data-game-eyebrow>XI builder</p>
+            <h1 data-game-title>Roll a squad. Choose one player. Place them in the XI.</h1>
           </div>
           <div class="hero-card">
             <div class="stat">
@@ -121,7 +124,7 @@
         </header>
 
         <section class="controls">
-          <button class="primary roll-action" data-roll-squad type="button">Roll Ashes squad</button>
+          <button class="primary roll-action" data-roll-squad type="button">Roll squad</button>
           <button class="secondary" data-start-series type="button" hidden>Simulate the series</button>
         </section>
 
@@ -129,7 +132,7 @@
           <section class="panel roster-panel">
             <div class="panel-header">
               <div>
-                <p class="panel-kicker">Squad pool</p>
+                <p class="panel-kicker" data-roster-kicker>Squad pool</p>
                 <h2 data-roster-title>No squad rolled yet</h2>
               </div>
               <p class="panel-subtitle" data-roster-summary>Roll a squad to see the players.</p>
@@ -141,7 +144,7 @@
             <div class="panel-header">
               <div>
                 <p class="panel-kicker">XI board</p>
-                <h2>Your Test side</h2>
+                <h2 data-board-title>Your Test side</h2>
               </div>
               <p class="panel-subtitle">Click a player first, then click a valid slot.</p>
             </div>
@@ -189,8 +192,8 @@
 
         <header class="hero hero-series">
           <div>
-            <p class="eyebrow">Test series</p>
-            <h1>Your XI takes on an all-star Ashes XI.</h1>
+            <p class="eyebrow" data-series-eyebrow>Series</p>
+            <h1 data-series-title>Your XI takes on an all-star XI.</h1>
           </div>
           <div class="hero-card">
             <div class="stat">
@@ -232,7 +235,7 @@
           <div class="panel-header">
             <div>
               <p class="panel-kicker">Opposition XI</p>
-              <h2>All-star Ashes XI</h2>
+              <h2 data-star-title>All-star XI</h2>
             </div>
             <p class="panel-subtitle">Built from the strongest players in our dataset.</p>
           </div>

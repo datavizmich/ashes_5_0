@@ -1,4 +1,5 @@
 import { ASHES_SQUADS } from "./data/ashes-squads.js";
+import { WORLD_CUP_SQUADS } from "./data/wc-squads.js";
 
 const CANONICAL_SITE_URL = "https://ashes-5-0.co.uk/";
 
@@ -18,6 +19,7 @@ const XI_SLOTS = [
 
 const STATE = {
   view: "home",
+  competition: "ashes",
   squads: ASHES_SQUADS,
   catalog: [],
   lineup: new Map(),
@@ -55,16 +57,28 @@ function bindElements() {
     homeView: "[data-home-view]",
     gameView: "[data-game-view]",
     seriesView: "[data-series-view]",
+    homeEyebrow: "[data-home-eyebrow]",
+    homeTitle: "[data-home-title]",
+    homeLede: "[data-home-lede]",
+    homeSquadsLabel: "[data-home-squads-label]",
+    homePlayersLabel: "[data-home-players-label]",
+    homeFormatLabel: "[data-home-format-label]",
+    homeRuleOne: "[data-home-rule-one]",
     totalSquads: "[data-total-squads]",
     totalPlayers: "[data-total-players]",
     homeMode: "[data-home-mode]",
+    homeCompetition: "[data-home-competition]",
     gameSquadCount: "[data-game-squad-count]",
     gamePlayerCount: "[data-game-player-count]",
     gameMode: "[data-game-mode]",
+    gameEyebrow: "[data-game-eyebrow]",
+    gameTitle: "[data-game-title]",
     currentSquad: "[data-current-squad]",
     lineupStatus: "[data-lineup-status]",
     rosterTitle: "[data-roster-title]",
     rosterSummary: "[data-roster-summary]",
+    rosterKicker: "[data-roster-kicker]",
+    boardTitle: "[data-board-title]",
     rosterGrid: "[data-roster-grid]",
     board: "[data-board]",
     rollSquad: "[data-roll-squad]",
@@ -76,6 +90,9 @@ function bindElements() {
     seriesStatus: "[data-series-status]",
     seriesUserStrength: "[data-series-user-strength]",
     seriesStarStrength: "[data-series-star-strength]",
+    seriesEyebrow: "[data-series-eyebrow]",
+    seriesTitle: "[data-series-title]",
+    starTitle: "[data-star-title]",
     seriesFeed: "[data-series-feed]",
     seriesTableWrap: "[data-series-table-wrap]",
     starLineup: "[data-star-lineup]",
@@ -149,6 +166,77 @@ function shuffle(values) {
 
 function normalizeName(name) {
   return String(name).trim().toLowerCase();
+}
+
+function playerKey(player) {
+  return player?.id ?? normalizeName(player?.name ?? "");
+}
+
+function competitionConfig() {
+  if (STATE.competition === "worldcup") {
+    return {
+      name: "World Cup",
+      title: "World Cup XI",
+      plural: "World Cup",
+      accentLabel: "dark blue",
+      theme: "worldcup",
+      format: "limited-overs",
+      homeEyebrow: "World Cup XI",
+      homeTitle: "Roll a World Cup squad. Lock one player. Build your XI.",
+      homeLede:
+        "Each roll produces a historic World Cup squad. Pick one player from the squad to lock into your XI. Build your team, then survive the group stage and knockout rounds.",
+      squadsLabel: "World Cup squads",
+      gameEyebrow: "World Cup builder",
+      gameTitle: "Roll a squad. Choose one player. Place them in the XI.",
+      rosterKicker: "World Cup pool",
+      boardTitle: "Your World Cup side",
+      seriesEyebrow: "World Cup series",
+      seriesTitle: "Your XI navigates a World Cup group and knockout route.",
+      oppositionTitle: "World Cup opposition",
+      seriesProgressLabel: "Matches",
+      matchLabel: "ODI",
+      seriesDescriptor: "World Cup tournament",
+      modeButton: "Ashes mode",
+    };
+  }
+
+  return {
+    name: "Ashes",
+    title: "Ashes XI",
+    plural: "Ashes",
+    accentLabel: "green",
+    theme: "ashes",
+    format: "tests",
+    homeEyebrow: "Ashes XI",
+    homeTitle: "Roll an Ashes squad. Lock one player. Build your Test XI.",
+    homeLede:
+      "Each roll produces a historic Ashes squad. Pick one player from the squad to lock into your XI. Keep going until your dream Ashes line-up is complete and you are ready to take on the All-star XI.",
+    squadsLabel: "Ashes squads",
+    gameEyebrow: "XI builder",
+    gameTitle: "Roll a squad. Choose one player. Place them in the XI.",
+    rosterKicker: "Squad pool",
+    boardTitle: "Your Test side",
+    seriesEyebrow: "Test series",
+    seriesTitle: "Your XI takes on an all-star Ashes XI.",
+    oppositionTitle: "All-star Ashes XI",
+    seriesProgressLabel: "Tests",
+    matchLabel: "Test",
+    seriesDescriptor: "5-Test series",
+    modeButton: "World Cup mode",
+  };
+}
+
+function setCompetition(nextCompetition) {
+  STATE.competition = nextCompetition === "worldcup" ? "worldcup" : "ashes";
+  STATE.squads = STATE.competition === "worldcup" ? WORLD_CUP_SQUADS : ASHES_SQUADS;
+  STATE.lineup.clear();
+  STATE.currentSquad = null;
+  STATE.selectedPlayerId = null;
+  STATE.series = null;
+  STATE.seriesShareAsset = null;
+  STATE.seriesShareAssetPromise = null;
+  addCatalogMetadata();
+  renderAll();
 }
 
 function addCatalogMetadata() {
@@ -250,12 +338,12 @@ function buildBestLineup(players) {
   const lineup = new Map();
 
   XI_SLOTS.forEach((slot, index) => {
-    const pool = players.filter((player) => !chosen.has(player.id) && slotAcceptsPlayer(slot, player));
-    const fallback = pool.length ? pool : players.filter((player) => !chosen.has(player.id));
+    const pool = players.filter((player) => !chosen.has(playerKey(player)) && slotAcceptsPlayer(slot, player));
+    const fallback = pool.length ? pool : players.filter((player) => !chosen.has(playerKey(player)));
     const pick = shuffle(fallback).sort((a, b) => playerSlotScore(b, slot) - playerSlotScore(a, slot))[0] ?? null;
     if (pick) {
       lineup.set(index, pick);
-      chosen.add(pick.id);
+      chosen.add(playerKey(pick));
     }
   });
 
@@ -381,6 +469,7 @@ function draftMetricsFromLineup(lineup) {
 
 function seriesWinnerLabel() {
   if (!STATE.series) return "Simulation ready";
+  if (STATE.series.statusText) return STATE.series.statusText;
   if (STATE.series.userWins > STATE.series.starWins) return "Your XI lead the series";
   if (STATE.series.starWins > STATE.series.userWins) return "All-star XI lead the series";
   return "Series level";
@@ -606,12 +695,14 @@ function buildInningsSummary(teamLabel, batting, bowling) {
 }
 
 function bestBattersFromInnings(inningsList) {
-  const batters = inningsList.flatMap((innings) => innings?.batting?.batters ?? []);
+  const batters = inningsList.flatMap((innings) => innings?.batting?.batters ?? innings?.batters ?? []);
   return batters.filter((card) => !card.dnb).sort((a, b) => b.runs - a.runs || b.balls - a.balls)[0] ?? null;
 }
 
 function bestBowlerFromInnings(inningsList) {
-  const bowlers = inningsList.flatMap((innings) => innings?.bowling ?? []).filter((bowler) => bowler && bowler.overs !== "0");
+  const bowlers = inningsList
+    .flatMap((innings) => innings?.bowling ?? innings?.bowlers ?? [])
+    .filter((bowler) => bowler && bowler.overs !== "0");
   return bowlers.sort((a, b) => b.wickets - a.wickets || a.runs - b.runs)[0] ?? null;
 }
 
@@ -631,6 +722,28 @@ function summariseResult(match) {
   const { user1, star1, user2, star2 } = match.innings;
   const userTotal = user1.total + user2.total;
   const starTotal = star1.total + star2.total;
+
+  if (match.format === "limited-overs") {
+    const limitedUserTotal = user1.total;
+    const limitedStarTotal = star1.total;
+
+    if (match.result === "draw") {
+      return "Match tied";
+    }
+
+    if (match.result === "win") {
+      if (star1.chaseComplete) {
+        return `won by ${10 - star1.wickets} ${pluralize(10 - star1.wickets, "wicket")}`;
+      }
+      return `won by ${limitedUserTotal - limitedStarTotal} ${pluralize(limitedUserTotal - limitedStarTotal, "run")}`;
+    }
+
+    if (star1.chaseComplete) {
+      return `lost by ${10 - star1.wickets} ${pluralize(10 - star1.wickets, "wicket")}`;
+    }
+
+    return `lost by ${limitedStarTotal - limitedUserTotal} ${pluralize(limitedStarTotal - limitedUserTotal, "run")}`;
+  }
 
   if (match.result === "draw") {
     return "Series drawn";
@@ -661,6 +774,7 @@ function summariseResult(match) {
 }
 
 function generateHeadline(match) {
+  const limitedOvers = match.format === "limited-overs";
   const batters = [
     ...(match.innings.user1?.batters ?? []),
     ...(match.innings.user2?.batters ?? []),
@@ -678,11 +792,15 @@ function generateHeadline(match) {
   const topBowl = [...bowlers].sort((a, b) => b.wickets - a.wickets || a.runs - b.runs)[0] ?? null;
 
   if (topBowl && topBowl.wickets >= 5) {
-    return `${topBowl.name} destroys the chase with ${topBowl.wickets} wickets`;
+    return limitedOvers
+      ? `${topBowl.name} turns the game with ${topBowl.wickets} wickets`
+      : `${topBowl.name} destroys the chase with ${topBowl.wickets} wickets`;
   }
 
   if (topBat && topBat.runs >= 140) {
-    return `${topBat.name}'s ${topBat.runs} seals the Test`;
+    return limitedOvers
+      ? `${topBat.name}'s ${topBat.runs} seals the match`
+      : `${topBat.name}'s ${topBat.runs} seals the Test`;
   }
 
   if (match.result === "draw") {
@@ -698,6 +816,23 @@ function matchMarginText(match) {
   const { user1, star1, user2, star2 } = match.innings;
   const userTotal = user1.total + user2.total;
   const starTotal = star1.total + star2.total;
+
+  if (match.format === "limited-overs") {
+    if (match.result === "draw") return "Match tied";
+
+    if (match.result === "win") {
+      if (star1.chaseComplete) {
+        return `Won by ${10 - star1.wickets} ${pluralize(10 - star1.wickets, "wicket")}`;
+      }
+      return `Won by ${user1.total - star1.total} ${pluralize(user1.total - star1.total, "run")}`;
+    }
+
+    if (star1.chaseComplete) {
+      return `Lost by ${10 - star1.wickets} ${pluralize(10 - star1.wickets, "wicket")}`;
+    }
+
+    return `Lost by ${star1.total - user1.total} ${pluralize(star1.total - user1.total, "run")}`;
+  }
 
   if (match.result === "draw") return "Match drawn";
 
@@ -805,6 +940,331 @@ function buildAchievementList(series, leaders) {
   return achievements;
 }
 
+function oversFromBalls(balls) {
+  return balls / 6;
+}
+
+function worldCupSquadStrength(squad) {
+  return teamMetricsFromLineup(buildBestLineup(squad.players)).overall;
+}
+
+function buildWorldCupPools() {
+  const ranked = WORLD_CUP_SQUADS
+    .map((squad) => ({
+      squad,
+      lineup: buildBestLineup(squad.players),
+      metrics: teamMetricsFromLineup(buildBestLineup(squad.players)),
+      strength: worldCupSquadStrength(squad),
+    }))
+    .sort((a, b) => b.strength - a.strength || b.metrics.overall - a.metrics.overall);
+
+  const buckets = {
+    weak: [],
+    middle: [],
+    strong: [],
+    elite: [],
+  };
+
+  ranked.forEach((entry, index) => {
+    const bucketIndex = clamp(Math.floor((index / Math.max(1, ranked.length)) * 4), 0, 3);
+    const bucketName = ["weak", "middle", "strong", "elite"][bucketIndex];
+    buckets[bucketName].push(entry);
+  });
+
+  return { ranked, buckets };
+}
+
+function drawWorldCupOpponent(bucket, usedIds, fallbackPool) {
+  const source = bucket.filter((entry) => !usedIds.has(entry.squad.id));
+  const pool = source.length ? source : fallbackPool.filter((entry) => !usedIds.has(entry.squad.id));
+  const pick = randomChoice(pool.length ? pool : fallbackPool);
+  if (!pick) return null;
+  usedIds.add(pick.squad.id);
+  return pick;
+}
+
+function createDisplayMatch({
+  stage,
+  stageLabel,
+  matchNumber,
+  venue,
+  homeTeam,
+  awayTeam,
+  match,
+}) {
+  const resultClass =
+    match.result === "win" ? "result-win" : match.result === "loss" ? "result-loss" : "result-draw";
+  return {
+    format: "limited-overs",
+    stage,
+    stageLabel,
+    matchNumber,
+    venue,
+    result: match.result,
+    resultClass,
+    homeTeam,
+    awayTeam,
+    innings: [
+      { label: `${homeTeam.label} innings`, score: inningsScoreLabel(match.innings.user1) },
+      { label: `${awayTeam.label} innings`, score: inningsScoreLabel(match.innings.star1) },
+    ],
+    scoreline: `${inningsScoreLabel(match.innings.user1)} | ${inningsScoreLabel(match.innings.star1)}`,
+    summary: summariseResult(match),
+    headline: generateHeadline(match),
+    inningsData: {
+      user1: buildInningsSummary(`${homeTeam.label} innings`, match.innings.user1, match.innings.user1.bowling),
+      star1: buildInningsSummary(`${awayTeam.label} innings`, match.innings.star1, match.innings.star1.bowling),
+      user2: buildInningsSummary(`${homeTeam.label} 2nd innings`, match.innings.user2, match.innings.user2.bowling),
+      star2: buildInningsSummary(`${awayTeam.label} 2nd innings`, match.innings.star2, match.innings.star2.bowling),
+    },
+    userBox: buildMatchBoxScore({
+      batting: [match.innings.user1],
+      bowling: [match.innings.star1],
+    }),
+    starBox: buildMatchBoxScore({
+      batting: [match.innings.star1],
+      bowling: [match.innings.user1],
+    }),
+  };
+}
+
+function buildWorldCupTournament() {
+  const userLine = userLineup();
+  const userTeam = teamMetricsFromLineup(userLine);
+  const { ranked, buckets } = buildWorldCupPools();
+  const usedIds = new Set();
+
+  const drawBucketOpponent = (bucket, category) => {
+    const draw = drawWorldCupOpponent(bucket, usedIds, ranked);
+    if (!draw) return null;
+    return {
+      id: draw.squad.id,
+      label: draw.squad.label,
+      lineup: draw.lineup,
+      metrics: draw.metrics,
+      category,
+      squad: draw.squad,
+    };
+  };
+
+  const groupOpponents = [
+    drawBucketOpponent(buckets.weak, "Weak"),
+    drawBucketOpponent(buckets.middle, "Middle"),
+    drawBucketOpponent(buckets.strong, "Strong"),
+  ].filter(Boolean);
+
+  const userEntry = {
+    id: "your",
+    label: "Your XI",
+    lineup: userLine,
+    metrics: userTeam,
+    category: "user",
+  };
+
+  const groupTeams = [userEntry, ...groupOpponents];
+  const standings = new Map(
+    groupTeams.map((team) => [
+      team.id,
+      {
+        id: team.id,
+        label: team.label,
+        team,
+        played: 0,
+        wins: 0,
+        losses: 0,
+        draws: 0,
+        points: 0,
+        runsFor: 0,
+        runsAgainst: 0,
+        ballsFor: 0,
+        ballsAgainst: 0,
+        nrr: 0,
+      },
+    ]),
+  );
+
+  const updateStandings = (firstTeam, secondTeam, match) => {
+    const first = standings.get(firstTeam.id);
+    const second = standings.get(secondTeam.id);
+    if (!first || !second) return;
+
+    first.played += 1;
+    second.played += 1;
+    first.runsFor += match.innings.user1.total;
+    first.runsAgainst += match.innings.star1.total;
+    first.ballsFor += match.innings.user1.balls;
+    first.ballsAgainst += match.innings.star1.balls;
+    second.runsFor += match.innings.star1.total;
+    second.runsAgainst += match.innings.user1.total;
+    second.ballsFor += match.innings.star1.balls;
+    second.ballsAgainst += match.innings.user1.balls;
+
+    if (match.result === "win") {
+      first.wins += 1;
+      first.points += 2;
+      second.losses += 1;
+    } else if (match.result === "loss") {
+      second.wins += 1;
+      second.points += 2;
+      first.losses += 1;
+    } else {
+      first.draws += 1;
+      second.draws += 1;
+      first.points += 1;
+      second.points += 1;
+    }
+  };
+
+  const visibleMatches = [];
+  const userMatches = new Map();
+
+  const fixtures = shuffle([
+    [groupTeams[0], groupTeams[1]],
+    [groupTeams[0], groupTeams[2]],
+    [groupTeams[0], groupTeams[3]],
+    [groupTeams[1], groupTeams[2]],
+    [groupTeams[1], groupTeams[3]],
+    [groupTeams[2], groupTeams[3]],
+  ]);
+
+  fixtures.forEach(([firstTeam, secondTeam], index) => {
+    const match = simulateLimitedOversMatch(firstTeam.lineup, secondTeam.lineup, {
+      pitch: index % 2 === 0 ? "balanced" : "flat",
+    });
+    updateStandings(firstTeam, secondTeam, match);
+
+    if (firstTeam.id === "your" || secondTeam.id === "your") {
+      const opponent = firstTeam.id === "your" ? secondTeam : firstTeam;
+      const displayMatch = createDisplayMatch({
+        stage: "group",
+        stageLabel: "Group stage",
+        matchNumber: userMatches.size + 1,
+        venue: opponent.label,
+        homeTeam: userEntry,
+        awayTeam: opponent,
+        match: firstTeam.id === "your"
+          ? match
+          : {
+              ...match,
+              result: match.result === "win" ? "loss" : match.result === "loss" ? "win" : "draw",
+              innings: {
+                user1: match.innings.star1,
+                star1: match.innings.user1,
+                user2: match.innings.star2,
+                star2: match.innings.user2,
+              },
+            },
+      });
+
+      userMatches.set(opponent.id, displayMatch);
+    }
+  });
+
+  const groupTable = [...standings.values()]
+    .map((entry) => ({
+      ...entry,
+      nrr:
+        oversFromBalls(entry.ballsFor) > 0 && oversFromBalls(entry.ballsAgainst) > 0
+          ? entry.runsFor / oversFromBalls(entry.ballsFor) - entry.runsAgainst / oversFromBalls(entry.ballsAgainst)
+          : 0,
+    }))
+    .sort((a, b) => b.points - a.points || b.nrr - a.nrr || b.runsFor - a.runsFor || a.label.localeCompare(b.label));
+
+  const qualified = groupTable.findIndex((entry) => entry.id === "your") < 2;
+  const groupMatches = [...userMatches.values()].sort((a, b) => a.matchNumber - b.matchNumber);
+  const knockoutMatches = [];
+  let statusText = qualified ? "Through to the semi-finals" : "Knocked out in the group stage";
+  let finalOpponent = null;
+  let starTeam =
+    [...groupOpponents].sort((a, b) => b.metrics.overall - a.metrics.overall || b.metrics.batting - a.metrics.batting)[0] ??
+    userEntry;
+  let starLineup = starTeam.lineup;
+
+  if (qualified) {
+    const semiOpponent = drawWorldCupOpponent(buckets.elite, usedIds, buckets.elite);
+    if (semiOpponent) {
+      const semiTeam = {
+        id: semiOpponent.squad.id,
+        label: semiOpponent.squad.label,
+        lineup: semiOpponent.lineup,
+        metrics: semiOpponent.metrics,
+        category: "Elite",
+      };
+      const semiMatch = simulateLimitedOversMatch(userLine, semiTeam.lineup, { pitch: "balanced" });
+      knockoutMatches.push(
+        createDisplayMatch({
+          stage: "semi",
+          stageLabel: "Semi-final",
+          matchNumber: groupMatches.length + 1,
+          venue: semiTeam.label,
+          homeTeam: userEntry,
+          awayTeam: semiTeam,
+          match: semiMatch,
+        }),
+      );
+      starTeam = semiTeam;
+      starLineup = semiTeam.lineup;
+
+      if (semiMatch.result === "win") {
+        finalOpponent = drawWorldCupOpponent(buckets.elite, usedIds, buckets.elite);
+        if (finalOpponent) {
+          const finalTeam = {
+            id: finalOpponent.squad.id,
+            label: finalOpponent.squad.label,
+            lineup: finalOpponent.lineup,
+            metrics: finalOpponent.metrics,
+            category: "Elite",
+          };
+          const finalMatch = simulateLimitedOversMatch(userLine, finalTeam.lineup, { pitch: "balanced" });
+          knockoutMatches.push(
+            createDisplayMatch({
+              stage: "final",
+              stageLabel: "Final",
+              matchNumber: groupMatches.length + knockoutMatches.length,
+              venue: finalTeam.label,
+              homeTeam: userEntry,
+              awayTeam: finalTeam,
+              match: finalMatch,
+            }),
+          );
+          starTeam = finalTeam;
+          starLineup = finalTeam.lineup;
+          statusText = finalMatch.result === "win" ? "World Cup champions" : "Runners-up";
+        } else {
+          statusText = "Semi-final winner";
+        }
+      } else {
+        statusText = "Semi-final exit";
+      }
+    }
+  }
+
+  const matches = [...groupMatches, ...knockoutMatches];
+  const userWins = matches.filter((match) => match.result === "win").length;
+  const starWins = matches.filter((match) => match.result === "loss").length;
+  const draws = matches.filter((match) => match.result === "draw").length;
+
+  return {
+    format: "limited-overs",
+    userLineup: userLine,
+    starLineup,
+    userTeam,
+    starTeam: starTeam.metrics,
+    matches,
+    groupTable,
+    revealed: 0,
+    userWins,
+    starWins,
+    draws,
+    qualified,
+    statusText,
+    stageReached: knockoutMatches.length ? knockoutMatches[knockoutMatches.length - 1].stage : qualified ? "semi" : "group",
+    playerOfSeries: null,
+    leaders: collectSeriesStats({ matches }),
+    tournamentType: "worldcup",
+  };
+}
+
 function achievementMeta(name) {
   return ACHIEVEMENT_DEFS[name] ?? {
     description: "Achievement unlocked.",
@@ -872,6 +1332,7 @@ function renderDraftMeter() {
 function renderSeriesInsights() {
   if (!STATE.series || !els.seriesInsights) return;
 
+  const competition = competitionConfig();
   const completed = seriesComplete();
   const leaders = collectSeriesStats(STATE.series);
   const achievements = completed ? buildAchievementList(STATE.series, leaders) : [];
@@ -879,7 +1340,7 @@ function renderSeriesInsights() {
   const starMetrics = teamMetricsFromLineup(STATE.series.starLineup);
   const strengthPercent = clamp(Math.round(50 + (userMetrics.overall - 60) * 2.2), 1, 99);
   const playerOfSeries = leaders.overallLeader
-    ? `${leaders.overallLeader.name} (${leaders.overallLeader.side === "your" ? "Your XI" : "All-star XI"})`
+    ? `${leaders.overallLeader.name} (${leaders.overallLeader.side === "your" ? "Your XI" : competition.oppositionTitle})`
     : "Awaiting";
 
   els.seriesInsights.innerHTML = `
@@ -892,7 +1353,7 @@ function renderSeriesInsights() {
       <article class="insight-card">
         <span class="insight-label">XI rating</span>
         <strong>Your XI is stronger than ${strengthPercent}% of generated XIs</strong>
-        <p>All-star XI: ${starMetrics.overall} overall · ${starMetrics.grade}</p>
+        <p>${competition.oppositionTitle}: ${starMetrics.overall} overall · ${starMetrics.grade}</p>
       </article>
       <article class="insight-card">
         <span class="insight-label">Player of the series</span>
@@ -1017,11 +1478,29 @@ function renderDetailedInnings(match, innings, label) {
 }
 
 function renderStats() {
+  const competition = competitionConfig();
   els.totalSquads.textContent = String(STATE.squads.length);
   els.totalPlayers.textContent = String(STATE.catalog.length);
   els.gameSquadCount.textContent = `${STATE.squads.length} squads`;
   els.gamePlayerCount.textContent = `${STATE.catalog.length} players`;
   els.homeMode.value = STATE.mode;
+  document.title = `${competition.title} Cricket Game | Roll Squads & Build a ${competition.name} XI`;
+  els.homeEyebrow.textContent = competition.homeEyebrow;
+  els.homeTitle.textContent = competition.homeTitle;
+  els.homeLede.textContent = competition.homeLede;
+  els.homeSquadsLabel.textContent = competition.squadsLabel;
+  els.homePlayersLabel.textContent = "Total players";
+  els.homeFormatLabel.textContent = "Series format";
+  els.homeRuleOne.textContent = `Roll a previous ${competition.name} squad.`;
+  els.homeCompetition.textContent = competition.modeButton;
+  els.gameEyebrow.textContent = competition.gameEyebrow;
+  els.gameTitle.textContent = competition.gameTitle;
+  els.rosterKicker.textContent = competition.rosterKicker;
+  els.boardTitle.textContent = competition.boardTitle;
+  els.seriesEyebrow.textContent = competition.seriesEyebrow;
+  els.seriesTitle.textContent = competition.seriesTitle;
+  els.starTitle.textContent = competition.oppositionTitle;
+  document.body.dataset.competition = competition.theme;
 }
 
 function renderView() {
@@ -1032,6 +1511,7 @@ function renderView() {
 }
 
 function renderGameMeta() {
+  const competition = competitionConfig();
   els.gameMode.textContent = STATE.mode === "memory" ? "Memory" : "Classic";
   els.currentSquad.textContent = currentSquadLabel();
   els.lineupStatus.textContent = `${STATE.lineup.size} / ${XI_SLOTS.length} locked`;
@@ -1040,10 +1520,12 @@ function renderGameMeta() {
   els.startSeries.textContent = lineupComplete()
     ? "Simulate the series"
     : `Fill XI to simulate (${STATE.lineup.size}/11)`;
+  els.rollSquad.textContent = `Roll ${competition.name} squad`;
   els.rollSquad.disabled = STATE.view !== "game" || lineupComplete() || Boolean(STATE.currentSquad);
 }
 
 function renderRoster() {
+  const competition = competitionConfig();
   const players = STATE.currentSquad?.players ?? [];
   const selected = STATE.catalog.find((player) => player.id === STATE.selectedPlayerId) ?? null;
 
@@ -1053,12 +1535,13 @@ function renderRoster() {
       ? "Your XI is complete. Start the series."
       : STATE.lineup.size
         ? "A player has been locked. Roll another squad to continue."
-        : "Roll an Ashes squad to begin.";
+        : `Roll a ${competition.name} squad to begin.`;
   } else if (selected) {
     els.rosterSummary.textContent = `${selected.name} is selected. Pick a valid slot to lock them in.`;
   } else {
     els.rosterSummary.textContent = `${players.length} players available. Click one, then choose a slot.`;
   }
+  els.rosterGrid.dataset.competition = competition.theme;
 
   if (!players.length) {
     els.rosterGrid.innerHTML = `
@@ -1107,7 +1590,9 @@ function renderRoster() {
 }
 
 function renderBoard() {
+  const competition = competitionConfig();
   const selected = STATE.catalog.find((player) => player.id === STATE.selectedPlayerId) ?? null;
+  els.board.dataset.competition = competition.theme;
 
   els.board.innerHTML = `
     <div class="board-grid">
@@ -1153,33 +1638,46 @@ function renderBoard() {
 
 function renderSeriesSummary() {
   if (!STATE.series) return;
+  const competition = competitionConfig();
   const completed = seriesComplete();
-  els.seriesProgress.textContent = `${STATE.series.revealed} / ${STATE.series.matches.length} Tests`;
+  els.seriesProgress.textContent = `${STATE.series.revealed} / ${STATE.series.matches.length} ${competition.seriesProgressLabel}`;
   els.seriesStatus.textContent = completed ? "Series complete" : seriesWinnerLabel();
   els.seriesUserStrength.textContent = `${STATE.series.userTeam.overall} · ${STATE.series.userTeam.grade}`;
   els.seriesStarStrength.textContent = `${STATE.series.starTeam.overall} · ${STATE.series.starTeam.grade}`;
   els.seriesActions.hidden = !completed;
+  els.seriesTitle.textContent = competition.seriesTitle;
 }
 
 function renderSeriesFeed() {
   if (!STATE.series) return;
+  const competition = competitionConfig();
   const visible = STATE.series.matches.slice(0, STATE.series.revealed);
   els.seriesFeed.innerHTML = visible
     .map((match) => {
       const resultClass =
         match.result === "win" ? "result-win" : match.result === "loss" ? "result-loss" : "result-draw";
+      const limitedOvers = match.format === "limited-overs";
+      const homeLabel = match.homeTeam?.label ?? "Your XI";
+      const awayLabel = match.awayTeam?.label ?? competition.oppositionTitle;
+      const awayCategory = match.awayTeam?.category ? ` · ${match.awayTeam.category}` : "";
+      const innings = limitedOvers
+        ? match.innings.slice(0, 2)
+        : match.innings;
+      const metaLabel = limitedOvers
+        ? `${match.stageLabel ?? competition.matchLabel}${match.matchNumber ? ` ${match.matchNumber}` : ""}${awayCategory} · ${match.venue}`
+        : `${competition.matchLabel} ${match.matchNumber ?? match.testNumber} · ${match.venue}`;
       return `
         <article class="match-card ${resultClass}">
-          <div class="match-meta">Test ${match.testNumber} · ${match.venue}</div>
+          <div class="match-meta">${escapeHtml(metaLabel)}</div>
           <div class="match-row">
-            <span class="match-team">Your XI</span>
+            <span class="match-team">${escapeHtml(homeLabel)}</span>
             <strong class="match-score">${escapeHtml(match.scoreline)}</strong>
-            <span class="match-team">All-star XI</span>
+            <span class="match-team">${escapeHtml(awayLabel)}</span>
           </div>
           <div class="match-headline">${escapeHtml(match.headline)}</div>
           <div class="match-summary">${escapeHtml(match.summary)}</div>
           <div class="innings-grid">
-            ${match.innings
+            ${innings
               .map(
                 (innings) => `
                   <div class="innings-chip">
@@ -1192,12 +1690,12 @@ function renderSeriesFeed() {
           </div>
           <div class="box-score">
             <div class="box-team">
-              <span class="box-heading">Your XI</span>
+              <span class="box-heading">${escapeHtml(homeLabel)}</span>
               <span>Top bat: ${escapeHtml(match.userBox.batter.name)} ${escapeHtml(String(match.userBox.batter.runs))}</span>
               <span>Top bowl: ${escapeHtml(match.userBox.bowler.name)} ${escapeHtml(match.userBox.bowler.figures)}</span>
             </div>
             <div class="box-team">
-              <span class="box-heading">All-star XI</span>
+              <span class="box-heading">${escapeHtml(awayLabel)}</span>
               <span>Top bat: ${escapeHtml(match.starBox.batter.name)} ${escapeHtml(String(match.starBox.batter.runs))}</span>
               <span>Top bowl: ${escapeHtml(match.starBox.bowler.name)} ${escapeHtml(match.starBox.bowler.figures)}</span>
             </div>
@@ -1205,10 +1703,10 @@ function renderSeriesFeed() {
           <details class="scorecard-toggle">
             <summary>Full scorecard</summary>
             <div class="scorecard-stack">
-              ${renderDetailedInnings(match, match.inningsData.user1, "Your XI 1st innings")}
-              ${renderDetailedInnings(match, match.inningsData.star1, "All-star XI 1st innings")}
-              ${renderDetailedInnings(match, match.inningsData.user2, "Your XI 2nd innings")}
-              ${renderDetailedInnings(match, match.inningsData.star2, "All-star XI 2nd innings")}
+              ${renderDetailedInnings(match, match.inningsData.user1, limitedOvers ? `${homeLabel} innings` : `${homeLabel} 1st innings`)}
+              ${renderDetailedInnings(match, match.inningsData.star1, limitedOvers ? `${awayLabel} innings` : `${awayLabel} 1st innings`)}
+              ${limitedOvers ? "" : renderDetailedInnings(match, match.inningsData.user2, `${homeLabel} 2nd innings`)}
+              ${limitedOvers ? "" : renderDetailedInnings(match, match.inningsData.star2, `${awayLabel} 2nd innings`)}
             </div>
           </details>
         </article>
@@ -1220,7 +1718,51 @@ function renderSeriesFeed() {
 function renderSeriesTable() {
   if (!STATE.series) return;
   if (STATE.series.revealed < STATE.series.matches.length) {
-    els.seriesTableWrap.innerHTML = `<div class="placeholder">The table will appear when the series ends.</div>`;
+    els.seriesTableWrap.innerHTML = `<div class="placeholder">The table will appear when the tournament ends.</div>`;
+    return;
+  }
+
+  if (STATE.series.tournamentType === "worldcup") {
+    const qualifiers = STATE.series.groupTable.slice(0, 2).map((entry) => entry.id);
+    const yourRow = STATE.series.groupTable.find((entry) => entry.id === "your");
+
+    els.seriesTableWrap.innerHTML = `
+      <div class="tournament-summary">
+        <div class="tournament-summary-card">
+          <span class="scorecard-team">World Cup path</span>
+          <strong>${escapeHtml(STATE.series.statusText ?? "Tournament complete")}</strong>
+          <p>${escapeHtml(yourRow ? `Your XI finished ${yourRow.played} group matches.` : "Tournament complete.")}</p>
+        </div>
+        <table class="series-table">
+          <thead>
+            <tr>
+              <th>Team</th>
+              <th>Pld</th>
+              <th>W</th>
+              <th>L</th>
+              <th>Pts</th>
+              <th>NRR</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${STATE.series.groupTable
+              .map(
+                (entry) => `
+                  <tr class="${entry.id === "your" ? "highlight" : qualifiers.includes(entry.id) ? "qualified" : ""}">
+                    <td>${escapeHtml(entry.label)}</td>
+                    <td>${entry.played}</td>
+                    <td>${entry.wins}</td>
+                    <td>${entry.losses}</td>
+                    <td>${entry.points}</td>
+                    <td>${entry.nrr.toFixed(2)}</td>
+                  </tr>
+                `,
+              )
+              .join("")}
+          </tbody>
+        </table>
+      </div>
+    `;
     return;
   }
 
@@ -1258,6 +1800,7 @@ function renderSeriesTable() {
 
 function renderStarLineup() {
   if (!STATE.series) return;
+  const competition = competitionConfig();
   const revealRatings = seriesComplete() || STATE.mode !== "memory";
   els.starLineup.innerHTML = STATE.series.starLineup
     .map(
@@ -1270,6 +1813,7 @@ function renderStarLineup() {
       `,
     )
     .join("");
+  els.starLineup.dataset.competition = competition.theme;
 }
 
 function renderSeriesReveal() {
@@ -1652,7 +2196,221 @@ function simulateInnings(lineup, opposition, inningsIndex, conditions = {}, chas
   };
 }
 
-function simulateMatch(userLineup, starLineup, conditions = {}) {
+function buildDidNotBatInnings(lineup) {
+  return {
+    batters: battingOrder(lineup).map((player) => ({
+      name: player.name,
+      runs: 0,
+      balls: 0,
+      fours: 0,
+      sixes: 0,
+      out: false,
+      notOut: false,
+      dismissal: "DNB",
+      dnb: true,
+    })),
+    extras: 0,
+    runs: 0,
+    wickets: 0,
+    declared: false,
+    chaseComplete: false,
+    didNotBat: true,
+    total: 0,
+    balls: 0,
+    overs: "0.0",
+    topBatter: null,
+    bowling: [],
+  };
+}
+
+function buildLimitedOversBattingScorecard(lineup, opposition, inningsIndex, conditions = {}, chaseTarget = null, oversLimit = 50) {
+  const order = battingOrder(lineup);
+  const bowlingStrength = lineupScore(opposition).bowling;
+  const pitch = conditions.pitch ?? "balanced";
+  const maxBalls = oversLimit * 6;
+  const wicketsLimit = 10;
+  const totalExtras = clamp(Math.round(2 + Math.random() * 9 + bowlingStrength / 16 + inningsIndex * 0.5), 0, 24);
+
+  let runs = 0;
+  let wickets = 0;
+  let ballsRemaining = maxBalls;
+  let chaseComplete = false;
+  const batters = [];
+
+  for (let index = 0; index < order.length; index += 1) {
+    const player = order[index];
+
+    if (ballsRemaining <= 0 || wickets >= wicketsLimit || chaseComplete) {
+      break;
+    }
+
+    const rawRuns = sampleBatterScore(player, bowlingStrength, pitch, inningsIndex);
+    const batting = player?.batting ?? 45;
+    const aggression = player.roles.includes("Opener")
+      ? 1.15
+      : player.roles.includes("Top Order")
+        ? 1.08
+        : player.roles.includes("Middle Order")
+          ? 1.0
+          : player.roles.includes("All-rounder")
+            ? 0.95
+            : 0.88;
+    const pressure = clamp(0.82 + ballsRemaining / maxBalls * 0.28, 0.82, 1.1);
+    const adjustedRuns = clamp(
+      Math.round(rawRuns * aggression * pressure * 0.9 + batting * 0.08 + normalRandom() * 5),
+      0,
+      180,
+    );
+    const balls = clamp(
+      Math.round(4 + adjustedRuns * (0.58 + Math.random() * 0.34) + (100 - batting) * 0.03),
+      1,
+      ballsRemaining,
+    );
+
+    ballsRemaining -= balls;
+    runs += adjustedRuns;
+
+    const card = {
+      name: player.name,
+      runs: adjustedRuns,
+      balls,
+      fours: adjustedRuns === 0
+        ? 0
+        : clamp(Math.round(adjustedRuns / 8 + Math.random() * 2), 0, Math.max(0, Math.floor(adjustedRuns / 2))),
+      sixes: adjustedRuns === 0
+        ? 0
+        : clamp(Math.round(adjustedRuns / 28 + Math.random() * 2), 0, Math.max(0, Math.floor(adjustedRuns / 6))),
+      out: true,
+      notOut: false,
+      dismissal: randomChoice(["c", "lbw", "b", "st", "run out"]) ?? "c",
+    };
+
+    if (runs + totalExtras >= chaseTarget && chaseTarget !== null) {
+      card.out = false;
+      card.notOut = true;
+      card.dismissal = "not out";
+      chaseComplete = true;
+      batters.push(card);
+      break;
+    }
+
+    if (ballsRemaining <= 0) {
+      card.out = false;
+      card.notOut = true;
+      card.dismissal = "not out";
+      batters.push(card);
+      break;
+    }
+
+    wickets += 1;
+    batters.push(card);
+  }
+
+  while (batters.length < order.length) {
+    const player = order[batters.length];
+    batters.push({
+      name: player.name,
+      runs: 0,
+      balls: 0,
+      fours: 0,
+      sixes: 0,
+      out: false,
+      notOut: false,
+      dismissal: "DNB",
+      dnb: true,
+    });
+  }
+
+  const ballsFaced = maxBalls - ballsRemaining;
+  const topBatter = [...batters]
+    .filter((card) => !card.dnb)
+    .sort((a, b) => b.runs - a.runs)[0] ?? batters[0] ?? null;
+
+  return {
+    batters,
+    extras: totalExtras,
+    runs,
+    wickets,
+    declared: false,
+    chaseComplete,
+    total: runs + totalExtras,
+    balls: ballsFaced,
+    overs: ballsToOvers(ballsFaced),
+    topBatter,
+    notOutCount: batters.filter((card) => card.notOut).length,
+  };
+}
+
+function buildLimitedOversBowlingScorecard(lineup, inningsBalls, wickets, teamEdge = 0) {
+  const ranked = teamBowlingRanking(lineup, teamEdge);
+  const bowlers = ranked.map(({ player, value }) => ({
+    name: player.name,
+    player,
+    value,
+    weight: Math.max(1, player.bowling + value / 4),
+    overs: 0,
+    balls: 0,
+    runs: 0,
+    wickets: 0,
+    maidens: 0,
+  }));
+
+  const used = bowlers.filter((entry) => entry.player.roles.some((role) => ["Fast Bowler", "Spinner", "All-rounder"].includes(role)));
+  const working = (used.length ? used : bowlers.slice(0, Math.min(6, bowlers.length))).slice(0, Math.min(6, bowlers.length));
+  const totalOvers = clamp(Math.max(1, Math.round(inningsBalls / 6)), 1, 50);
+  const maxOversPerBowler = 10;
+
+  for (let over = 0; over < totalOvers; over += 1) {
+    const available = working.filter((bowler) => bowler.overs < maxOversPerBowler);
+    const pool = available.length ? available : working;
+    const bowler = weightedPick(
+      pool,
+      (item) => Math.max(1, item.weight) * Math.max(1, maxOversPerBowler - item.overs),
+    );
+    bowler.overs += 1;
+  }
+
+  working.forEach((entry) => {
+    entry.balls = entry.overs * 6;
+  });
+
+  const wicketPool = [];
+  for (let index = 0; index < wickets; index += 1) {
+    const wicketWorking = working.filter((bowler) => bowler.balls > 0);
+    wicketPool.push(
+      weightedPick(wicketWorking, (bowler) => Math.max(1, bowler.player.bowling + bowler.value / 3 - bowler.wickets * 12)),
+    );
+  }
+  wicketPool.forEach((bowler) => {
+    bowler.wickets += 1;
+  });
+
+  working.forEach((bowler) => {
+    const ballShare = bowler.balls / (totalOvers * 6);
+    bowler.runs = clamp(
+      Math.round(inningsBalls * ballShare + (100 - bowler.player.bowling) * 0.18 + Math.random() * 6),
+      0,
+      Math.max(0, inningsBalls + 18),
+    );
+    bowler.maidens = clamp(
+      Math.round(bowler.balls / 30 + (bowler.player.bowling - 50) / 30 + Math.random() * 1.2),
+      0,
+      10,
+    );
+  });
+
+  return working
+    .map((bowler) => ({
+      name: bowler.name,
+      overs: ballsToOvers(bowler.balls),
+      maidens: bowler.maidens,
+      runs: bowler.runs,
+      wickets: bowler.wickets,
+    }))
+    .sort((a, b) => b.wickets - a.wickets || a.runs - b.runs);
+}
+
+function simulateTestMatch(userLineup, starLineup, conditions = {}) {
   const user1 = buildBattingScorecard(userLineup, starLineup, 1, conditions);
   const star1 = buildBattingScorecard(starLineup, userLineup, 2, conditions);
 
@@ -1716,13 +2474,50 @@ function simulateMatch(userLineup, starLineup, conditions = {}) {
 
   return {
     result,
+    format: "tests",
     innings: { user1, star1, user2, star2 },
     userTotal,
     starTotal,
   };
 }
 
+function simulateLimitedOversMatch(userLineup, starLineup, conditions = {}) {
+  const user1 = buildLimitedOversBattingScorecard(userLineup, starLineup, 1, conditions, null, 50);
+  const star1 = buildLimitedOversBattingScorecard(starLineup, userLineup, 2, conditions, null, 50);
+  const user1Bowling = buildLimitedOversBowlingScorecard(starLineup, user1.balls, user1.wickets, 0);
+  const star1Bowling = buildLimitedOversBowlingScorecard(userLineup, star1.balls, star1.wickets, user1.total - star1.total);
+
+  user1.bowling = user1Bowling;
+  star1.bowling = star1Bowling;
+
+  const result =
+    user1.total > star1.total
+        ? "win"
+        : user1.total < star1.total
+          ? "loss"
+          : "draw";
+
+  return {
+    result,
+    format: "limited-overs",
+    innings: {
+      user1,
+      star1,
+      user2: buildDidNotBatInnings(userLineup),
+      star2: buildDidNotBatInnings(starLineup),
+    },
+    userTotal: user1.total,
+    starTotal: star1.total,
+  };
+}
+
 function buildSeries() {
+  if (STATE.competition === "worldcup") {
+    return buildWorldCupTournament();
+  }
+
+  const competition = competitionConfig();
+
   const userLine = userLineup();
   const starLine = buildAllStarXI();
   const userTeam = teamMetricsFromLineup(userLine);
@@ -1732,12 +2527,22 @@ function buildSeries() {
   let starWins = 0;
   let draws = 0;
 
-  for (let testNumber = 1; testNumber <= 5; testNumber += 1) {
+  const format = competition.format;
+
+  for (let matchNumber = 1; matchNumber <= 5; matchNumber += 1) {
     const conditions = {
-      pitch: testNumber % 2 === 1 ? "green" : "balanced",
+      pitch: format === "limited-overs"
+        ? matchNumber % 2 === 1
+          ? "balanced"
+          : "flat"
+        : matchNumber % 2 === 1
+          ? "green"
+          : "balanced",
     };
 
-    const match = simulateMatch(userLine, starLine, conditions);
+    const match = format === "limited-overs"
+      ? simulateLimitedOversMatch(userLine, starLine, conditions)
+      : simulateTestMatch(userLine, starLine, conditions);
 
     const outcome = match.result;
 
@@ -1751,35 +2556,72 @@ function buildSeries() {
     const starInnings2 = match.innings.star2;
 
     matches.push({
-      testNumber,
-      venue: testNumber % 2 === 1 ? "Home conditions" : "Balanced conditions",
+      format,
+      testNumber: matchNumber,
+      matchNumber,
+      venue: format === "limited-overs"
+        ? matchNumber % 2 === 1
+          ? "Day game"
+          : "Night game"
+        : matchNumber % 2 === 1
+          ? "Home conditions"
+          : "Balanced conditions",
       result: outcome,
       summary: matchMarginText(match),
       headline: generateHeadline(match),
-      innings: [
-        { label: "Your XI 1st inns", score: inningsScoreLabel(userInnings1) },
-        { label: "All-star XI 1st inns", score: inningsScoreLabel(starInnings1) },
-        { label: "Your XI 2nd inns", score: inningsScoreLabel(userInnings2) },
-        { label: "All-star XI 2nd inns", score: inningsScoreLabel(starInnings2) },
-      ],
-      scoreline: `${inningsScoreLabel(userInnings1)} & ${inningsScoreLabel(userInnings2)} | ${inningsScoreLabel(starInnings1)} & ${inningsScoreLabel(starInnings2)}`,
+      innings: format === "limited-overs"
+        ? [
+            { label: "Your XI innings", score: inningsScoreLabel(userInnings1) },
+            { label: "All-star XI innings", score: inningsScoreLabel(starInnings1) },
+          ]
+        : [
+            { label: "Your XI 1st inns", score: inningsScoreLabel(userInnings1) },
+            { label: "All-star XI 1st inns", score: inningsScoreLabel(starInnings1) },
+            { label: "Your XI 2nd inns", score: inningsScoreLabel(userInnings2) },
+            { label: "All-star XI 2nd inns", score: inningsScoreLabel(starInnings2) },
+          ],
+      scoreline: format === "limited-overs"
+        ? `${inningsScoreLabel(userInnings1)} | ${inningsScoreLabel(starInnings1)}`
+        : `${inningsScoreLabel(userInnings1)} & ${inningsScoreLabel(userInnings2)} | ${inningsScoreLabel(starInnings1)} & ${inningsScoreLabel(starInnings2)}`,
       inningsData: {
-        user1: buildInningsSummary("Your XI 1st innings", userInnings1, match.innings.user1.bowling),
-        star1: buildInningsSummary("All-star XI 1st innings", starInnings1, match.innings.star1.bowling),
+        user1: buildInningsSummary(
+          format === "limited-overs" ? "Your XI innings" : "Your XI 1st innings",
+          userInnings1,
+          match.innings.user1.bowling,
+        ),
+        star1: buildInningsSummary(
+          format === "limited-overs" ? "All-star XI innings" : "All-star XI 1st innings",
+          starInnings1,
+          match.innings.star1.bowling,
+        ),
         user2: buildInningsSummary("Your XI 2nd innings", userInnings2, match.innings.user2.bowling),
         star2: buildInningsSummary("All-star XI 2nd innings", starInnings2, match.innings.star2.bowling),
       },
     });
 
     const matchRecord = matches[matches.length - 1];
-    matchRecord.userBox = buildMatchBoxScore({
-      batting: [matchRecord.inningsData.user1, matchRecord.inningsData.user2],
-      bowling: [matchRecord.inningsData.star1, matchRecord.inningsData.star2],
-    });
-    matchRecord.starBox = buildMatchBoxScore({
-      batting: [matchRecord.inningsData.star1, matchRecord.inningsData.star2],
-      bowling: [matchRecord.inningsData.user1, matchRecord.inningsData.user2],
-    });
+    matchRecord.userBox = buildMatchBoxScore(
+      format === "limited-overs"
+        ? {
+            batting: [matchRecord.inningsData.user1],
+            bowling: [matchRecord.inningsData.star1],
+          }
+        : {
+            batting: [matchRecord.inningsData.user1, matchRecord.inningsData.user2],
+            bowling: [matchRecord.inningsData.star1, matchRecord.inningsData.star2],
+          },
+    );
+    matchRecord.starBox = buildMatchBoxScore(
+      format === "limited-overs"
+        ? {
+            batting: [matchRecord.inningsData.star1],
+            bowling: [matchRecord.inningsData.user1],
+          }
+        : {
+            batting: [matchRecord.inningsData.star1, matchRecord.inningsData.star2],
+            bowling: [matchRecord.inningsData.user1, matchRecord.inningsData.user2],
+          },
+    );
   }
 
   const leaders = collectSeriesStats({ matches });
@@ -1811,24 +2653,25 @@ function clearTimer() {
 function startSeries() {
   if (!lineupComplete()) return;
   clearTimer();
+  const competition = competitionConfig();
   try {
     STATE.achievementDetail = null;
     STATE.achievementPinned = false;
     STATE.seriesShareAsset = null;
     STATE.seriesShareAssetPromise = null;
     STATE.series = buildSeries();
-    prepareSeriesShareAsset(STATE.series, STATE.mode);
+    prepareSeriesShareAsset(STATE.series, STATE.mode, competitionConfig().title);
     setShareStatus("");
     STATE.view = "series";
     renderAll();
     animateSeries();
   } catch (error) {
-    console.error("Ashes XI series failed to start:", error);
+    console.error(`${competition.title} series failed to start:`, error);
     STATE.series = null;
     els.seriesStatus.textContent = `Series error: ${error instanceof Error ? error.message : String(error)}`;
     STATE.view = "game";
     renderAll();
-    window.alert(`Series could not start: ${error instanceof Error ? error.message : String(error)}`);
+    window.alert(`${competition.title} series could not start: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -1909,10 +2752,14 @@ function wireControls() {
   els.rollSquad.addEventListener("click", rollSquad);
   els.startSeries.addEventListener("click", startSeries);
   els.playAgain.addEventListener("click", goHome);
+  els.homeCompetition.addEventListener("click", () => {
+    STATE.view = "home";
+    setCompetition(STATE.competition === "worldcup" ? "ashes" : "worldcup");
+  });
   els.shareResult.addEventListener("click", async () => {
     if (!STATE.series) return;
     const text = formatShareText();
-    const title = "Ashes XI";
+    const title = competitionConfig().title;
     const file = await ensureSeriesShareAsset();
 
     if (file && navigator.share && navigator.canShare?.({ files: [file] })) {
@@ -2097,7 +2944,7 @@ function fitCanvasText(ctx, text, maxWidth, maxSize, minSize, weight = 700, fami
   ctx.font = `${weight} ${size}px ${family}`;
 }
 
-async function createSeriesShareFile(series, modeLabel) {
+async function createSeriesShareFile(series, modeLabel, competitionTitle) {
   if (!series) return null;
   if (document.fonts?.ready) {
     try {
@@ -2141,8 +2988,8 @@ async function createSeriesShareFile(series, modeLabel) {
   ctx.strokeRect(24, 24, width - 48, height - 48);
 
   ctx.fillStyle = "#f8f8f8";
-  fitCanvasText(ctx, "Ashes XI", 700, 66, 42, 800, "Oswald");
-  ctx.fillText("Ashes XI", 80, 118);
+  fitCanvasText(ctx, competitionTitle, 700, 66, 42, 800, "Oswald");
+  ctx.fillText(competitionTitle, 80, 118);
 
   const modeText = `${modeLabel} series complete`;
   ctx.fillStyle = "rgba(248, 248, 248, 0.82)";
@@ -2245,10 +3092,10 @@ async function createSeriesShareFile(series, modeLabel) {
   return new File([blob], "ashes-xi-team.png", { type: "image/png" });
 }
 
-function prepareSeriesShareAsset(series, modeLabel) {
+function prepareSeriesShareAsset(series, modeLabel, competitionTitle) {
   if (!series || STATE.seriesShareAsset || STATE.seriesShareAssetPromise) return;
   const seriesRef = series;
-  STATE.seriesShareAssetPromise = createSeriesShareFile(seriesRef, modeLabel)
+  STATE.seriesShareAssetPromise = createSeriesShareFile(seriesRef, modeLabel, competitionTitle)
     .then((file) => {
       if (STATE.series === seriesRef) {
         STATE.seriesShareAsset = file;
@@ -2275,7 +3122,7 @@ async function ensureSeriesShareAsset() {
   if (!STATE.series) return null;
   if (STATE.seriesShareAsset) return STATE.seriesShareAsset;
   if (!STATE.seriesShareAssetPromise) {
-    prepareSeriesShareAsset(STATE.series, STATE.mode);
+    prepareSeriesShareAsset(STATE.series, STATE.mode, competitionConfig().title);
   }
 
   try {
@@ -2333,7 +3180,7 @@ async function downloadSeriesShareImage() {
 
 function formatShareText() {
   if (!STATE.series) {
-    return `I just played Ashes XI. ${shareUrl()}`;
+    return `I just played ${competitionConfig().title}. ${shareUrl()}`;
   }
 
   const seriesResult =
@@ -2343,7 +3190,8 @@ function formatShareText() {
         ? "lost"
         : "drew";
   const modeLabel = STATE.mode === "memory" ? "Memory" : "Classic";
-  return `I just finished a ${modeLabel} Ashes XI series and ${seriesResult} the 5-Test series ${STATE.series.userWins}-${STATE.series.starWins}-${STATE.series.draws}. ${shareUrl()}`;
+  const competition = competitionConfig();
+  return `I just finished a ${modeLabel} ${competition.title} series and ${seriesResult} the ${competition.seriesDescriptor} ${STATE.series.userWins}-${STATE.series.starWins}-${STATE.series.draws}. ${shareUrl()}`;
 }
 
 function init() {
