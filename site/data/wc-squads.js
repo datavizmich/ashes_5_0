@@ -405,6 +405,166 @@ const RAW_WORLD_CUP_SQUADS = [
       { name: "Stefan Kelly", roles: ["Fast Bowler"], batting: 20, bowling: 68, fielding: 65, experience: 62 },
       { name: "Kevin Hurdle", roles: ["Fast Bowler"], batting: 18, bowling: 71, fielding: 68, experience: 72 }
     ]
+  },
+
+  {
+    id: "ind-1983wc",
+    label: "India 1983 World Cup squad",
+    team: "India",
+    year: 1983,
+    players: [
+      { name: "Sunil Gavaskar", roles: ["Opener"], batting: 95, bowling: 5, fielding: 82, experience: 100 },
+      { name: "Krishnamachari Srikkanth", roles: ["Opener"], batting: 82, bowling: 25, fielding: 78, experience: 76 },
+      { name: "Mohinder Amarnath", roles: ["All-rounder"], batting: 88, bowling: 82, fielding: 80, experience: 92 },
+      { name: "Yashpal Sharma", roles: ["Top Order"], batting: 84, bowling: 10, fielding: 78, experience: 84 },
+      { name: "Sandeep Patil", roles: ["Middle Order"], batting: 86, bowling: 5, fielding: 80, experience: 80 },
+      { name: "Kapil Dev", roles: ["All-rounder"], batting: 92, bowling: 94, fielding: 88, experience: 94 },
+      { name: "Kirti Azad", roles: ["All-rounder"], batting: 72, bowling: 72, fielding: 76, experience: 76 },
+      { name: "Syed Kirmani", roles: ["Wicketkeeper"], batting: 68, bowling: 0, fielding: 90, experience: 92 },
+      { name: "Roger Binny", roles: ["All-rounder"], batting: 72, bowling: 84, fielding: 80, experience: 82 },
+      { name: "Madan Lal", roles: ["Fast Bowler"], batting: 68, bowling: 82, fielding: 78, experience: 84 },
+      { name: "Balwinder Sandhu", roles: ["Fast Bowler"], batting: 52, bowling: 78, fielding: 74, experience: 76 }
+    ]
+  },
+  
+  {
+    id: "wi-1983wc",
+    label: "West Indies 1983 World Cup squad",
+    team: "West Indies",
+    year: 1983,
+    players: [
+      { name: "Gordon Greenidge", roles: ["Opener"], batting: 94, bowling: 0, fielding: 82, experience: 98 },
+      { name: "Desmond Haynes", roles: ["Opener"], batting: 92, bowling: 0, fielding: 82, experience: 94 },
+      { name: "Viv Richards", roles: ["Top Order"], batting: 99, bowling: 45, fielding: 92, experience: 100 },
+      { name: "Larry Gomes", roles: ["Middle Order"], batting: 84, bowling: 0, fielding: 78, experience: 88 },
+      { name: "Clive Lloyd", roles: ["Middle Order"], batting: 92, bowling: 10, fielding: 82, experience: 100 },
+      { name: "Jeff Dujon", roles: ["Wicketkeeper"], batting: 82, bowling: 0, fielding: 92, experience: 92 },
+      { name: "Malcolm Marshall", roles: ["Fast Bowler"], batting: 58, bowling: 96, fielding: 84, experience: 90 },
+      { name: "Joel Garner", roles: ["Fast Bowler"], batting: 32, bowling: 95, fielding: 82, experience: 94 },
+      { name: "Michael Holding", roles: ["Fast Bowler"], batting: 24, bowling: 95, fielding: 80, experience: 96 },
+      { name: "Andy Roberts", roles: ["Fast Bowler"], batting: 28, bowling: 94, fielding: 80, experience: 98 },
+      { name: "Roger Harper", roles: ["All-rounder"], batting: 66, bowling: 78, fielding: 86, experience: 72 }
+    ]
+  },
+  
+  {
+    id: "aus-1987wc",
+    label: "Australia 1987 World Cup squad",
+    team: "Australia",
+    year: 1987,
+    players: [
+      { name: "Geoff Marsh", roles: ["Opener"], batting: 88, bowling: 0, fielding: 80, experience: 88 },
+      { name: "David Boon", roles: ["Opener"], batting: 90, bowling: 0, fielding: 80, experience: 92 },
+      { name: "Dean Jones", roles: ["Top Order"], batting: 92, bowling: 20, fielding: 88, experience: 90 },
+      { name: "Allan Border", roles: ["Middle Order"], batting: 95, bowling: 35, fielding: 84, experience: 100 },
+      { name: "Steve Waugh", roles: ["All-rounder"], batting: 86, bowling: 82, fielding: 88, experience: 82 },
+      { name: "Tom Moody", roles: ["All-rounder"], batting: 78, bowling: 78, fielding: 80, experience: 72 },
+      { name: "Greg Dyer", roles: ["Wicketkeeper"], batting: 70, bowling: 0, fielding: 84, experience: 78 },
+      { name: "Craig McDermott", roles: ["Fast Bowler"], batting: 24, bowling: 88, fielding: 76, experience: 80 },
+      { name: "Bruce Reid", roles: ["Fast Bowler"], batting: 22, bowling: 90, fielding: 76, experience: 82 },
+      { name: "Simon O'Donnell", roles: ["All-rounder"], batting: 74, bowling: 82, fielding: 78, experience: 80 },
+      { name: "Tim May", roles: ["Spinner"], batting: 38, bowling: 80, fielding: 76, experience: 70 }
+    ]
+  },
+  
+  {
+    id: "zim-1987wc",
+    label: "Zimbabwe 1987 World Cup squad",
+    team: "Zimbabwe",
+    year: 1987,
+    players: [
+      { name: "David Houghton", roles: ["Top Order"], batting: 82, bowling: 0, fielding: 78, experience: 86 },
+      { name: "Ali Shah", roles: ["Opener"], batting: 68, bowling: 10, fielding: 70, experience: 74 },
+      { name: "Kevin Curran", roles: ["All-rounder"], batting: 78, bowling: 80, fielding: 78, experience: 84 },
+      { name: "Andy Pycroft", roles: ["Middle Order"], batting: 74, bowling: 0, fielding: 74, experience: 80 },
+      { name: "Iain Butchart", roles: ["All-rounder"], batting: 70, bowling: 74, fielding: 74, experience: 78 },
+      { name: "Grant Paterson", roles: ["Wicketkeeper"], batting: 66, bowling: 0, fielding: 80, experience: 72 },
+      { name: "John Traicos", roles: ["Spinner"], batting: 52, bowling: 82, fielding: 76, experience: 95 },
+      { name: "Eddo Brandes", roles: ["Fast Bowler"], batting: 24, bowling: 80, fielding: 74, experience: 72 },
+      { name: "Gary Crocker", roles: ["Fast Bowler"], batting: 22, bowling: 76, fielding: 72, experience: 74 },
+      { name: "Phil Carlson", roles: ["Fast Bowler"], batting: 20, bowling: 74, fielding: 70, experience: 70 },
+      { name: "Patrick Shah", roles: ["Middle Order"], batting: 68, bowling: 0, fielding: 70, experience: 72 }
+    ]
+  },
+  
+  {
+    id: "sa-2003wc",
+    label: "South Africa 2003 World Cup squad",
+    team: "South Africa",
+    year: 2003,
+    players: [
+      { name: "Graeme Smith", roles: ["Opener"], batting: 88, bowling: 0, fielding: 82, experience: 78 },
+      { name: "Herschelle Gibbs", roles: ["Opener"], batting: 92, bowling: 20, fielding: 90, experience: 90 },
+      { name: "Jacques Kallis", roles: ["All-rounder"], batting: 96, bowling: 90, fielding: 88, experience: 98 },
+      { name: "Gary Kirsten", roles: ["Top Order"], batting: 90, bowling: 0, fielding: 82, experience: 98 },
+      { name: "Boeta Dippenaar", roles: ["Middle Order"], batting: 80, bowling: 0, fielding: 76, experience: 80 },
+      { name: "Mark Boucher", roles: ["Wicketkeeper"], batting: 84, bowling: 0, fielding: 92, experience: 92 },
+      { name: "Lance Klusener", roles: ["All-rounder"], batting: 88, bowling: 86, fielding: 84, experience: 96 },
+      { name: "Shaun Pollock", roles: ["All-rounder"], batting: 82, bowling: 94, fielding: 88, experience: 98 },
+      { name: "Makhaya Ntini", roles: ["Fast Bowler"], batting: 20, bowling: 90, fielding: 76, experience: 86 },
+      { name: "Allan Donald", roles: ["Fast Bowler"], batting: 16, bowling: 95, fielding: 80, experience: 100 },
+      { name: "Robin Peterson", roles: ["Spinner"], batting: 50, bowling: 80, fielding: 78, experience: 70 }
+    ]
+  },
+  
+  {
+    id: "ned-2003wc",
+    label: "Netherlands 2003 World Cup squad",
+    team: "Netherlands",
+    year: 2003,
+    players: [
+      { name: "Robert van Oosterom", roles: ["Opener"], batting: 62, bowling: 0, fielding: 68, experience: 72 },
+      { name: "Daan van Bunge", roles: ["Opener"], batting: 66, bowling: 0, fielding: 68, experience: 68 },
+      { name: "Tim de Leede", roles: ["All-rounder"], batting: 82, bowling: 80, fielding: 82, experience: 94 },
+      { name: "Bas Zuiderent", roles: ["Middle Order"], batting: 72, bowling: 20, fielding: 74, experience: 80 },
+      { name: "Luuk van Troost", roles: ["Wicketkeeper"], batting: 66, bowling: 0, fielding: 76, experience: 84 },
+      { name: "Feiko Kloppenburg", roles: ["All-rounder"], batting: 64, bowling: 74, fielding: 72, experience: 74 },
+      { name: "Roland Lefebvre", roles: ["All-rounder"], batting: 68, bowling: 76, fielding: 74, experience: 88 },
+      { name: "Adeel Raja", roles: ["Spinner"], batting: 40, bowling: 74, fielding: 72, experience: 68 },
+      { name: "Edgar Schiferli", roles: ["Fast Bowler"], batting: 18, bowling: 72, fielding: 68, experience: 62 },
+      { name: "Victor Grandia", roles: ["Fast Bowler"], batting: 16, bowling: 70, fielding: 68, experience: 70 },
+      { name: "Jeroen Smits", roles: ["Middle Order"], batting: 64, bowling: 0, fielding: 74, experience: 78 }
+    ]
+  },
+  
+  {
+    id: "ned-2023wc",
+    label: "Netherlands 2023 World Cup squad",
+    team: "Netherlands",
+    year: 2023,
+    players: [
+      { name: "Max O'Dowd", roles: ["Opener"], batting: 74, bowling: 5, fielding: 74, experience: 75 },
+      { name: "Vikram Singh", roles: ["Opener"], batting: 70, bowling: 0, fielding: 71, experience: 62 },
+      { name: "Colin Ackermann", roles: ["All-rounder"], batting: 78, bowling: 70, fielding: 76, experience: 82 },
+      { name: "Bas de Leede", roles: ["All-rounder"], batting: 82, bowling: 78, fielding: 80, experience: 68 },
+      { name: "Teja Nidamanuru", roles: ["Middle Order"], batting: 76, bowling: 0, fielding: 73, experience: 64 },
+      { name: "Scott Edwards", roles: ["Wicketkeeper"], batting: 80, bowling: 0, fielding: 84, experience: 76 },
+      { name: "Sybrand Engelbrecht", roles: ["All-rounder"], batting: 75, bowling: 65, fielding: 78, experience: 72 },
+      { name: "Roelof van der Merwe", roles: ["Spinner"], batting: 65, bowling: 82, fielding: 80, experience: 92 },
+      { name: "Paul van Meekeren", roles: ["Fast Bowler"], batting: 22, bowling: 82, fielding: 74, experience: 80 },
+      { name: "Aryan Dutt", roles: ["Spinner"], batting: 25, bowling: 78, fielding: 72, experience: 58 },
+      { name: "Ryan Klein", roles: ["Fast Bowler"], batting: 18, bowling: 74, fielding: 70, experience: 55 }
+    ]
+  },
+  
+  {
+    id: "afg-2023wc",
+    label: "Afghanistan 2023 World Cup squad",
+    team: "Afghanistan",
+    year: 2023,
+    players: [
+      { name: "Rahmanullah Gurbaz", roles: ["Opener", "Wicketkeeper"], batting: 86, bowling: 0, fielding: 82, experience: 74 },
+      { name: "Ibrahim Zadran", roles: ["Opener"], batting: 84, bowling: 0, fielding: 78, experience: 72 },
+      { name: "Rahmat Shah", roles: ["Top Order"], batting: 82, bowling: 10, fielding: 76, experience: 86 },
+      { name: "Hashmatullah Shahidi", roles: ["Middle Order"], batting: 82, bowling: 0, fielding: 76, experience: 88 },
+      { name: "Azmatullah Omarzai", roles: ["All-rounder"], batting: 84, bowling: 82, fielding: 80, experience: 72 },
+      { name: "Mohammad Nabi", roles: ["All-rounder"], batting: 84, bowling: 88, fielding: 84, experience: 99 },
+      { name: "Rashid Khan", roles: ["Spinner"], batting: 74, bowling: 95, fielding: 86, experience: 92 },
+      { name: "Mujeeb Ur Rahman", roles: ["Spinner"], batting: 24, bowling: 89, fielding: 78, experience: 84 },
+      { name: "Naveen-ul-Haq", roles: ["Fast Bowler"], batting: 18, bowling: 84, fielding: 74, experience: 78 },
+      { name: "Fazalhaq Farooqi", roles: ["Fast Bowler"], batting: 16, bowling: 86, fielding: 74, experience: 72 },
+      { name: "Noor Ahmad", roles: ["Spinner"], batting: 18, bowling: 84, fielding: 76, experience: 64 }
+    ]
   }
   
 ];
