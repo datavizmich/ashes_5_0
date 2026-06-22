@@ -33,6 +33,7 @@ const STATE = {
   achievementHelpBound: false,
   seriesShareAsset: null,
   seriesShareAssetPromise: null,
+  rollAnimation: null,
 };
 
 const ACHIEVEMENT_DEFS = {
@@ -63,6 +64,7 @@ function bindElements() {
     homeSquadsLabel: "[data-home-squads-label]",
     homePlayersLabel: "[data-home-players-label]",
     homeFormatLabel: "[data-home-format-label]",
+    homeFormatValue: "[data-home-format-value]",
     homeRuleOne: "[data-home-rule-one]",
     totalSquads: "[data-total-squads]",
     totalPlayers: "[data-total-players]",
@@ -172,6 +174,13 @@ function playerKey(player) {
   return player?.id ?? normalizeName(player?.name ?? "");
 }
 
+function clearRollAnimation() {
+  if (STATE.rollAnimation?.timer) {
+    clearInterval(STATE.rollAnimation.timer);
+  }
+  STATE.rollAnimation = null;
+}
+
 function competitionConfig() {
   if (STATE.competition === "worldcup") {
     return {
@@ -232,6 +241,7 @@ function setCompetition(nextCompetition) {
   STATE.lineup.clear();
   STATE.currentSquad = null;
   STATE.selectedPlayerId = null;
+  clearRollAnimation();
   STATE.series = null;
   STATE.seriesShareAsset = null;
   STATE.seriesShareAssetPromise = null;
@@ -385,6 +395,7 @@ function teamLabelFromSquad(squad) {
 }
 
 function currentSquadLabel() {
+  if (STATE.rollAnimation?.active) return STATE.rollAnimation.label;
   return STATE.currentSquad ? STATE.currentSquad.label : "Roll a squad";
 }
 
@@ -1491,6 +1502,7 @@ function renderStats() {
   els.homeSquadsLabel.textContent = competition.squadsLabel;
   els.homePlayersLabel.textContent = "Total players";
   els.homeFormatLabel.textContent = "Series format";
+  els.homeFormatValue.textContent = competition.format === "limited-overs" ? "ODI" : "5 Tests";
   els.homeRuleOne.textContent = `Roll a previous ${competition.name} squad.`;
   els.homeCompetition.textContent = competition.modeButton;
   els.gameEyebrow.textContent = competition.gameEyebrow;
@@ -1512,6 +1524,7 @@ function renderView() {
 
 function renderGameMeta() {
   const competition = competitionConfig();
+  const rolling = Boolean(STATE.rollAnimation?.active);
   els.gameMode.textContent = STATE.mode === "memory" ? "Memory" : "Classic";
   els.currentSquad.textContent = currentSquadLabel();
   els.lineupStatus.textContent = `${STATE.lineup.size} / ${XI_SLOTS.length} locked`;
@@ -1520,17 +1533,24 @@ function renderGameMeta() {
   els.startSeries.textContent = lineupComplete()
     ? "Simulate the series"
     : `Fill XI to simulate (${STATE.lineup.size}/11)`;
-  els.rollSquad.textContent = `Roll ${competition.name} squad`;
-  els.rollSquad.disabled = STATE.view !== "game" || lineupComplete() || Boolean(STATE.currentSquad);
+  els.rollSquad.textContent = rolling ? "Rolling..." : `Roll ${competition.name} squad`;
+  els.rollSquad.disabled = STATE.view !== "game" || lineupComplete() || Boolean(STATE.currentSquad) || rolling;
 }
 
 function renderRoster() {
   const competition = competitionConfig();
   const players = STATE.currentSquad?.players ?? [];
   const selected = STATE.catalog.find((player) => player.id === STATE.selectedPlayerId) ?? null;
+  const rolling = Boolean(STATE.rollAnimation?.active);
 
-  els.rosterTitle.textContent = STATE.currentSquad ? STATE.currentSquad.label : "No squad rolled yet";
-  if (!STATE.currentSquad) {
+  els.rosterTitle.textContent = rolling
+    ? STATE.rollAnimation.label
+    : STATE.currentSquad
+      ? STATE.currentSquad.label
+      : "No squad rolled yet";
+  if (rolling) {
+    els.rosterSummary.textContent = "Rolling through squads...";
+  } else if (!STATE.currentSquad) {
     els.rosterSummary.textContent = lineupComplete()
       ? "Your XI is complete. Start the series."
       : STATE.lineup.size
@@ -1543,11 +1563,13 @@ function renderRoster() {
   }
   els.rosterGrid.dataset.competition = competition.theme;
 
-  if (!players.length) {
+  if (rolling || !players.length) {
     els.rosterGrid.innerHTML = `
       <div class="placeholder">
         ${
-          lineupComplete()
+          rolling
+            ? "Rolling squad..."
+            : lineupComplete()
             ? "XI complete. Simulate the series."
             : STATE.lineup.size
               ? "Player locked. Roll another squad."
@@ -1592,13 +1614,14 @@ function renderRoster() {
 function renderBoard() {
   const competition = competitionConfig();
   const selected = STATE.catalog.find((player) => player.id === STATE.selectedPlayerId) ?? null;
+  const rolling = Boolean(STATE.rollAnimation?.active);
   els.board.dataset.competition = competition.theme;
 
   els.board.innerHTML = `
     <div class="board-grid">
       ${XI_SLOTS.map((slot, index) => {
         const player = STATE.lineup.get(index) ?? null;
-        const canAccept = selected ? slotAcceptsPlayer(slot, selected) : false;
+        const canAccept = !rolling && selected ? slotAcceptsPlayer(slot, selected) : false;
         const canClick = Boolean(selected && canAccept && !player);
         return `
           <button
@@ -1876,12 +1899,71 @@ function renderAll() {
 }
 
 function rollSquad() {
-  if (STATE.view !== "game" || STATE.currentSquad || lineupComplete()) return;
+  if (STATE.view !== "game" || STATE.currentSquad || lineupComplete() || STATE.rollAnimation?.active) return;
+
   const pool = STATE.squads.filter(squadHasAvailablePlayer);
   const chosen = randomChoice(pool.length ? pool : STATE.squads);
-  STATE.currentSquad = chosen ? decorateSquad(chosen) : null;
+  if (!chosen) return;
+
+  const candidates = shuffle(
+    [...STATE.squads]
+      .filter((squad) => squad.id !== chosen.id)
+      .concat(chosen),
+  );
+  const animationFrames = [];
+  const cycles = STATE.competition === "worldcup" ? 16 : 12;
+
+  for (let index = 0; index < cycles; index += 1) {
+    const squad = candidates[index % candidates.length];
+    animationFrames.push({
+      label: `${squad.team} ${squad.year}`,
+      squadLabel: squad.label,
+    });
+  }
+  animationFrames.push({
+    label: `${chosen.team} ${chosen.year}`,
+    squadLabel: chosen.label,
+  });
+
+  const animation = {
+    active: true,
+    label: "Rolling...",
+    timer: null,
+    frames: animationFrames,
+    index: 0,
+  };
+
+  STATE.rollAnimation = animation;
   STATE.selectedPlayerId = null;
+  STATE.currentSquad = null;
   renderAll();
+
+  const tick = () => {
+    if (STATE.rollAnimation !== animation) return;
+
+    const frame = animation.frames[animation.index];
+    if (frame) {
+      animation.label = frame.label;
+      els.rosterTitle.textContent = frame.squadLabel;
+      els.currentSquad.textContent = frame.label;
+      renderGameMeta();
+      renderRoster();
+      renderBoard();
+    }
+
+    animation.index += 1;
+    if (animation.index >= animation.frames.length) {
+      clearInterval(animation.timer);
+      animation.active = false;
+      STATE.currentSquad = decorateSquad(chosen);
+      STATE.rollAnimation = null;
+      STATE.selectedPlayerId = null;
+      renderAll();
+    }
+  };
+
+  animation.timer = setInterval(tick, STATE.competition === "worldcup" ? 55 : 65);
+  tick();
 }
 
 function normalRandom() {
@@ -2702,6 +2784,7 @@ function animateSeries() {
 
 function goHome() {
   clearTimer();
+  clearRollAnimation();
   STATE.view = "home";
   STATE.lineup.clear();
   STATE.currentSquad = null;
@@ -2717,6 +2800,7 @@ function goHome() {
 
 function goBuilder() {
   clearTimer();
+  clearRollAnimation();
   STATE.view = "game";
   STATE.series = null;
   STATE.seriesShareAsset = null;
@@ -2729,6 +2813,7 @@ function goBuilder() {
 
 function resetBuilder() {
   clearTimer();
+  clearRollAnimation();
   STATE.lineup.clear();
   STATE.currentSquad = null;
   STATE.selectedPlayerId = null;

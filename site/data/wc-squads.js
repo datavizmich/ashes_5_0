@@ -21,6 +21,7 @@ function sortSquadPlayers(players) {
 function normalizeSquad(squad) {
   return {
     ...squad,
+    label: squad.label.replace(/\s+(Ashes|World Cup)\s+squad$/u, ""),
     players: sortSquadPlayers(squad.players),
   };
 }
