@@ -298,6 +298,20 @@ button {
   border-radius: 1.4rem;
   display: grid;
   gap: 0.8rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0.45rem;
+  background: linear-gradient(180deg, rgba(212, 175, 55, 0.95), rgba(184, 134, 11, 0.45));
+}
+
+body[data-competition="worldcup"] .hero-card::before {
+  background: linear-gradient(180deg, rgba(103, 183, 255, 0.95), rgba(47, 125, 211, 0.45));
 }
 
 .stat {
@@ -475,6 +489,7 @@ select {
 .content,
 .season-layout {
   grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  align-items: start;
 }
 
 .topbar {
@@ -987,6 +1002,62 @@ button:disabled {
   margin-top: 1rem;
 }
 
+.series-controls-panel,
+.series-insights-panel,
+.memory-reveal,
+.actions-panel {
+  margin-top: 0.9rem;
+}
+
+.collapsible-panel {
+  padding: 0;
+  overflow: hidden;
+}
+
+.collapsible-panel[open] {
+  padding-bottom: 1rem;
+}
+
+.collapsible-summary {
+  list-style: none;
+  cursor: pointer;
+  margin: 0;
+  padding: 1rem 1rem 0.85rem;
+  border-radius: 1.35rem;
+}
+
+.collapsible-summary::-webkit-details-marker {
+  display: none;
+}
+
+.collapsible-summary::after {
+  content: "Expand";
+  margin-left: auto;
+  font-family: var(--score-font);
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent-2);
+  align-self: center;
+}
+
+.collapsible-panel[open] > .collapsible-summary::after {
+  content: "Collapse";
+}
+
+.collapsible-summary .panel-subtitle {
+  max-width: 36ch;
+}
+
+.collapsible-body {
+  padding: 0 1rem 1rem;
+}
+
+.collapsible-panel .lineup-list,
+.collapsible-panel .compare-grid {
+  margin-top: 0.25rem;
+}
+
 .insights-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
@@ -1159,11 +1230,16 @@ button.achievement-badge:focus-visible {
 }
 
 .memory-reveal {
-  margin-top: 1rem;
+  margin-top: 0.9rem;
+  margin-bottom: 1.25rem;
 }
 
 .actions-panel .controls {
   margin-top: 0;
+}
+
+.actions-panel .panel-header {
+  margin-bottom: 1rem;
 }
 
 .topbar .ghost {

@@ -94,10 +94,10 @@ function bindElements() {
     seriesStarStrength: "[data-series-star-strength]",
     seriesEyebrow: "[data-series-eyebrow]",
     seriesTitle: "[data-series-title]",
-    starTitle: "[data-star-title]",
     seriesFeed: "[data-series-feed]",
     seriesTableWrap: "[data-series-table-wrap]",
-    starLineup: "[data-star-lineup]",
+    seriesNext: "[data-series-next]",
+    seriesAll: "[data-series-all]",
     draftMeter: "[data-draft-meter]",
     draftBatting: "[data-draft-batting]",
     draftBowling: "[data-draft-bowling]",
@@ -978,7 +978,7 @@ function buildWorldCupPools() {
 
   ranked.forEach((entry, index) => {
     const bucketIndex = clamp(Math.floor((index / Math.max(1, ranked.length)) * 4), 0, 3);
-    const bucketName = ["weak", "middle", "strong", "elite"][bucketIndex];
+    const bucketName = ["elite", "strong", "middle", "weak"][bucketIndex];
     buckets[bucketName].push(entry);
   });
 
@@ -1349,56 +1349,111 @@ function renderSeriesInsights() {
   const achievements = completed ? buildAchievementList(STATE.series, leaders) : [];
   const userMetrics = teamMetricsFromLineup(STATE.series.userLineup);
   const starMetrics = teamMetricsFromLineup(STATE.series.starLineup);
+  const isWorldCup = STATE.series.tournamentType === "worldcup";
   const strengthPercent = clamp(Math.round(50 + (userMetrics.overall - 60) * 2.2), 1, 99);
   const playerOfSeries = leaders.overallLeader
     ? `${leaders.overallLeader.name} (${leaders.overallLeader.side === "your" ? "Your XI" : competition.oppositionTitle})`
     : "Awaiting";
+  const tournamentLeader = STATE.series.statusText ?? "Tournament complete";
+  const pathSummary = isWorldCup
+    ? [
+        `Group stage: ${STATE.series.groupTable.findIndex((entry) => entry.id === "your") < 2 ? "Qualified" : "Eliminated"}`,
+        `Knockout: ${STATE.series.matches.some((match) => match.stage === "final") ? "Reached final" : STATE.series.matches.some((match) => match.stage === "semi") ? "Reached semi-final" : "No knockout match"}`,
+        `Result: ${tournamentLeader}`,
+      ]
+    : [];
 
-  els.seriesInsights.innerHTML = `
-    <div class="insights-grid">
-      <article class="insight-card insight-primary">
-        <span class="insight-label">Team grade</span>
-        <strong>Overall ${userMetrics.overall} · ${userMetrics.grade}</strong>
-        <p>Batting ${userMetrics.batting} · Bowling ${userMetrics.bowling} · Fielding ${userMetrics.fielding}</p>
-      </article>
-      <article class="insight-card">
-        <span class="insight-label">XI rating</span>
-        <strong>Your XI is stronger than ${strengthPercent}% of generated XIs</strong>
-        <p>${competition.oppositionTitle}: ${starMetrics.overall} overall · ${starMetrics.grade}</p>
-      </article>
-      <article class="insight-card">
-        <span class="insight-label">Player of the series</span>
-        <strong>${escapeHtml(playerOfSeries)}</strong>
-        <p>${escapeHtml(seriesWinnerLabel())}</p>
-      </article>
-      <article class="insight-card">
-        <span class="insight-label">Series leaders</span>
-        <div class="leader-stack">
-          <span>Most Runs: ${escapeHtml(leaders.mostRuns ? `${leaders.mostRuns.name} (${leaders.mostRuns.runs})` : "n/a")}</span>
-          <span>Most Wickets: ${escapeHtml(leaders.mostWickets ? `${leaders.mostWickets.name} (${leaders.mostWickets.wickets})` : "n/a")}</span>
-          <span>Most Centuries: ${escapeHtml(leaders.mostCenturies ? `${leaders.mostCenturies.name} (${leaders.mostCenturies.centuries})` : "n/a")}</span>
-          <span>Most Five-Fors: ${escapeHtml(leaders.mostFiveFors ? `${leaders.mostFiveFors.name} (${leaders.mostFiveFors.fiveFors})` : "n/a")}</span>
-        </div>
-      </article>
-    </div>
-    <div class="badge-row">
-      ${
-        completed && achievements.length
-          ? achievements
-              .map(
-                (name) =>
-                  `<button type="button" class="achievement-badge" data-achievement-key="${escapeHtml(name)}" title="${escapeHtml(achievementMeta(name).description)}">${escapeHtml(name)}</button>`,
-              )
-              .join("")
-          : `<span class="achievement-badge muted">Keep playing to unlock achievements</span>`
-      }
-    </div>
-    <div class="achievement-detail" data-achievement-detail hidden>
-      <span class="achievement-detail-label">Achievement detail</span>
-      <strong data-achievement-title></strong>
-      <p data-achievement-copy></p>
-    </div>
-  `;
+  els.seriesInsights.innerHTML = isWorldCup
+    ? `
+      <div class="insights-grid">
+        <article class="insight-card insight-primary">
+          <span class="insight-label">Tournament summary</span>
+          <strong>${escapeHtml(tournamentLeader)}</strong>
+          <p>${escapeHtml(pathSummary.join(" · "))}</p>
+        </article>
+        <article class="insight-card">
+          <span class="insight-label">Player of the tournament</span>
+          <strong>${escapeHtml(playerOfSeries)}</strong>
+          <p>Most runs: ${escapeHtml(leaders.mostRuns ? `${leaders.mostRuns.name} (${leaders.mostRuns.runs})` : "n/a")}</p>
+        </article>
+        <article class="insight-card">
+          <span class="insight-label">Tournament leaders</span>
+          <div class="leader-stack">
+            <span>Most Runs: ${escapeHtml(leaders.mostRuns ? `${leaders.mostRuns.name} (${leaders.mostRuns.runs})` : "n/a")}</span>
+            <span>Most Wickets: ${escapeHtml(leaders.mostWickets ? `${leaders.mostWickets.name} (${leaders.mostWickets.wickets})` : "n/a")}</span>
+            <span>Most Centuries: ${escapeHtml(leaders.mostCenturies ? `${leaders.mostCenturies.name} (${leaders.mostCenturies.centuries})` : "n/a")}</span>
+            <span>Most Five-Fors: ${escapeHtml(leaders.mostFiveFors ? `${leaders.mostFiveFors.name} (${leaders.mostFiveFors.fiveFors})` : "n/a")}</span>
+          </div>
+        </article>
+        <article class="insight-card">
+          <span class="insight-label">Team grade</span>
+          <strong>Overall ${userMetrics.overall} · ${userMetrics.grade}</strong>
+          <p>Batting ${userMetrics.batting} · Bowling ${userMetrics.bowling} · Fielding ${userMetrics.fielding}</p>
+        </article>
+      </div>
+      <div class="badge-row">
+        ${
+          completed && achievements.length
+            ? achievements
+                .map(
+                  (name) =>
+                    `<button type="button" class="achievement-badge" data-achievement-key="${escapeHtml(name)}" title="${escapeHtml(achievementMeta(name).description)}">${escapeHtml(name)}</button>`,
+                )
+                .join("")
+            : `<span class="achievement-badge muted">Keep playing to unlock achievements</span>`
+        }
+      </div>
+      <div class="achievement-detail" data-achievement-detail hidden>
+        <span class="achievement-detail-label">Achievement detail</span>
+        <strong data-achievement-title></strong>
+        <p data-achievement-copy></p>
+      </div>
+    `
+    : `
+      <div class="insights-grid">
+        <article class="insight-card insight-primary">
+          <span class="insight-label">Team grade</span>
+          <strong>Overall ${userMetrics.overall} · ${userMetrics.grade}</strong>
+          <p>Batting ${userMetrics.batting} · Bowling ${userMetrics.bowling} · Fielding ${userMetrics.fielding}</p>
+        </article>
+        <article class="insight-card">
+          <span class="insight-label">XI rating</span>
+          <strong>Your XI is stronger than ${strengthPercent}% of generated XIs</strong>
+          <p>${competition.oppositionTitle}: ${starMetrics.overall} overall · ${starMetrics.grade}</p>
+        </article>
+        <article class="insight-card">
+          <span class="insight-label">Player of the series</span>
+          <strong>${escapeHtml(playerOfSeries)}</strong>
+          <p>${escapeHtml(seriesWinnerLabel())}</p>
+        </article>
+        <article class="insight-card">
+          <span class="insight-label">Series leaders</span>
+          <div class="leader-stack">
+            <span>Most Runs: ${escapeHtml(leaders.mostRuns ? `${leaders.mostRuns.name} (${leaders.mostRuns.runs})` : "n/a")}</span>
+            <span>Most Wickets: ${escapeHtml(leaders.mostWickets ? `${leaders.mostWickets.name} (${leaders.mostWickets.wickets})` : "n/a")}</span>
+            <span>Most Centuries: ${escapeHtml(leaders.mostCenturies ? `${leaders.mostCenturies.name} (${leaders.mostCenturies.centuries})` : "n/a")}</span>
+            <span>Most Five-Fors: ${escapeHtml(leaders.mostFiveFors ? `${leaders.mostFiveFors.name} (${leaders.mostFiveFors.fiveFors})` : "n/a")}</span>
+          </div>
+        </article>
+      </div>
+      <div class="badge-row">
+        ${
+          completed && achievements.length
+            ? achievements
+                .map(
+                  (name) =>
+                    `<button type="button" class="achievement-badge" data-achievement-key="${escapeHtml(name)}" title="${escapeHtml(achievementMeta(name).description)}">${escapeHtml(name)}</button>`,
+                )
+                .join("")
+            : `<span class="achievement-badge muted">Keep playing to unlock achievements</span>`
+        }
+      </div>
+      <div class="achievement-detail" data-achievement-detail hidden>
+        <span class="achievement-detail-label">Achievement detail</span>
+        <strong data-achievement-title></strong>
+        <p data-achievement-copy></p>
+      </div>
+    `;
 
   if (STATE.achievementDetail) {
     setAchievementDetail(STATE.achievementDetail, STATE.achievementPinned);
@@ -1511,7 +1566,7 @@ function renderStats() {
   els.boardTitle.textContent = competition.boardTitle;
   els.seriesEyebrow.textContent = competition.seriesEyebrow;
   els.seriesTitle.textContent = competition.seriesTitle;
-  els.starTitle.textContent = competition.oppositionTitle;
+  if (els.starTitle) els.starTitle.textContent = competition.oppositionTitle;
   document.body.dataset.competition = competition.theme;
 }
 
@@ -1663,12 +1718,21 @@ function renderSeriesSummary() {
   if (!STATE.series) return;
   const competition = competitionConfig();
   const completed = seriesComplete();
+  const revealedAll = STATE.series.revealed >= STATE.series.matches.length;
   els.seriesProgress.textContent = `${STATE.series.revealed} / ${STATE.series.matches.length} ${competition.seriesProgressLabel}`;
-  els.seriesStatus.textContent = completed ? "Series complete" : seriesWinnerLabel();
+  els.seriesStatus.textContent = completed ? "Series complete" : STATE.series.revealed === 0 ? "Ready to simulate" : seriesWinnerLabel();
   els.seriesUserStrength.textContent = `${STATE.series.userTeam.overall} · ${STATE.series.userTeam.grade}`;
   els.seriesStarStrength.textContent = `${STATE.series.starTeam.overall} · ${STATE.series.starTeam.grade}`;
   els.seriesActions.hidden = !completed;
   els.seriesTitle.textContent = competition.seriesTitle;
+  if (els.seriesNext) {
+    els.seriesNext.disabled = revealedAll;
+    els.seriesNext.textContent = revealedAll ? "Series complete" : "Simulate next game";
+  }
+  if (els.seriesAll) {
+    els.seriesAll.disabled = revealedAll;
+    els.seriesAll.textContent = revealedAll ? "Series complete" : "Simulate all games";
+  }
 }
 
 function renderSeriesFeed() {
@@ -1822,7 +1886,7 @@ function renderSeriesTable() {
 }
 
 function renderStarLineup() {
-  if (!STATE.series) return;
+  if (!STATE.series || !els.starLineup) return;
   const competition = competitionConfig();
   const revealRatings = seriesComplete() || STATE.mode !== "memory";
   els.starLineup.innerHTML = STATE.series.starLineup
@@ -1843,6 +1907,7 @@ function renderSeriesReveal() {
   if (!STATE.series || !els.seriesReveal || !els.seriesRevealGrid) return;
   const showReveal = STATE.mode === "memory" && seriesComplete();
   els.seriesReveal.hidden = !showReveal;
+  els.seriesReveal.open = showReveal;
 
   if (!showReveal) {
     els.seriesRevealGrid.innerHTML = "";
@@ -2746,7 +2811,6 @@ function startSeries() {
     setShareStatus("");
     STATE.view = "series";
     renderAll();
-    animateSeries();
   } catch (error) {
     console.error(`${competition.title} series failed to start:`, error);
     STATE.series = null;
@@ -2757,29 +2821,16 @@ function startSeries() {
   }
 }
 
-function animateSeries() {
-  if (!STATE.series) return;
-  clearTimer();
-  STATE.series.revealed = 0;
-  els.seriesFeed.innerHTML = "";
-  els.seriesTableWrap.innerHTML = `<div class="placeholder">The series table will appear when the series ends.</div>`;
+function revealNextSeriesMatch() {
+  if (!STATE.series || STATE.series.revealed >= STATE.series.matches.length) return;
+  STATE.series.revealed += 1;
   renderSeries();
+}
 
-  const tick = () => {
-    if (!STATE.series || STATE.view !== "series") return;
-    STATE.series.revealed += 1;
-    renderSeries();
-
-    if (STATE.series.revealed >= STATE.series.matches.length) {
-      clearTimer();
-      renderSeries();
-      return;
-    }
-
-    STATE.timer = setTimeout(tick, 700);
-  };
-
-  STATE.timer = setTimeout(tick, 500);
+function revealAllSeriesMatches() {
+  if (!STATE.series) return;
+  STATE.series.revealed = STATE.series.matches.length;
+  renderSeries();
 }
 
 function goHome() {
@@ -2836,6 +2887,8 @@ function wireControls() {
   els.backBuilder.addEventListener("click", goBuilder);
   els.rollSquad.addEventListener("click", rollSquad);
   els.startSeries.addEventListener("click", startSeries);
+  els.seriesNext.addEventListener("click", revealNextSeriesMatch);
+  els.seriesAll.addEventListener("click", revealAllSeriesMatches);
   els.playAgain.addEventListener("click", goHome);
   els.homeCompetition.addEventListener("click", () => {
     STATE.view = "home";

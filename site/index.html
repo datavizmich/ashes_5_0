@@ -207,6 +207,20 @@
           </div>
         </header>
 
+        <section class="panel series-controls-panel">
+          <div class="panel-header">
+            <div>
+              <p class="panel-kicker">Simulation</p>
+              <h2>Reveal the series</h2>
+            </div>
+            <p class="panel-subtitle">Step through one game at a time or show every result at once.</p>
+          </div>
+          <div class="controls">
+            <button class="primary" data-series-next type="button">Simulate next game</button>
+            <button class="secondary" data-series-all type="button">Simulate all games</button>
+          </div>
+        </section>
+
         <section class="season-layout">
           <article class="panel">
             <div class="panel-header">
@@ -231,18 +245,16 @@
           </article>
         </section>
 
-        <section class="panel all-stars-panel">
-          <div class="panel-header">
+        <details class="panel collapsible-panel series-insights-panel">
+          <summary class="panel-header collapsible-summary">
             <div>
-              <p class="panel-kicker">Opposition XI</p>
-              <h2 data-star-title>All-star XI</h2>
+              <p class="panel-kicker">Series insights</p>
+              <h2>Performance summary</h2>
             </div>
-            <p class="panel-subtitle">Built from the strongest players in our dataset.</p>
-          </div>
-          <div class="lineup-list" data-star-lineup></div>
-        </section>
-
-        <section class="panel series-insights" data-series-insights></section>
+            <p class="panel-subtitle">Runs, wickets, and tournament context.</p>
+          </summary>
+          <div class="collapsible-body series-insights" data-series-insights></div>
+        </details>
 
         <section class="panel actions-panel" data-series-actions hidden>
           <div class="panel-header">
@@ -261,15 +273,18 @@
           <p class="share-status" data-share-status aria-live="polite"></p>
         </section>
 
-        <section class="panel memory-reveal" data-series-reveal hidden>
-          <div class="panel-header">
+        <details class="panel collapsible-panel memory-reveal" data-series-reveal hidden>
+          <summary class="panel-header collapsible-summary">
             <div>
               <p class="panel-kicker">Memory reveal</p>
               <h2>Both XIs</h2>
             </div>
+            <p class="panel-subtitle">Open to compare both lineups.</p>
+          </summary>
+          <div class="collapsible-body">
+            <div class="compare-grid" data-series-reveal-grid></div>
           </div>
-          <div class="compare-grid" data-series-reveal-grid></div>
-        </section>
+        </details>
       </section>
     </main>
 
