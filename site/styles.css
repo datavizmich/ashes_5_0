@@ -1009,6 +1009,10 @@ button:disabled {
   margin-top: 0.9rem;
 }
 
+.series-controls-panel {
+  margin-bottom: 0.75rem;
+}
+
 .collapsible-panel {
   padding: 0;
   overflow: hidden;

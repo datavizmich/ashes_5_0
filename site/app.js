@@ -360,10 +360,11 @@ function buildBestLineup(players) {
   return buildLineupFromMap(lineup);
 }
 
-function buildAllStarXI() {
+function buildAllStarXI(excludedNames = new Set()) {
   const byName = new Map();
   for (const player of STATE.catalog) {
     const key = normalizeName(player.name);
+    if (excludedNames.has(key)) continue;
     const existing = byName.get(key);
     if (!existing || playerOverall(player) > playerOverall(existing)) {
       byName.set(key, player);
@@ -1720,7 +1721,11 @@ function renderSeriesSummary() {
   const completed = seriesComplete();
   const revealedAll = STATE.series.revealed >= STATE.series.matches.length;
   els.seriesProgress.textContent = `${STATE.series.revealed} / ${STATE.series.matches.length} ${competition.seriesProgressLabel}`;
-  els.seriesStatus.textContent = completed ? "Series complete" : STATE.series.revealed === 0 ? "Ready to simulate" : seriesWinnerLabel();
+  els.seriesStatus.textContent = completed
+    ? "Series complete"
+    : STATE.series.revealed === 0
+      ? "Ready to simulate"
+      : "Simulation in progress";
   els.seriesUserStrength.textContent = `${STATE.series.userTeam.overall} · ${STATE.series.userTeam.grade}`;
   els.seriesStarStrength.textContent = `${STATE.series.starTeam.overall} · ${STATE.series.starTeam.grade}`;
   els.seriesActions.hidden = !completed;
@@ -2666,7 +2671,8 @@ function buildSeries() {
   const competition = competitionConfig();
 
   const userLine = userLineup();
-  const starLine = buildAllStarXI();
+  const excludedNames = new Set(userLine.map((player) => normalizeName(player.name)));
+  const starLine = buildAllStarXI(excludedNames);
   const userTeam = teamMetricsFromLineup(userLine);
   const starTeam = teamMetricsFromLineup(starLine);
   const matches = [];
@@ -2807,7 +2813,7 @@ function startSeries() {
     STATE.seriesShareAsset = null;
     STATE.seriesShareAssetPromise = null;
     STATE.series = buildSeries();
-    prepareSeriesShareAsset(STATE.series, STATE.mode, competitionConfig().title);
+    prepareSeriesShareAsset(STATE.series, STATE.mode, competitionConfig().title, competitionConfig().theme);
     setShareStatus("");
     STATE.view = "series";
     renderAll();
@@ -3082,7 +3088,7 @@ function fitCanvasText(ctx, text, maxWidth, maxSize, minSize, weight = 700, fami
   ctx.font = `${weight} ${size}px ${family}`;
 }
 
-async function createSeriesShareFile(series, modeLabel, competitionTitle) {
+async function createSeriesShareFile(series, modeLabel, competitionTitle, competitionTheme) {
   if (!series) return null;
   if (document.fonts?.ready) {
     try {
@@ -3105,18 +3111,25 @@ async function createSeriesShareFile(series, modeLabel, competitionTitle) {
   if (!ctx) return null;
   ctx.scale(scale, scale);
 
+  const isWorldCup = competitionTheme === "worldcup";
   const bg = ctx.createLinearGradient(0, 0, width, height);
-  bg.addColorStop(0, "#123524");
-  bg.addColorStop(0.55, "#0f2d1f");
-  bg.addColorStop(1, "#08150f");
+  if (isWorldCup) {
+    bg.addColorStop(0, "#081830");
+    bg.addColorStop(0.55, "#0a2143");
+    bg.addColorStop(1, "#050f1d");
+  } else {
+    bg.addColorStop(0, "#123524");
+    bg.addColorStop(0.55, "#0f2d1f");
+    bg.addColorStop(1, "#08150f");
+  }
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, width, height);
 
-  ctx.fillStyle = "rgba(212, 175, 55, 0.18)";
+  ctx.fillStyle = isWorldCup ? "rgba(103, 183, 255, 0.18)" : "rgba(212, 175, 55, 0.18)";
   ctx.beginPath();
   ctx.arc(width - 180, 150, 220, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = "rgba(245, 240, 230, 0.08)";
+  ctx.fillStyle = isWorldCup ? "rgba(180, 212, 255, 0.08)" : "rgba(245, 240, 230, 0.08)";
   ctx.beginPath();
   ctx.arc(140, height - 180, 260, 0, Math.PI * 2);
   ctx.fill();
@@ -3140,7 +3153,7 @@ async function createSeriesShareFile(series, modeLabel, competitionTitle) {
       : series.userWins < series.starWins
         ? `Your XI lost the series ${series.userWins}-${series.starWins}-${series.draws}`
         : `The series finished level ${series.userWins}-${series.starWins}-${series.draws}`;
-  ctx.fillStyle = "#d4af37";
+  ctx.fillStyle = isWorldCup ? "#67b7ff" : "#d4af37";
   fitCanvasText(ctx, resultText, 900, 30, 18, 700, "Inter");
   ctx.fillText(resultText, 80, 192);
 
@@ -3165,7 +3178,7 @@ async function createSeriesShareFile(series, modeLabel, competitionTitle) {
     ctx.strokeStyle = "rgba(31, 31, 31, 0.08)";
     ctx.stroke();
 
-    ctx.fillStyle = "#b8860b";
+    ctx.fillStyle = isWorldCup ? "#67b7ff" : "#b8860b";
     fitCanvasText(ctx, card.label, cardW - 36, 18, 14, 800, "Inter");
     ctx.fillText(card.label, x + 18, cardY + 34);
 
@@ -3174,7 +3187,7 @@ async function createSeriesShareFile(series, modeLabel, competitionTitle) {
     ctx.fillText(String(card.value), x + 18, cardY + 84);
   });
 
-  ctx.fillStyle = "#d4af37";
+  ctx.fillStyle = isWorldCup ? "#67b7ff" : "#d4af37";
   fitCanvasText(ctx, "Your XI", 380, 28, 18, 800, "Inter");
   ctx.fillText("Your XI", 80, 430);
 
@@ -3227,13 +3240,13 @@ async function createSeriesShareFile(series, modeLabel, competitionTitle) {
     }, "image/png");
   });
 
-  return new File([blob], "ashes-xi-team.png", { type: "image/png" });
+  return new File([blob], `${isWorldCup ? "world-cup" : "ashes"}-xi-team.png`, { type: "image/png" });
 }
 
-function prepareSeriesShareAsset(series, modeLabel, competitionTitle) {
+function prepareSeriesShareAsset(series, modeLabel, competitionTitle, competitionTheme) {
   if (!series || STATE.seriesShareAsset || STATE.seriesShareAssetPromise) return;
   const seriesRef = series;
-  STATE.seriesShareAssetPromise = createSeriesShareFile(seriesRef, modeLabel, competitionTitle)
+  STATE.seriesShareAssetPromise = createSeriesShareFile(seriesRef, modeLabel, competitionTitle, competitionTheme)
     .then((file) => {
       if (STATE.series === seriesRef) {
         STATE.seriesShareAsset = file;
@@ -3260,7 +3273,8 @@ async function ensureSeriesShareAsset() {
   if (!STATE.series) return null;
   if (STATE.seriesShareAsset) return STATE.seriesShareAsset;
   if (!STATE.seriesShareAssetPromise) {
-    prepareSeriesShareAsset(STATE.series, STATE.mode, competitionConfig().title);
+    const competition = competitionConfig();
+    prepareSeriesShareAsset(STATE.series, STATE.mode, competition.title, competition.theme);
   }
 
   try {
@@ -3307,7 +3321,7 @@ async function downloadSeriesShareImage() {
   const objectUrl = URL.createObjectURL(file);
   const link = document.createElement("a");
   link.href = objectUrl;
-  link.download = file.name || "ashes-xi-team.png";
+  link.download = file.name || `${competitionConfig().theme === "worldcup" ? "world-cup" : "ashes"}-xi-team.png`;
   link.rel = "noopener";
   document.body.appendChild(link);
   link.click();
