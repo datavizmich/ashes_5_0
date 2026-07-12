@@ -3112,24 +3112,51 @@ async function createSeriesShareFile(series, modeLabel, competitionTitle, compet
   ctx.scale(scale, scale);
 
   const isWorldCup = competitionTheme === "worldcup";
+  const palette = isWorldCup
+    ? {
+        bgStart: "#06162f",
+        bgMid: "#0b2448",
+        bgEnd: "#04101f",
+        glowA: "rgba(103, 183, 255, 0.18)",
+        glowB: "rgba(180, 212, 255, 0.08)",
+        cardFill: "rgba(239, 245, 255, 0.95)",
+        cardAltFill: "rgba(226, 237, 255, 0.95)",
+        stroke: "rgba(179, 206, 255, 0.14)",
+        accent: "#67b7ff",
+        accentSoft: "#2f7dd3",
+        text: "#f8fbff",
+        textStrong: "#eaf3ff",
+        muted: "rgba(232, 241, 255, 0.76)",
+        darkText: "#10233f",
+      }
+    : {
+        bgStart: "#123524",
+        bgMid: "#0f2d1f",
+        bgEnd: "#08150f",
+        glowA: "rgba(212, 175, 55, 0.18)",
+        glowB: "rgba(245, 240, 230, 0.08)",
+        cardFill: "rgba(245, 240, 230, 0.94)",
+        cardAltFill: "rgba(236, 228, 210, 0.94)",
+        stroke: "rgba(31, 31, 31, 0.08)",
+        accent: "#d4af37",
+        accentSoft: "#b8860b",
+        text: "#f8f8f8",
+        textStrong: "rgba(248, 248, 248, 0.82)",
+        muted: "rgba(248, 248, 248, 0.7)",
+        darkText: "#1f1f1f",
+      };
   const bg = ctx.createLinearGradient(0, 0, width, height);
-  if (isWorldCup) {
-    bg.addColorStop(0, "#081830");
-    bg.addColorStop(0.55, "#0a2143");
-    bg.addColorStop(1, "#050f1d");
-  } else {
-    bg.addColorStop(0, "#123524");
-    bg.addColorStop(0.55, "#0f2d1f");
-    bg.addColorStop(1, "#08150f");
-  }
+  bg.addColorStop(0, palette.bgStart);
+  bg.addColorStop(0.55, palette.bgMid);
+  bg.addColorStop(1, palette.bgEnd);
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, width, height);
 
-  ctx.fillStyle = isWorldCup ? "rgba(103, 183, 255, 0.18)" : "rgba(212, 175, 55, 0.18)";
+  ctx.fillStyle = palette.glowA;
   ctx.beginPath();
   ctx.arc(width - 180, 150, 220, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = isWorldCup ? "rgba(180, 212, 255, 0.08)" : "rgba(245, 240, 230, 0.08)";
+  ctx.fillStyle = palette.glowB;
   ctx.beginPath();
   ctx.arc(140, height - 180, 260, 0, Math.PI * 2);
   ctx.fill();
@@ -3138,12 +3165,12 @@ async function createSeriesShareFile(series, modeLabel, competitionTitle, compet
   ctx.lineWidth = 2;
   ctx.strokeRect(24, 24, width - 48, height - 48);
 
-  ctx.fillStyle = "#f8f8f8";
+  ctx.fillStyle = palette.text;
   fitCanvasText(ctx, competitionTitle, 700, 66, 42, 800, "Oswald");
   ctx.fillText(competitionTitle, 80, 118);
 
   const modeText = `${modeLabel} series complete`;
-  ctx.fillStyle = "rgba(248, 248, 248, 0.82)";
+  ctx.fillStyle = palette.textStrong;
   fitCanvasText(ctx, modeText, 560, 28, 18, 600, "Inter");
   ctx.fillText(modeText, 80, 155);
 
@@ -3153,7 +3180,7 @@ async function createSeriesShareFile(series, modeLabel, competitionTitle, compet
       : series.userWins < series.starWins
         ? `Your XI lost the series ${series.userWins}-${series.starWins}-${series.draws}`
         : `The series finished level ${series.userWins}-${series.starWins}-${series.draws}`;
-  ctx.fillStyle = isWorldCup ? "#67b7ff" : "#d4af37";
+  ctx.fillStyle = palette.accent;
   fitCanvasText(ctx, resultText, 900, 30, 18, 700, "Inter");
   ctx.fillText(resultText, 80, 192);
 
@@ -3172,26 +3199,26 @@ async function createSeriesShareFile(series, modeLabel, competitionTitle, compet
 
   metricCards.forEach((card, index) => {
     const x = 80 + index * (cardW + gap);
-    ctx.fillStyle = "rgba(245, 240, 230, 0.94)";
+    ctx.fillStyle = index % 2 === 0 ? palette.cardFill : palette.cardAltFill;
     roundRectPath(ctx, x, cardY, cardW, cardH, 24);
     ctx.fill();
-    ctx.strokeStyle = "rgba(31, 31, 31, 0.08)";
+    ctx.strokeStyle = palette.stroke;
     ctx.stroke();
 
-    ctx.fillStyle = isWorldCup ? "#67b7ff" : "#b8860b";
+    ctx.fillStyle = palette.accent;
     fitCanvasText(ctx, card.label, cardW - 36, 18, 14, 800, "Inter");
     ctx.fillText(card.label, x + 18, cardY + 34);
 
-    ctx.fillStyle = "#1f1f1f";
+    ctx.fillStyle = palette.darkText;
     fitCanvasText(ctx, String(card.value), cardW - 36, 38, 24, 800, "Oswald");
     ctx.fillText(String(card.value), x + 18, cardY + 84);
   });
 
-  ctx.fillStyle = isWorldCup ? "#67b7ff" : "#d4af37";
+  ctx.fillStyle = palette.accent;
   fitCanvasText(ctx, "Your XI", 380, 28, 18, 800, "Inter");
   ctx.fillText("Your XI", 80, 430);
 
-  ctx.fillStyle = "rgba(248, 248, 248, 0.7)";
+  ctx.fillStyle = palette.muted;
   fitCanvasText(ctx, "Player ratings", 360, 16, 12, 600, "Inter");
   ctx.fillText("Player ratings", 185, 430);
 
@@ -3203,30 +3230,30 @@ async function createSeriesShareFile(series, modeLabel, competitionTitle, compet
   series.userLineup.forEach((player, index) => {
     const y = rowsTop + index * (rowHeight + rowGap);
     const slot = XI_SLOTS[index];
-    ctx.fillStyle = index % 2 === 0 ? "rgba(245, 240, 230, 0.94)" : "rgba(236, 228, 210, 0.94)";
+    ctx.fillStyle = index % 2 === 0 ? palette.cardFill : palette.cardAltFill;
     roundRectPath(ctx, 80, y, rowWidth, rowHeight, 22);
     ctx.fill();
-    ctx.strokeStyle = "rgba(31, 31, 31, 0.08)";
+    ctx.strokeStyle = palette.stroke;
     ctx.stroke();
 
-    ctx.fillStyle = "#b8860b";
+    ctx.fillStyle = palette.accentSoft;
     fitCanvasText(ctx, slot.label, 110, 18, 13, 800, "Inter");
     ctx.fillText(slot.label, 104, y + 28);
 
-    ctx.fillStyle = "#1f1f1f";
+    ctx.fillStyle = palette.darkText;
     fitCanvasText(ctx, player.name, 470, 28, 18, 800, "Inter");
     ctx.fillText(player.name, 104, y + 58);
 
-    ctx.fillStyle = "#5f5d56";
+    ctx.fillStyle = isWorldCup ? "#4a6384" : "#5f5d56";
     fitCanvasText(ctx, `Bat ${player.batting}  Bowl ${player.bowling}  Field ${player.fielding}`, 310, 16, 12, 600, "Roboto Mono");
     ctx.fillText(`Bat ${player.batting}  Bowl ${player.bowling}  Field ${player.fielding}`, 1120, y + 33);
 
-    ctx.fillStyle = "#123524";
+    ctx.fillStyle = isWorldCup ? "#0c2d57" : "#123524";
     fitCanvasText(ctx, `Overall ${playerOverall(player)}`, 170, 22, 14, 800, "Oswald");
     ctx.fillText(`Overall ${playerOverall(player)}`, 1290, y + 58);
   });
 
-  ctx.fillStyle = "rgba(248, 248, 248, 0.75)";
+  ctx.fillStyle = palette.muted;
   fitCanvasText(ctx, "ashes-5-0.co.uk", 300, 18, 13, 600, "Roboto Mono");
   ctx.fillText("ashes-5-0.co.uk", 80, height - 52);
 
