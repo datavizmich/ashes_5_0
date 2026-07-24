@@ -82,8 +82,8 @@ export async function renderSpaPage(context, options = {}) {
 
   if (bootstrapScript) {
     html = html.replace(
-      /<script type="module" src="\.\/app\.js"><\/script>/u,
-      `${bootstrapScript}<script type="module" src="./app.js"></script>`,
+      /<script type="module" src="\/app\.js"><\/script>/u,
+      `${bootstrapScript}<script type="module" src="/app.js"></script>`,
     );
   }
 
