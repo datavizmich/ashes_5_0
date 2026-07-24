@@ -118,7 +118,76 @@
               <span class="feature-action-label">Challenge a friend</span>
               <span class="feature-badge" aria-hidden="true">NEW</span>
             </button>
+            <button class="secondary" data-home-leaderboard type="button">Player leaderboard</button>
             <button class="secondary" data-home-competition type="button">World Cup mode</button>
+          </div>
+        </section>
+      </section>
+
+      <section class="view leaderboard-view" data-leaderboard-view hidden>
+        <header class="topbar topbar-home">
+          <button class="ghost" data-leaderboard-home type="button">Home</button>
+        </header>
+
+        <header class="hero">
+          <div>
+            <p class="eyebrow">Player leaderboard</p>
+            <h1>See which Ashes players appear most often in completed XIs.</h1>
+            <p class="lede">
+              Counts are based on saved solo teams, challenge creators, and completed challenge responses.
+            </p>
+          </div>
+          <div class="hero-card">
+            <div class="stat">
+              <span>Completed teams</span>
+              <strong data-leaderboard-total>0</strong>
+            </div>
+            <div class="stat">
+              <span>Metric</span>
+              <strong data-leaderboard-metric-label>Selected</strong>
+            </div>
+            <div class="stat">
+              <span>Period</span>
+              <strong data-leaderboard-period-label>All time</strong>
+            </div>
+          </div>
+        </header>
+
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <p class="panel-kicker">Filters</p>
+              <h2>Completed XI selections</h2>
+            </div>
+            <p class="panel-subtitle" data-leaderboard-status>Loading leaderboard...</p>
+          </div>
+
+          <div class="config-grid leaderboard-filters">
+            <label class="control">
+              <span>Metric</span>
+              <select data-leaderboard-metric>
+                <option value="selected">Selected</option>
+              </select>
+            </label>
+            <label class="control">
+              <span>Period</span>
+              <select data-leaderboard-period>
+                <option value="all">All time</option>
+                <option value="30d">Last 30 days</option>
+              </select>
+            </label>
+            <label class="control">
+              <span>Mode</span>
+              <select data-leaderboard-mode>
+                <option value="all">All modes</option>
+                <option value="classic">Classic</option>
+                <option value="memory">Memory</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="table-wrap leaderboard-table-wrap" data-leaderboard-table>
+            <div class="placeholder">Loading leaderboard...</div>
           </div>
         </section>
       </section>

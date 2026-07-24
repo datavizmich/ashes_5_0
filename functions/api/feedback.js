@@ -1,3 +1,5 @@
+import { checkRateLimit } from "../_lib/security.js";
+
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -32,6 +34,10 @@ function buildForwardBody(payload) {
 
 export async function onRequestPost(context) {
   const { request, env } = context;
+  const rateLimit = checkRateLimit(request, "api:feedback", { limit: 5, windowMs: 60_000 });
+  if (!rateLimit.allowed) {
+    return json({ ok: false, error: "Too many feedback submissions. Please try again shortly." }, 429);
+  }
   const payload = await readPayload(request).catch(() => null);
 
   if (!payload) {

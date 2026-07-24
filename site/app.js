@@ -27,6 +27,8 @@ const LEGACY_CHALLENGE_CREATOR_QUERY_KEY = "challenger";
 const LEGACY_CHALLENGE_MODE_QUERY_KEY = "challengeMode";
 const CHALLENGE_RESULT_VERSION = "challenge-result-v1";
 const RESULT_SIMULATION_VERSION = "ashes-5-0-sim-v1";
+const TEAM_DATA_VERSION = "ashes-5-0-data-v1";
+const BOOTSTRAP = window.__ASHES_BOOTSTRAP__ ?? null;
 
 const STATE = {
   view: "home",
@@ -34,6 +36,7 @@ const STATE = {
   squads: ASHES_SQUADS,
   catalog: [],
   challenge: null,
+  generatedChallenge: null,
   result: null,
   challengeDraftName: "",
   challengeDraftMode: "classic",
@@ -43,6 +46,23 @@ const STATE = {
   selectedPlayerId: null,
   mode: "classic",
   series: null,
+  teamSubmissionKey: "",
+  challengeSubmissionKey: "",
+  resultSubmissionKey: "",
+  soloTeamRecorded: false,
+  routeError: null,
+  leaderboard: {
+    metric: "selected",
+    period: "all",
+    mode: "all",
+    totalTeams: 0,
+    entries: [],
+    loading: false,
+    error: "",
+  },
+  challengeLinkPromise: null,
+  resultPersistPromise: null,
+  soloPersistPromise: null,
   timer: null,
   achievementDetail: null,
   achievementPinned: false,
@@ -72,6 +92,7 @@ const els = {};
 function bindElements() {
   const selectors = {
     homeView: "[data-home-view]",
+    leaderboardView: "[data-leaderboard-view]",
     gameView: "[data-game-view]",
     seriesView: "[data-series-view]",
     homeEyebrow: "[data-home-eyebrow]",
@@ -94,7 +115,17 @@ function bindElements() {
     totalSquads: "[data-total-squads]",
     totalPlayers: "[data-total-players]",
     homeChallenge: "[data-home-challenge]",
+    homeLeaderboard: "[data-home-leaderboard]",
     homeCompetition: "[data-home-competition]",
+    leaderboardHome: "[data-leaderboard-home]",
+    leaderboardMetric: "[data-leaderboard-metric]",
+    leaderboardPeriod: "[data-leaderboard-period]",
+    leaderboardMode: "[data-leaderboard-mode]",
+    leaderboardTotal: "[data-leaderboard-total]",
+    leaderboardMetricLabel: "[data-leaderboard-metric-label]",
+    leaderboardPeriodLabel: "[data-leaderboard-period-label]",
+    leaderboardStatus: "[data-leaderboard-status]",
+    leaderboardTable: "[data-leaderboard-table]",
     gameSquadCount: "[data-game-squad-count]",
     gamePlayerCount: "[data-game-player-count]",
     gameMode: "[data-game-mode]",
@@ -392,17 +423,29 @@ function currentChallengeRef() {
   return "";
 }
 
+const DISALLOWED_ANALYTICS_KEYS = new Set([
+  "challenge_ref",
+  "challenge_id",
+  "result_id",
+  "challenge_url",
+  "result_url",
+  "creator_name",
+  "display_name",
+  "team_contents",
+]);
+
 function baseChallengeAnalyticsProps(overrides = {}) {
   const props = {
     competition: "ashes",
     challenge_mode: currentChallengePlayableMode(),
-    challenge_ref: currentChallengeRef(),
     has_creator_name: currentChallengeCreatorName() ? "true" : "false",
     ...overrides,
   };
 
   return Object.fromEntries(
-    Object.entries(props).filter(([, value]) => value !== "" && value !== null && value !== undefined),
+    Object.entries(props).filter(
+      ([key, value]) => !DISALLOWED_ANALYTICS_KEYS.has(key) && value !== "" && value !== null && value !== undefined,
+    ),
   );
 }
 
@@ -468,6 +511,90 @@ function createRandomId(byteLength = 9) {
   const bytes = new Uint8Array(byteLength);
   window.crypto.getRandomValues(bytes);
   return base64UrlEncodeBytes(bytes);
+}
+
+function createSubmissionKey() {
+  return createRandomId(10);
+}
+
+function resetSubmissionState() {
+  STATE.teamSubmissionKey = createSubmissionKey();
+  STATE.challengeSubmissionKey = createSubmissionKey();
+  STATE.resultSubmissionKey = "";
+  STATE.soloTeamRecorded = false;
+  STATE.generatedChallenge = null;
+}
+
+function hydrateAshesLineup(lineupPlayerIds) {
+  if (!Array.isArray(lineupPlayerIds) || lineupPlayerIds.length !== XI_SLOTS.length) return null;
+  const lineup = lineupPlayerIds.map((playerId) => {
+    const index = ASHES_CATALOG_INDEX_BY_ID.get(playerId);
+    return Number.isInteger(index) ? ASHES_CATALOG[index] : null;
+  });
+  return lineup.every(Boolean) ? decodeChallengeLineup(lineup) : null;
+}
+
+function isShortChallengePath(pathname = currentPathname()) {
+  return /^\/c\/[^/]+$/u.test(pathname);
+}
+
+function isShortResultPath(pathname = currentPathname()) {
+  return /^\/r\/[^/]+$/u.test(pathname);
+}
+
+function isLeaderboardPath(pathname = currentPathname()) {
+  return pathname === "/leaderboard";
+}
+
+function routeUsesDedicatedPath(pathname = currentPathname()) {
+  return isShortChallengePath(pathname) || isShortResultPath(pathname) || isLeaderboardPath(pathname);
+}
+
+function replaceBrowserPath(pathname) {
+  window.history.replaceState({}, "", pathname);
+}
+
+function clearRouteError() {
+  STATE.routeError = null;
+}
+
+function setRouteError(title, message) {
+  STATE.routeError = { title, message };
+  STATE.challenge = null;
+  STATE.result = null;
+  STATE.view = "home";
+}
+
+function applyChallengeApiPayload(challenge, team) {
+  const lineup = hydrateAshesLineup(team?.lineupPlayerIds ?? []);
+  if (!challenge || !team || !lineup) return null;
+  return {
+    publicId: challenge.id,
+    shortUrl: challenge.url,
+    code: challenge.id,
+    creatorName: normalizeChallengeCreatorName(team.displayName),
+    mode: normalizePlayableMode(team.mode) ?? "classic",
+    lineup,
+    lineupPlayerIds: [...team.lineupPlayerIds],
+    label: "Challenge XI",
+  };
+}
+
+function applyResultApiPayload(result) {
+  if (!result || typeof result !== "object") return null;
+  return {
+    ...result,
+    publicId: result.id ?? result.publicId ?? "",
+    shortUrl: result.shortUrl ?? (result.id ? `${CANONICAL_SITE_ORIGIN}/r/${result.id}` : ""),
+  };
+}
+
+function leaderboardMetricLabel(metric) {
+  return metric === "selected" ? "Selected" : "Selected";
+}
+
+function leaderboardPeriodLabel(period) {
+  return period === "30d" ? "Last 30 days" : "All time";
 }
 
 function challengeModeCode(mode) {
@@ -572,10 +699,16 @@ function challengeUrlForLineup(lineup, creatorName = "", mode = "classic", origi
 }
 
 function currentChallengeUrl() {
-  const lineup = challengeLineupLoaded() ? STATE.challenge.lineup : lineupComplete() ? userLineup() : null;
-  return lineup?.length === XI_SLOTS.length
-    ? challengeUrlForLineup(lineup, currentChallengeCreatorName(), currentChallengePlayableMode())
-    : "";
+  if (challengeLineupLoaded()) {
+    return STATE.challenge?.shortUrl
+      || challengeUrlForLineup(STATE.challenge.lineup, currentChallengeCreatorName(), currentChallengePlayableMode());
+  }
+
+  if (STATE.generatedChallenge?.url) {
+    return STATE.generatedChallenge.url;
+  }
+
+  return "";
 }
 
 function sanitizeResultText(value, maxLength = 160) {
@@ -785,7 +918,8 @@ function resultUrlForRecord(record, origin = currentSiteOrigin()) {
 }
 
 function currentResultUrl() {
-  return resultSnapshotLoaded() ? resultUrlForRecord(STATE.result) : "";
+  if (!resultSnapshotLoaded()) return "";
+  return STATE.result?.shortUrl || resultUrlForRecord(STATE.result);
 }
 
 function clearResultUrlFromBrowser() {
@@ -796,6 +930,12 @@ function clearResultUrlFromBrowser() {
 }
 
 function writeResultUrlToBrowser(record) {
+  if (record?.shortUrl) {
+    const url = new URL(record.shortUrl, currentSiteOrigin());
+    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+    return;
+  }
+
   const url = new URL(resultUrlForRecord(record, currentSiteOrigin()));
   window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
 }
@@ -961,6 +1101,7 @@ function buildChallengeResultRecord() {
     achievements,
     completedAt: new Date().toISOString(),
     simulationVersion: RESULT_SIMULATION_VERSION,
+    dataVersion: TEAM_DATA_VERSION,
   };
 }
 
@@ -972,8 +1113,151 @@ function finalizeChallengeResultIfNeeded() {
   STATE.result = result;
   STATE.seriesShareAsset = null;
   STATE.seriesShareAssetPromise = null;
-  writeResultUrlToBrowser(result);
+  if (STATE.challenge?.publicId) {
+    void ensurePersistedChallengeResult({ background: true });
+  } else {
+    writeResultUrlToBrowser(result);
+  }
   return result;
+}
+
+async function postJsonRequest(url, payload) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || data.ok === false) {
+    throw new Error(data.error || "Request failed.");
+  }
+
+  return data;
+}
+
+function currentTeamSubmissionPayload(displayName = "") {
+  return {
+    submissionKey: STATE.teamSubmissionKey,
+    mode: currentChallengePlayableMode() ?? normalizePlayableMode(STATE.mode) ?? "classic",
+    displayName: normalizeChallengeCreatorName(displayName),
+    lineupPlayerIds: userLineup().map((player) => player.id),
+    dataVersion: TEAM_DATA_VERSION,
+  };
+}
+
+async function ensureGeneratedChallengeLink() {
+  if (STATE.generatedChallenge?.url) {
+    return STATE.generatedChallenge.url;
+  }
+  if (!challengeCreationMode() || !lineupComplete()) {
+    throw new Error("Challenge invite is not ready.");
+  }
+  if (STATE.challengeLinkPromise) {
+    const challenge = await STATE.challengeLinkPromise;
+    return challenge?.url ?? "";
+  }
+
+  setChallengeStatus("Creating short invite...");
+  STATE.challengeLinkPromise = postJsonRequest("/api/challenges", {
+    challengeSubmissionKey: STATE.challengeSubmissionKey,
+    team: currentTeamSubmissionPayload(STATE.challengeDraftName),
+  })
+    .then((data) => {
+      STATE.generatedChallenge = { id: data.id, url: data.url };
+      return STATE.generatedChallenge;
+    })
+    .finally(() => {
+      STATE.challengeLinkPromise = null;
+      renderChallengePanel();
+    });
+
+  const challenge = await STATE.challengeLinkPromise;
+  return challenge?.url ?? "";
+}
+
+async function persistSoloTeamIfNeeded() {
+  if (STATE.competition !== "ashes" || isChallengeMode() || !lineupComplete() || STATE.soloTeamRecorded) {
+    return;
+  }
+  if (STATE.soloPersistPromise) {
+    await STATE.soloPersistPromise;
+    return;
+  }
+
+  STATE.soloPersistPromise = postJsonRequest("/api/teams/solo", {
+    team: currentTeamSubmissionPayload(""),
+  })
+    .then(() => {
+      STATE.soloTeamRecorded = true;
+    })
+    .catch((error) => {
+      console.error("Solo team persistence failed:", error);
+    })
+    .finally(() => {
+      STATE.soloPersistPromise = null;
+    });
+
+  await STATE.soloPersistPromise;
+}
+
+async function ensurePersistedChallengeResult({ background = false } = {}) {
+  const result = currentChallengeResultRecord();
+  if (!result) {
+    throw new Error("Challenge result is not ready.");
+  }
+  if (!STATE.challenge?.publicId) {
+    return result;
+  }
+  if (STATE.result?.shortUrl) {
+    return STATE.result;
+  }
+  if (STATE.resultPersistPromise) {
+    return STATE.resultPersistPromise;
+  }
+
+  if (!STATE.resultSubmissionKey) {
+    STATE.resultSubmissionKey = createSubmissionKey();
+  }
+
+  if (!background) {
+    setShareStatus("Saving result...");
+  }
+
+  STATE.resultPersistPromise = postJsonRequest(`/api/challenges/${STATE.challenge.publicId}/results`, {
+    resultSubmissionKey: STATE.resultSubmissionKey,
+    team: currentTeamSubmissionPayload(STATE.challengeResponseName),
+    result: {
+      ...result,
+      dataVersion: TEAM_DATA_VERSION,
+    },
+  })
+    .then((data) => {
+      STATE.result = {
+        ...result,
+        id: data.id,
+        publicId: data.id,
+        shortUrl: data.url,
+      };
+      writeResultUrlToBrowser(STATE.result);
+      return STATE.result;
+    })
+    .catch((error) => {
+      if (!background) {
+        throw error;
+      }
+      console.error("Challenge result persistence failed:", error);
+      setShareStatus("Result not saved yet. Try sharing again.");
+      return result;
+    })
+    .finally(() => {
+      STATE.resultPersistPromise = null;
+      renderAll();
+    });
+
+  return STATE.resultPersistPromise;
 }
 
 function clearRollAnimation() {
@@ -2381,6 +2665,7 @@ function renderDetailedInnings(match, innings, label) {
 function renderStats() {
   const competition = competitionConfig();
   const loadedChallenge = challengeLineupLoaded();
+  const routeError = STATE.view === "home" ? STATE.routeError : null;
   els.totalSquads.textContent = String(STATE.squads.length);
   els.totalPlayers.textContent = String(STATE.catalog.length);
   els.gameSquadCount.textContent = `${STATE.squads.length} squads`;
@@ -2388,19 +2673,21 @@ function renderStats() {
   els.homeMode.value = isMemoryMode() ? "memory" : "classic";
   els.homeMode.disabled = loadedChallenge;
   document.title = pageTitleForCompetition(competition);
-  els.homeEyebrow.textContent = competition.homeEyebrow;
-  els.homeTitle.textContent = competition.homeTitle;
-  els.homeLede.textContent = competition.homeLede;
-  els.homePanelKicker.textContent = loadedChallenge ? "Challenge received" : "How it works";
-  els.homePanelTitle.textContent = loadedChallenge ? "Accept challenge" : "Squad Roller";
+  els.homeEyebrow.textContent = routeError ? "Link problem" : competition.homeEyebrow;
+  els.homeTitle.textContent = routeError ? routeError.title : competition.homeTitle;
+  els.homeLede.textContent = routeError ? routeError.message : competition.homeLede;
+  els.homePanelKicker.textContent = routeError ? "Helpful 404" : loadedChallenge ? "Challenge received" : "How it works";
+  els.homePanelTitle.textContent = routeError ? "Start a fresh game" : loadedChallenge ? "Accept challenge" : "Squad Roller";
   els.homePanelCopy.hidden = loadedChallenge || STATE.competition !== "ashes";
-  els.homePanelCopy.textContent = loadedChallenge || STATE.competition !== "ashes"
-    ? ""
-    : "New feature: turn your completed Ashes XI into a private challenge link.";
-  els.homeConfigGrid.hidden = loadedChallenge;
+  els.homePanelCopy.textContent = routeError
+    ? "That saved link is unavailable. You can still draft a new XI, open the leaderboard, or ask for a fresh short link."
+    : loadedChallenge || STATE.competition !== "ashes"
+      ? ""
+      : "New feature: turn your completed Ashes XI into a private challenge link.";
+  els.homeConfigGrid.hidden = loadedChallenge || Boolean(routeError);
   els.homeResponseNameRow.hidden = !loadedChallenge;
   els.homeResponseName.value = currentChallengeResponseName();
-  els.homeRulesGrid.hidden = loadedChallenge;
+  els.homeRulesGrid.hidden = loadedChallenge || Boolean(routeError);
   els.homeSquadsLabel.textContent = competition.squadsLabel;
   els.homePlayersLabel.textContent = "Total players";
   els.homeFormatLabel.textContent = "Series format";
@@ -2413,12 +2700,18 @@ function renderStats() {
       : "Repeat until your XI is full, then simulate the series.";
   els.homeCompetition.textContent = competition.modeButton;
   els.homeChallenge.hidden = loadedChallenge || STATE.competition !== "ashes";
+  els.homeLeaderboard.hidden = loadedChallenge || STATE.competition !== "ashes";
   els.homeCompetition.hidden = loadedChallenge;
-  els.playGame.textContent = loadedChallenge
+  els.playGame.textContent = routeError
+    ? "Start a new game"
+    : loadedChallenge
     ? "Accept challenge"
     : STATE.competition === "worldcup"
       ? "Start World Cup game"
       : "Start a solo game";
+  els.leaderboardTotal.textContent = String(STATE.leaderboard.totalTeams);
+  els.leaderboardMetricLabel.textContent = leaderboardMetricLabel(STATE.leaderboard.metric);
+  els.leaderboardPeriodLabel.textContent = leaderboardPeriodLabel(STATE.leaderboard.period);
   els.gameEyebrow.textContent = competition.gameEyebrow;
   els.gameTitle.textContent = competition.gameTitle;
   els.rosterKicker.textContent = competition.rosterKicker;
@@ -2433,6 +2726,7 @@ function renderStats() {
 
 function renderView() {
   els.homeView.hidden = STATE.view !== "home";
+  els.leaderboardView.hidden = STATE.view !== "leaderboard";
   els.gameView.hidden = STATE.view !== "game";
   els.seriesView.hidden = STATE.view !== "series";
   document.body.dataset.view = STATE.view;
@@ -2624,6 +2918,7 @@ function renderChallengePanel() {
   const ready = loadedChallenge || lineupComplete();
   const url = ready ? currentChallengeUrl() : "";
   const challengeCreatorName = currentChallengeCreatorName();
+  const generatedLink = !loadedChallenge && Boolean(STATE.generatedChallenge?.url);
 
   els.challengeTitle.textContent = loadedChallenge
     ? creatorName
@@ -2635,10 +2930,13 @@ function renderChallengePanel() {
       ? `Draft your XI in ${playableModeLabel.toLowerCase()} mode, then simulate a five-Test series against ${creatorName}'s saved side.`
       : `Draft your XI in ${playableModeLabel.toLowerCase()} mode, then simulate a five-Test series against the saved side.`
     : ready
-      ? "Your XI is locked. Copy the Ashes 5-0 invite above and send it to someone else."
+      ? generatedLink
+        ? "Your short Ashes 5-0 invite is ready to share."
+        : "Your XI is locked. Create a short Ashes 5-0 invite link to share with someone else."
       : `Complete your XI in ${playableModeLabel.toLowerCase()} mode to generate an Ashes 5-0 invite link.`;
   els.challengeNameRow.hidden = loadedChallenge;
   els.challengeName.value = loadedChallenge ? "" : STATE.challengeDraftName;
+  els.challengeName.disabled = generatedLink;
   els.challengeMeta.hidden = !loadedChallenge;
   els.challengeMeta.textContent = loadedChallenge
     ? creatorName
@@ -2646,14 +2944,17 @@ function renderChallengePanel() {
       : `${playableModeLabel} mode challenge.`
     : "";
   els.challengeLink.value = url;
-  if (!ready) {
+  if (!ready || (!loadedChallenge && !generatedLink)) {
     setChallengeStatus("");
   }
   els.copyChallengeLink.disabled = !ready;
-  els.copyChallengeLink.textContent = "Copy invite";
+  els.copyChallengeLink.textContent = loadedChallenge || generatedLink ? "Copy invite" : "Create invite";
   if (!loadedChallenge && challengeCreatorName && !ready) {
     els.challengeMeta.hidden = false;
     els.challengeMeta.textContent = `Invite will be shared as ${challengeCreatorName} · ${playableModeLabel} mode.`;
+  } else if (!loadedChallenge && generatedLink) {
+    els.challengeMeta.hidden = false;
+    els.challengeMeta.textContent = `Short invite saved as ${challengeCreatorName || "Anonymous"} · ${playableModeLabel} mode.`;
   }
 }
 
@@ -2927,6 +3228,91 @@ function renderSeries() {
   renderSeriesReveal();
 }
 
+async function loadLeaderboard() {
+  STATE.leaderboard.loading = true;
+  STATE.leaderboard.error = "";
+  renderLeaderboard();
+
+  try {
+    const params = new URLSearchParams({
+      metric: STATE.leaderboard.metric,
+      period: STATE.leaderboard.period,
+      mode: STATE.leaderboard.mode,
+    });
+    const response = await fetch(`/api/leaderboards/players?${params.toString()}`);
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload.ok === false) {
+      throw new Error(payload.error || "Could not load the leaderboard.");
+    }
+
+    STATE.leaderboard.totalTeams = Number(payload.totalTeams ?? 0);
+    STATE.leaderboard.entries = Array.isArray(payload.entries) ? payload.entries : [];
+  } catch (error) {
+    STATE.leaderboard.error = error instanceof Error ? error.message : "Could not load the leaderboard.";
+  } finally {
+    STATE.leaderboard.loading = false;
+    renderLeaderboard();
+  }
+}
+
+function renderLeaderboard() {
+  const leaderboard = STATE.leaderboard;
+  els.leaderboardMetric.value = leaderboard.metric;
+  els.leaderboardPeriod.value = leaderboard.period;
+  els.leaderboardMode.value = leaderboard.mode;
+
+  if (leaderboard.loading) {
+    els.leaderboardStatus.textContent = "Loading leaderboard...";
+    els.leaderboardTable.innerHTML = `<div class="placeholder">Loading leaderboard...</div>`;
+    return;
+  }
+
+  if (leaderboard.error) {
+    els.leaderboardStatus.textContent = leaderboard.error;
+    els.leaderboardTable.innerHTML = `<div class="placeholder">${escapeHtml(leaderboard.error)}</div>`;
+    return;
+  }
+
+  els.leaderboardStatus.textContent = leaderboard.totalTeams
+    ? `${leaderboard.totalTeams} completed ${leaderboard.totalTeams === 1 ? "team" : "teams"} represented.`
+    : "No completed Ashes teams match these filters yet.";
+
+  if (!leaderboard.entries.length) {
+    els.leaderboardTable.innerHTML = `<div class="placeholder">No completed Ashes teams match these filters yet.</div>`;
+    return;
+  }
+
+  els.leaderboardTable.innerHTML = `
+    <table class="series-table leaderboard-table">
+      <thead>
+        <tr>
+          <th>Rank</th>
+          <th>Player</th>
+          <th>Selections</th>
+          <th>Share</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${leaderboard.entries
+          .map((entry, index) => {
+            const share = leaderboard.totalTeams
+              ? `${Math.round((entry.count / leaderboard.totalTeams) * 100)}%`
+              : "0%";
+            return `
+              <tr>
+                <td>${index + 1}</td>
+                <td>${escapeHtml(entry.name)}</td>
+                <td>${entry.count}</td>
+                <td>${share}</td>
+              </tr>
+            `;
+          })
+          .join("")}
+      </tbody>
+    </table>
+  `;
+}
+
 function renderAll() {
   syncSeoMetadata();
   renderStats();
@@ -2937,6 +3323,7 @@ function renderAll() {
   renderRoster();
   renderBoard();
   renderSeries();
+  renderLeaderboard();
 }
 
 function rollSquad() {
@@ -3786,6 +4173,9 @@ function startSeries() {
     STATE.seriesShareAssetPromise = null;
     clearResultUrlFromBrowser();
     STATE.series = buildSeries();
+    if (STATE.competition === "ashes" && !isChallengeMode()) {
+      void persistSoloTeamIfNeeded();
+    }
     if (!challengeLineupLoaded()) {
       prepareSeriesShareAsset(STATE.series, modeLabel(), competitionConfig().title, competitionConfig().theme);
     }
@@ -3848,9 +4238,15 @@ function revealAllSeriesMatches() {
 }
 
 function goHome() {
+  if (routeUsesDedicatedPath()) {
+    window.location.assign("/");
+    return;
+  }
+
   clearTimer();
   clearRollAnimation();
   STATE.view = "home";
+  clearRouteError();
   if (resultSnapshotLoaded()) {
     STATE.result = null;
     STATE.challenge = null;
@@ -3868,6 +4264,7 @@ function goHome() {
   STATE.series = null;
   STATE.seriesShareAsset = null;
   STATE.seriesShareAssetPromise = null;
+  resetSubmissionState();
   setShareStatus("");
   STATE.achievementDetail = null;
   STATE.achievementPinned = false;
@@ -3897,6 +4294,9 @@ function startChallengeBack() {
   trackChallengeEvent("challenge_create_clicked", { role: "creator", source: "challenge-back" });
   trackChallengeEvent("challenge_started", { role: "creator", source: "challenge-back" });
   trackChallengeEvent("challenge_back_created", { role: "creator", source: "challenge-back" });
+  if (isShortResultPath()) {
+    replaceBrowserPath("/");
+  }
   STATE.challenge = null;
   STATE.result = null;
   STATE.challengeResponseName = "";
@@ -3914,6 +4314,7 @@ function startChallengeBack() {
   STATE.series = null;
   STATE.seriesShareAsset = null;
   STATE.seriesShareAssetPromise = null;
+  resetSubmissionState();
   setShareStatus("");
   STATE.achievementDetail = null;
   STATE.achievementPinned = false;
@@ -3934,6 +4335,7 @@ function resetBuilder() {
   STATE.series = null;
   STATE.seriesShareAsset = null;
   STATE.seriesShareAssetPromise = null;
+  resetSubmissionState();
   setShareStatus("");
   STATE.view = "game";
   STATE.achievementDetail = null;
@@ -3943,6 +4345,10 @@ function resetBuilder() {
 
 function wireControls() {
   els.playGame.addEventListener("click", () => {
+    if (STATE.routeError && routeUsesDedicatedPath()) {
+      replaceBrowserPath("/");
+    }
+    clearRouteError();
     if (challengeLineupLoaded()) {
       STATE.challengeResponseName = normalizeChallengeCreatorName(els.homeResponseName.value);
       trackChallengeEvent("challenge_accepted", { role: "recipient", source: "invite" });
@@ -3950,6 +4356,12 @@ function wireControls() {
     }
     STATE.view = "game";
     renderAll();
+  });
+  els.homeLeaderboard.addEventListener("click", () => {
+    window.location.assign("/leaderboard");
+  });
+  els.leaderboardHome.addEventListener("click", () => {
+    window.location.assign("/");
   });
   els.backHome.addEventListener("click", goHome);
   els.backBuilder.addEventListener("click", goBuilder);
@@ -3968,14 +4380,23 @@ function wireControls() {
   els.seriesAll.addEventListener("click", revealAllSeriesMatches);
   els.playAgain.addEventListener("click", goHome);
   els.homeChallenge.addEventListener("click", () => {
+    if (STATE.routeError && routeUsesDedicatedPath()) {
+      replaceBrowserPath("/");
+    }
     trackChallengeEvent("challenge_create_clicked", { role: "creator", source: "homepage" });
     trackChallengeEvent("challenge_started", { role: "creator", source: "homepage" });
+    resetSubmissionState();
+    clearRouteError();
     STATE.challengeDraftMode = normalizePlayableMode(STATE.mode);
     STATE.mode = "challenge";
     STATE.view = "game";
     renderAll();
   });
   els.homeCompetition.addEventListener("click", () => {
+    if (STATE.routeError && routeUsesDedicatedPath()) {
+      replaceBrowserPath("/");
+    }
+    clearRouteError();
     STATE.view = "home";
     setCompetition(STATE.competition === "worldcup" ? "ashes" : "worldcup");
   });
@@ -4013,6 +4434,18 @@ function wireControls() {
 
     STATE.mode = normalizePlayableMode(els.homeMode.value);
     renderAll();
+  });
+  els.leaderboardMetric.addEventListener("change", () => {
+    STATE.leaderboard.metric = els.leaderboardMetric.value;
+    void loadLeaderboard();
+  });
+  els.leaderboardPeriod.addEventListener("change", () => {
+    STATE.leaderboard.period = els.leaderboardPeriod.value;
+    void loadLeaderboard();
+  });
+  els.leaderboardMode.addEventListener("change", () => {
+    STATE.leaderboard.mode = els.leaderboardMode.value;
+    void loadLeaderboard();
   });
   els.shareResult.addEventListener("click", async () => {
     try {
@@ -4198,22 +4631,34 @@ function wireControls() {
 }
 
 function shareUrl() {
+  if (STATE.view === "leaderboard" || isLeaderboardPath()) {
+    return `${CANONICAL_SITE_ORIGIN}/leaderboard`;
+  }
   if (resultSnapshotLoaded()) return currentResultUrl();
   return challengeLineupLoaded() ? currentChallengeUrl() : canonicalUrlForCurrentPage();
 }
 
 function canonicalUrlForCurrentPage() {
+  if (STATE.view === "leaderboard" || isLeaderboardPath()) {
+    return `${CANONICAL_SITE_ORIGIN}/leaderboard`;
+  }
+
   if (resultSnapshotLoaded()) {
-    return resultUrlForRecord(STATE.result, CANONICAL_SITE_ORIGIN);
+    return currentResultUrl() || resultUrlForRecord(STATE.result, CANONICAL_SITE_ORIGIN);
   }
 
   if (challengeLineupLoaded()) {
-    return challengeUrlForLineup(
-      STATE.challenge.lineup,
-      loadedChallengeCreatorName(),
-      currentChallengePlayableMode(),
-      CANONICAL_SITE_ORIGIN,
-    );
+    return currentChallengeUrl()
+      || challengeUrlForLineup(
+        STATE.challenge.lineup,
+        loadedChallengeCreatorName(),
+        currentChallengePlayableMode(),
+        CANONICAL_SITE_ORIGIN,
+      );
+  }
+
+  if (STATE.routeError && (isShortChallengePath() || isShortResultPath())) {
+    return new URL(currentPathname(), CANONICAL_SITE_ORIGIN).href;
   }
 
   return pageUrlForOrigin(CANONICAL_SITE_ORIGIN).href;
@@ -4235,6 +4680,10 @@ function ensureHeadNode(selector, tagName, attributes) {
 
 function syncSeoMetadata() {
   const canonicalUrl = canonicalUrlForCurrentPage();
+  const leaderboardPage = STATE.view === "leaderboard" || isLeaderboardPath();
+  const shortChallengePage = isShortChallengePath();
+  const shortResultPage = isShortResultPath();
+  const routeError = STATE.routeError;
   const creatorName = currentChallengeCreatorName();
   const challengeMode = currentChallengePlayableMode() === "memory" ? "Memory" : "Classic";
   const resultLoaded = resultSnapshotLoaded();
@@ -4254,6 +4703,25 @@ function syncSeoMetadata() {
       ? `Open ${creatorName}'s Ashes 5-0 ${challengeMode.toLowerCase()} challenge, draft your XI, and play the five-Test series.`
       : `Open an Ashes 5-0 ${challengeMode.toLowerCase()} challenge, draft your XI, and play the five-Test series.`
     : SEO_HOME_DESCRIPTION;
+  const leaderboardTitle = "Player Leaderboard | Ashes 5-0";
+  const leaderboardDescription = "See which Ashes 5-0 players are selected most often across completed XIs.";
+  const worldCupDescription =
+    "Roll historic World Cup squads, draft one player at a time, build your all-time XI and survive the tournament route.";
+  const pageTitle = leaderboardPage
+    ? leaderboardTitle
+    : resultTitle
+      ?? challengeTitle
+      ?? (routeError && (shortChallengePage || shortResultPage) ? "Link Not Found | Ashes 5-0" : pageTitleForCompetition(competitionConfig()));
+  const pageDescription = leaderboardPage
+    ? leaderboardDescription
+    : resultDescription
+      ?? (challengeLineupLoaded() ? challengeDescription : routeError?.message || (STATE.competition === "worldcup" ? worldCupDescription : SEO_HOME_DESCRIPTION));
+  const robots = leaderboardPage
+    ? "index, follow"
+    : resultLoaded || challengeLineupLoaded() || shortChallengePage || shortResultPage
+      ? "noindex, follow"
+      : "index, follow";
+
   ensureHeadNode('link[rel="canonical"]', "link", {
     rel: "canonical",
     href: canonicalUrl,
@@ -4264,23 +4732,31 @@ function syncSeoMetadata() {
   });
   ensureHeadNode('meta[name="description"]', "meta", {
     name: "description",
-    content: resultDescription ?? challengeDescription,
+    content: pageDescription,
   });
   ensureHeadNode('meta[property="og:title"]', "meta", {
     property: "og:title",
-    content: resultTitle ?? challengeTitle ?? SEO_HOME_TITLE,
+    content: pageTitle,
   });
   ensureHeadNode('meta[property="og:description"]', "meta", {
     property: "og:description",
-    content: resultDescription ?? challengeDescription,
+    content: pageDescription,
   });
   ensureHeadNode('meta[name="robots"]', "meta", {
     name: "robots",
-    content: resultLoaded ? "noindex, follow" : "index, follow",
+    content: robots,
   });
 }
 
 function pageTitleForCompetition(competition) {
+  if (STATE.view === "leaderboard" || isLeaderboardPath()) {
+    return "Player Leaderboard | Ashes 5-0";
+  }
+
+  if (STATE.routeError && (isShortChallengePath() || isShortResultPath())) {
+    return "Link Not Found | Ashes 5-0";
+  }
+
   if (resultSnapshotLoaded()) {
     return `${currentSeriesUserLabel()} vs ${currentSeriesOppositionLabel()} | Challenge Result | Ashes 5-0`;
   }
@@ -4786,7 +5262,7 @@ function formatChallengeResultShareText(result, url = currentResultUrl() || resu
 }
 
 async function copyChallengeLink() {
-  const url = currentChallengeUrl();
+  const url = challengeLineupLoaded() ? currentChallengeUrl() : await ensureGeneratedChallengeLink();
   if (!url) {
     throw new Error("Challenge invite is not ready.");
   }
@@ -4799,12 +5275,16 @@ async function copyChallengeLink() {
 }
 
 async function copyChallengeResultLink() {
-  const result = currentChallengeResultRecord();
+  let result = currentChallengeResultRecord();
   if (!result) {
     throw new Error("Challenge result is not ready.");
   }
 
-  const url = currentResultUrl() || resultUrlForRecord(result);
+  if (challengeLineupLoaded() && STATE.challenge?.publicId && !result.shortUrl) {
+    result = await ensurePersistedChallengeResult();
+  }
+
+  const url = currentResultUrl() || result.shortUrl || resultUrlForRecord(result);
   await writeTextToClipboard(url);
   trackChallengeEvent("challenge_result_link_copied", {
     role: "recipient",
@@ -4863,12 +5343,16 @@ async function downloadChallengeResultImage() {
 }
 
 async function shareChallengeResult(source = "series-complete") {
-  const result = currentChallengeResultRecord();
+  let result = currentChallengeResultRecord();
   if (!result) {
     throw new Error("Challenge result is not ready.");
   }
 
-  const url = currentResultUrl() || resultUrlForRecord(result);
+  if (challengeLineupLoaded() && STATE.challenge?.publicId && !result.shortUrl) {
+    result = await ensurePersistedChallengeResult();
+  }
+
+  const url = currentResultUrl() || result.shortUrl || resultUrlForRecord(result);
   const text = formatChallengeResultShareText(result, url);
   const title = challengeResultTitle(result);
 
@@ -4933,6 +5417,8 @@ function formatShareText() {
 
 function init() {
   bindElements();
+  resetSubmissionState();
+
   const result = loadResultFromUrl();
   if (result) {
     STATE.challenge = null;
@@ -4965,12 +5451,83 @@ function init() {
         challenge_ref: challengeRefForCode(challenge.code),
         has_creator_name: challenge.creatorName ? "true" : "false",
       });
+    } else if (BOOTSTRAP?.route?.type === "result") {
+      const bootstrappedResult = applyResultApiPayload(BOOTSTRAP.result);
+      const bootstrappedSeries = bootstrappedResult ? seriesFromResultRecord(bootstrappedResult) : null;
+      if (bootstrappedResult && bootstrappedSeries) {
+        STATE.challenge = null;
+        STATE.result = bootstrappedResult;
+        STATE.challengeDraftMode = bootstrappedResult.mode;
+        STATE.challengeResponseName = bootstrappedResult.responderDisplayName;
+        STATE.competition = "ashes";
+        STATE.squads = ASHES_SQUADS;
+        STATE.mode = "challenge";
+        STATE.series = bootstrappedSeries;
+        STATE.view = "series";
+        prepareChallengeResultShareAsset(bootstrappedResult);
+        trackChallengeEvent("challenge_result_page_viewed", {
+          role: "viewer",
+          source: "result-link",
+          series_result: challengeSeriesOutcome(bootstrappedResult),
+          has_creator_name: bootstrappedResult.challengerDisplayName ? "true" : "false",
+        });
+      } else {
+        setRouteError(
+          "Result unavailable",
+          "That saved result could not be loaded. Start a fresh XI, open the leaderboard, or ask for a new result link.",
+        );
+      }
+    } else if (BOOTSTRAP?.route?.type === "challenge") {
+      const bootstrappedChallenge = applyChallengeApiPayload(BOOTSTRAP.challenge, BOOTSTRAP.team);
+      if (bootstrappedChallenge) {
+        STATE.challenge = bootstrappedChallenge;
+        STATE.challengeDraftMode = bootstrappedChallenge.mode;
+        STATE.competition = "ashes";
+        STATE.squads = ASHES_SQUADS;
+        STATE.mode = "challenge";
+        trackChallengeEvent("challenge_link_opened", {
+          role: "recipient",
+          challenge_mode: normalizePlayableMode(bootstrappedChallenge.mode),
+          has_creator_name: bootstrappedChallenge.creatorName ? "true" : "false",
+        });
+      } else {
+        setRouteError(
+          "Challenge unavailable",
+          "That saved challenge could not be loaded. Start a fresh XI, open the leaderboard, or ask for a new invite.",
+        );
+      }
+    } else if (BOOTSTRAP?.route?.type === "challenge-not-found") {
+      STATE.competition = "ashes";
+      STATE.squads = ASHES_SQUADS;
+      setRouteError(
+        "Challenge not found",
+        "That saved challenge link is unavailable. Start a fresh XI, open the leaderboard, or ask for a fresh invite.",
+      );
+    } else if (BOOTSTRAP?.route?.type === "result-not-found") {
+      STATE.competition = "ashes";
+      STATE.squads = ASHES_SQUADS;
+      setRouteError(
+        "Result not found",
+        "That saved result link is unavailable. Start a fresh XI, open the leaderboard, or ask for a fresh result link.",
+      );
+    } else if (BOOTSTRAP?.route?.type === "leaderboard" || isLeaderboardPath()) {
+      STATE.challenge = null;
+      STATE.result = null;
+      STATE.challengeDraftName = "";
+      STATE.challengeResponseName = "";
+      STATE.challengeDraftMode = "classic";
+      STATE.competition = "ashes";
+      STATE.squads = ASHES_SQUADS;
+      STATE.mode = "classic";
+      STATE.view = "leaderboard";
     }
   }
   addCatalogMetadata();
-  syncSeoMetadata();
   wireControls();
   renderAll();
+  if (STATE.view === "leaderboard") {
+    void loadLeaderboard();
+  }
   document.body.classList.add("app-ready");
 }
 

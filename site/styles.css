@@ -391,6 +391,10 @@ body:not(.app-ready) .hero-card .stat strong[data-total-players] {
   margin-bottom: 1rem;
 }
 
+.leaderboard-filters {
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+}
+
 .control {
   display: grid;
   gap: 0.5rem;
@@ -1057,6 +1061,26 @@ button:disabled {
   border-radius: 1rem;
 }
 
+.leaderboard-table-wrap {
+  padding: 0.35rem;
+  background: rgba(255, 255, 255, 0.58);
+  border: 1px solid rgba(31, 31, 31, 0.08);
+}
+
+.leaderboard-table {
+  min-width: 100%;
+}
+
+.leaderboard-table td:first-child {
+  color: var(--accent-2);
+  font-weight: 800;
+}
+
+.leaderboard-table td:nth-child(3),
+.leaderboard-table td:nth-child(4) {
+  font-weight: 700;
+}
+
 .placeholder {
   padding: 1rem;
   border-radius: 1rem;
@@ -1409,7 +1433,8 @@ button.achievement-badge:focus-visible {
   .innings-grid,
   .box-score,
   .metric-grid,
-  .season-reveal-row {
+  .season-reveal-row,
+  .leaderboard-filters {
     grid-template-columns: 1fr;
   }
 
