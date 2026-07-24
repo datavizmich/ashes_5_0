@@ -1,0 +1,9 @@
+name = "ashes-5-0"
+compatibility_date = "2026-07-24"
+pages_build_output_dir = "site"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ashes-5-0"
+database_id = "3c24a016-da11-4c4a-8aa6-2e52f0863b00"
+migrations_dir = "migrations"
