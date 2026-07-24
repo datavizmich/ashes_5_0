@@ -272,17 +272,28 @@ function mobileBuilderViewport() {
   return window.matchMedia("(max-width: 760px)").matches;
 }
 
-function scrollBuilderTargetIntoView(target, block = "start") {
+function blurActiveBuilderControl() {
+  const active = document.activeElement;
+  if (active instanceof HTMLElement && active !== document.body) {
+    active.blur();
+  }
+}
+
+function scrollBuilderTargetIntoView(target, offset = 14) {
   if (!target || !mobileBuilderViewport()) return;
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  window.requestAnimationFrame(() => {
-    window.requestAnimationFrame(() => {
-      target.scrollIntoView({
-        behavior: reduceMotion ? "auto" : "smooth",
-        block,
-        inline: "nearest",
-      });
+  const runScroll = () => {
+    const targetTop = Math.max(0, target.getBoundingClientRect().top + window.scrollY - offset);
+    window.scrollTo({
+      top: targetTop,
+      behavior: reduceMotion ? "auto" : "smooth",
     });
+  };
+
+  blurActiveBuilderControl();
+  window.requestAnimationFrame(() => {
+    runScroll();
+    window.setTimeout(runScroll, reduceMotion ? 0 : 120);
   });
 }
 
@@ -2565,6 +2576,7 @@ function renderBoard() {
 
   els.board.querySelectorAll("[data-slot-index]").forEach((button) => {
     button.addEventListener("click", () => {
+      button.blur();
       const index = Number(button.dataset.slotIndex);
       const slot = XI_SLOTS[index];
       const player = STATE.catalog.find((candidate) => candidate.id === STATE.selectedPlayerId);
@@ -2585,7 +2597,7 @@ function renderBoard() {
       STATE.selectedPlayerId = null;
       STATE.currentSquad = null;
       renderAll();
-      scrollBuilderTargetIntoView(els.rollSquad);
+      scrollBuilderTargetIntoView(els.rollSquad.closest(".controls") ?? els.rollSquad);
     });
   });
 }
