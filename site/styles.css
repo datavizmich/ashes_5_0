@@ -416,6 +416,30 @@ select {
   font: inherit;
 }
 
+.challenge-name-row {
+  margin-bottom: 0.75rem;
+}
+
+.challenge-name-control {
+  max-width: 420px;
+}
+
+.challenge-name-input {
+  width: 100%;
+  padding: 0.8rem 0.85rem;
+  border-radius: 0.95rem;
+  border: 1px solid rgba(31, 31, 31, 0.1);
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--text);
+  font: inherit;
+}
+
+.challenge-meta {
+  margin: 0 0 0.75rem;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
 .rules-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -448,6 +472,71 @@ select {
   min-width: 220px;
 }
 
+.home-controls {
+  align-items: stretch;
+}
+
+.home-controls > button {
+  min-height: 60px;
+}
+
+.home-controls .play-button {
+  flex: 1 1 220px;
+}
+
+.home-controls .feature-action {
+  flex: 1.15 1 280px;
+}
+
+.feature-action {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.8rem;
+  padding-right: 4.85rem;
+  background: linear-gradient(180deg, rgba(255, 249, 231, 0.98), rgba(244, 232, 196, 0.96));
+  border-color: rgba(212, 175, 55, 0.4);
+  overflow: visible;
+}
+
+.feature-action:hover,
+.feature-action:focus-visible {
+  border-color: rgba(212, 175, 55, 0.72);
+}
+
+.feature-action-label {
+  display: inline-block;
+}
+
+.feature-badge {
+  position: absolute;
+  top: -0.6rem;
+  right: 0.95rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 3.2rem;
+  padding: 0.34rem 0.6rem;
+  border-radius: 0.7rem;
+  background: #1f1f1f;
+  color: #f7e4a4;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  line-height: 1;
+  text-transform: uppercase;
+  border: 1px solid rgba(247, 228, 164, 0.26);
+  box-shadow:
+    0 10px 18px rgba(0, 0, 0, 0.16),
+    inset 0 0 0 1px rgba(247, 228, 164, 0.08);
+  pointer-events: none;
+}
+
+body[data-competition="worldcup"] [data-home-challenge] {
+  display: none;
+}
+
 .controls {
   display: flex;
   flex-wrap: wrap;
@@ -464,6 +553,33 @@ select {
   border-color: rgba(212, 175, 55, 0.18);
   padding: 0.8rem 0.9rem;
   margin-bottom: 1rem;
+}
+
+.challenge-panel {
+  margin-bottom: 1rem;
+}
+
+.challenge-link-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.challenge-link-input {
+  flex: 1 1 420px;
+  min-width: 0;
+  border: 1px solid rgba(31, 31, 31, 0.12);
+  border-radius: 0.95rem;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--text);
+  padding: 0.92rem 1rem;
+  font: inherit;
+  font-family: var(--score-font);
+}
+
+.challenge-link-input::placeholder {
+  color: var(--muted);
 }
 
 .metric-grid {
@@ -1366,10 +1482,112 @@ button.achievement-badge:focus-visible {
     justify-content: center;
   }
 
+  .controls > button,
+  .challenge-link-row > button,
+  .challenge-link-row > input,
+  .challenge-name-control {
+    width: 100%;
+    max-width: none;
+  }
+
+  .home-controls > button {
+    width: 100%;
+  }
+
+  .feature-action {
+    justify-content: center;
+    padding-right: 1.2rem;
+    padding-top: 1.2rem;
+  }
+
+  .feature-badge {
+    top: -0.55rem;
+    right: 0.75rem;
+    min-width: 2.9rem;
+    padding: 0.28rem 0.52rem;
+  }
+
+  .match-row {
+    grid-template-columns: 1fr;
+    justify-items: start;
+    gap: 0.3rem;
+  }
+
+  .match-score {
+    font-size: 1rem;
+  }
+
+  .match-team {
+    max-width: 100%;
+  }
+
+  .challenge-link-row {
+    gap: 0.6rem;
+  }
+
+  .challenge-link-input {
+    font-size: 0.88rem;
+    padding: 0.85rem 0.9rem;
+  }
+
+  .actions-panel .controls,
+  .series-controls-panel .controls {
+    align-items: stretch;
+  }
+
+  .season-reveal-row {
+    gap: 0.2rem;
+    padding: 0.7rem 0.75rem;
+  }
+
+  .season-reveal-rating,
+  .season-reveal-role {
+    white-space: normal;
+  }
+
   .scorecard-subline,
   .scorecard-footer,
   .season-reveal-summary {
     flex-direction: column;
     align-items: start;
+  }
+}
+
+@media (max-width: 520px) {
+  .panel,
+  .hero-card {
+    padding: 0.9rem;
+  }
+
+  .collapsible-summary,
+  .collapsible-body {
+    padding-left: 0.85rem;
+    padding-right: 0.85rem;
+  }
+
+  .feature-action {
+    min-height: 68px;
+  }
+
+  .feature-badge {
+    right: 0.6rem;
+    min-width: 2.65rem;
+    font-size: 0.64rem;
+    letter-spacing: 0.12em;
+  }
+
+  .match-card,
+  .insight-card,
+  .season-reveal-card,
+  .scorecard-section {
+    padding: 0.85rem;
+  }
+
+  .match-headline {
+    font-size: 1.08rem;
+  }
+
+  .stat {
+    padding: 0.8rem 0.85rem;
   }
 }

@@ -19,12 +19,25 @@ const XI_SLOTS = [
   { label: "Pace", accepts: ["Fast Bowler", "Pace Bowler", "Seam Bowler"], focus: "bowling", row: 1, col: 3 },
   { label: "Pace", accepts: ["Fast Bowler", "Pace Bowler", "Seam Bowler"], focus: "bowling", row: 1, col: 5 },
 ];
+const CHALLENGE_QUERY_KEY = "c";
+const CHALLENGE_CREATOR_QUERY_KEY = "n";
+const RESULT_QUERY_KEY = "r";
+const LEGACY_CHALLENGE_QUERY_KEY = "challenge";
+const LEGACY_CHALLENGE_CREATOR_QUERY_KEY = "challenger";
+const LEGACY_CHALLENGE_MODE_QUERY_KEY = "challengeMode";
+const CHALLENGE_RESULT_VERSION = "challenge-result-v1";
+const RESULT_SIMULATION_VERSION = "ashes-5-0-sim-v1";
 
 const STATE = {
   view: "home",
   competition: "ashes",
   squads: ASHES_SQUADS,
   catalog: [],
+  challenge: null,
+  result: null,
+  challengeDraftName: "",
+  challengeDraftMode: "classic",
+  challengeResponseName: "",
   lineup: new Map(),
   currentSquad: null,
   selectedPlayerId: null,
@@ -64,14 +77,23 @@ function bindElements() {
     homeEyebrow: "[data-home-eyebrow]",
     homeTitle: "[data-home-title]",
     homeLede: "[data-home-lede]",
+    homePanelKicker: "[data-home-panel-kicker]",
+    homePanelTitle: "[data-home-panel-title]",
+    homePanelCopy: "[data-home-panel-copy]",
+    homeConfigGrid: "[data-home-config-grid]",
+    homeResponseNameRow: "[data-home-response-name-row]",
+    homeResponseName: "[data-home-response-name]",
+    homeMode: "[data-home-mode]",
+    homeRulesGrid: "[data-home-rules-grid]",
     homeSquadsLabel: "[data-home-squads-label]",
     homePlayersLabel: "[data-home-players-label]",
     homeFormatLabel: "[data-home-format-label]",
     homeFormatValue: "[data-home-format-value]",
     homeRuleOne: "[data-home-rule-one]",
+    homeRuleThree: "[data-home-rule-three]",
     totalSquads: "[data-total-squads]",
     totalPlayers: "[data-total-players]",
-    homeMode: "[data-home-mode]",
+    homeChallenge: "[data-home-challenge]",
     homeCompetition: "[data-home-competition]",
     gameSquadCount: "[data-game-squad-count]",
     gamePlayerCount: "[data-game-player-count]",
@@ -88,12 +110,24 @@ function bindElements() {
     board: "[data-board]",
     rollSquad: "[data-roll-squad]",
     startSeries: "[data-start-series]",
+    challengePanel: "[data-challenge-panel]",
+    challengeTitle: "[data-challenge-title]",
+    challengeCopy: "[data-challenge-copy]",
+    challengeNameRow: "[data-challenge-name-row]",
+    challengeName: "[data-challenge-name]",
+    challengeMeta: "[data-challenge-meta]",
+    challengeLink: "[data-challenge-link]",
+    copyChallengeLink: "[data-copy-challenge-link]",
+    challengeStatus: "[data-challenge-status]",
     playGame: "[data-play-game]",
     backHome: "[data-back-home]",
     backBuilder: "[data-back-builder]",
     seriesProgress: "[data-series-progress]",
     seriesStatus: "[data-series-status]",
+    seriesControlsPanel: "[data-series-controls-panel]",
+    seriesUserLabel: "[data-series-user-label]",
     seriesUserStrength: "[data-series-user-strength]",
+    seriesOppositionLabel: "[data-series-opposition-label]",
     seriesStarStrength: "[data-series-star-strength]",
     seriesEyebrow: "[data-series-eyebrow]",
     seriesTitle: "[data-series-title]",
@@ -111,6 +145,8 @@ function bindElements() {
     seriesReveal: "[data-series-reveal]",
     seriesRevealGrid: "[data-series-reveal-grid]",
     playAgain: "[data-play-again]",
+    sendResultBack: "[data-send-result-back]",
+    challengeBack: "[data-challenge-back]",
     shareResult: "[data-share-result]",
     copyLink: "[data-copy-link]",
     downloadShare: "[data-download-share]",
@@ -177,6 +213,740 @@ function playerKey(player) {
   return player?.id ?? normalizeName(player?.name ?? "");
 }
 
+function buildCatalogFromSquads(squads) {
+  return squads.flatMap((squad) =>
+    squad.players.map((player, index) => ({
+      ...player,
+      id: `${squad.id}:${index}`,
+      squadId: squad.id,
+      squadLabel: squad.label,
+      squadTeam: squad.team,
+      squadYear: squad.year,
+    })),
+  );
+}
+
+const ASHES_CATALOG = buildCatalogFromSquads(ASHES_SQUADS);
+const WORLD_CUP_CATALOG = buildCatalogFromSquads(WORLD_CUP_SQUADS);
+const ASHES_CATALOG_INDEX_BY_ID = new Map(ASHES_CATALOG.map((player, index) => [player.id, index]));
+
+function isMemoryMode() {
+  if (isChallengeMode()) {
+    return currentChallengePlayableMode() === "memory";
+  }
+  return STATE.mode === "memory";
+}
+
+function isChallengeMode() {
+  return STATE.mode === "challenge";
+}
+
+function resultSnapshotLoaded() {
+  return Boolean(STATE.result);
+}
+
+function challengeLineupLoaded() {
+  return STATE.competition === "ashes"
+    && Array.isArray(STATE.challenge?.lineup)
+    && STATE.challenge.lineup.length === XI_SLOTS.length;
+}
+
+function challengeCreationMode() {
+  return STATE.competition === "ashes" && isChallengeMode() && !challengeLineupLoaded() && !resultSnapshotLoaded();
+}
+
+function modeLabel() {
+  if (isChallengeMode()) {
+    return isMemoryMode() ? "Memory Challenge" : "Challenge";
+  }
+  if (isMemoryMode()) return "Memory";
+  return "Classic";
+}
+
+function currentPathname() {
+  const pathname = window.location.pathname.replace(/\/index\.html$/i, "/");
+  return pathname === "" ? "/" : pathname.replace(/\/+$/u, "") || "/";
+}
+
+function currentSiteOrigin() {
+  if (window.location.origin?.startsWith("http")) {
+    return window.location.origin;
+  }
+
+  return CANONICAL_SITE_ORIGIN;
+}
+
+function pageUrlForOrigin(origin) {
+  return new URL(currentPathname(), origin);
+}
+
+function normalizeChallengeCreatorName(value) {
+  const normalized = String(value ?? "")
+    .replace(/\s+/gu, " ")
+    .trim();
+  return normalized ? normalized.slice(0, 40) : "";
+}
+
+function normalizePlayableMode(value) {
+  return value === "memory" ? "memory" : "classic";
+}
+
+function loadedChallengeCreatorName() {
+  return normalizeChallengeCreatorName(STATE.challenge?.creatorName ?? "");
+}
+
+function loadedResultChallengerName() {
+  return normalizeChallengeCreatorName(STATE.result?.challengerDisplayName ?? "");
+}
+
+function loadedResultResponderName() {
+  return normalizeChallengeCreatorName(STATE.result?.responderDisplayName ?? "");
+}
+
+function currentChallengeResponseName() {
+  return loadedResultResponderName() || normalizeChallengeCreatorName(STATE.challengeResponseName);
+}
+
+function currentChallengeCreatorName() {
+  if (resultSnapshotLoaded()) {
+    return loadedResultChallengerName();
+  }
+  return challengeLineupLoaded()
+    ? loadedChallengeCreatorName()
+    : normalizeChallengeCreatorName(STATE.challengeDraftName);
+}
+
+function currentChallengePlayableMode() {
+  if (resultSnapshotLoaded()) {
+    return normalizePlayableMode(STATE.result?.mode);
+  }
+  return challengeLineupLoaded()
+    ? normalizePlayableMode(STATE.challenge?.mode)
+    : normalizePlayableMode(STATE.challengeDraftMode);
+}
+
+function hashChallengeCode(value) {
+  const text = String(value ?? "");
+  let hash = 2166136261;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function challengeRefForCode(code) {
+  return code ? hashChallengeCode(code) : "";
+}
+
+function challengeCodeForLineup(lineup, mode = currentChallengePlayableMode()) {
+  try {
+    return serializeCompactChallengeCode(lineup, mode);
+  } catch {
+    return "";
+  }
+}
+
+function currentChallengeRef() {
+  if (resultSnapshotLoaded()) {
+    return String(STATE.result?.challengeRef ?? "");
+  }
+
+  if (challengeLineupLoaded()) {
+    return challengeRefForCode(STATE.challenge?.code);
+  }
+
+  if (challengeCreationMode() && lineupComplete()) {
+    return challengeRefForCode(challengeCodeForLineup(userLineup(), currentChallengePlayableMode()));
+  }
+
+  return "";
+}
+
+function baseChallengeAnalyticsProps(overrides = {}) {
+  const props = {
+    competition: "ashes",
+    challenge_mode: currentChallengePlayableMode(),
+    challenge_ref: currentChallengeRef(),
+    has_creator_name: currentChallengeCreatorName() ? "true" : "false",
+    ...overrides,
+  };
+
+  return Object.fromEntries(
+    Object.entries(props).filter(([, value]) => value !== "" && value !== null && value !== undefined),
+  );
+}
+
+function trackEvent(name, props = {}) {
+  const record = {
+    name,
+    props,
+    timestamp: Date.now(),
+  };
+
+  const eventLog = window.__ashesAnalyticsLog ?? [];
+  eventLog.push(record);
+  window.__ashesAnalyticsLog = eventLog.slice(-200);
+
+  const counts = window.__ashesAnalyticsCounts ?? {};
+  counts[name] = (counts[name] ?? 0) + 1;
+  window.__ashesAnalyticsCounts = counts;
+
+  window.dispatchEvent(new CustomEvent("ashes-analytics", { detail: record }));
+
+  if (typeof window.plausible === "function") {
+    window.plausible(name, { props });
+  }
+
+  if (typeof window.gtag === "function") {
+    window.gtag("event", name, props);
+  } else if (Array.isArray(window.dataLayer)) {
+    window.dataLayer.push({ event: name, ...props });
+  }
+}
+
+function trackChallengeEvent(name, overrides = {}) {
+  trackEvent(name, baseChallengeAnalyticsProps(overrides));
+}
+
+function base64UrlEncodeBytes(bytes) {
+  const binary = Array.from(bytes, (value) => String.fromCharCode(value)).join("");
+  return window.btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "");
+}
+
+function base64UrlDecodeBytes(value) {
+  const normalized = String(value ?? "").replaceAll("-", "+").replaceAll("_", "/");
+  const padding = normalized.length % 4 === 0 ? "" : "=".repeat(4 - (normalized.length % 4));
+  const binary = window.atob(`${normalized}${padding}`);
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+
+function encodeJsonPayload(payload) {
+  const text = new TextEncoder().encode(JSON.stringify(payload));
+  return base64UrlEncodeBytes(text);
+}
+
+function decodeJsonPayload(value) {
+  try {
+    const bytes = base64UrlDecodeBytes(value);
+    return JSON.parse(new TextDecoder().decode(bytes));
+  } catch {
+    return null;
+  }
+}
+
+function createRandomId(byteLength = 9) {
+  const bytes = new Uint8Array(byteLength);
+  window.crypto.getRandomValues(bytes);
+  return base64UrlEncodeBytes(bytes);
+}
+
+function challengeModeCode(mode) {
+  return normalizePlayableMode(mode) === "memory" ? "m" : "c";
+}
+
+function challengeModeFromCode(code) {
+  if (code === "m") return "memory";
+  if (code === "c") return "classic";
+  return null;
+}
+
+function serializeCompactLineup(lineup) {
+  const payload = lineup.map((player) => {
+    const index = ASHES_CATALOG_INDEX_BY_ID.get(player.id);
+    if (!Number.isInteger(index)) {
+      throw new Error(`Unknown Ashes player in lineup: ${player.id}`);
+    }
+    return index.toString(36).padStart(2, "0");
+  }).join("");
+  return payload;
+}
+
+function decodeChallengeLineup(lineup) {
+  if (!Array.isArray(lineup) || lineup.length !== XI_SLOTS.length) return null;
+  const ids = lineup.map((player) => player?.id).filter(Boolean);
+  if (ids.length !== XI_SLOTS.length || new Set(ids).size !== XI_SLOTS.length) {
+    return null;
+  }
+
+  const valid = lineup.every((player, index) => slotAcceptsPlayer(XI_SLOTS[index], player));
+  return valid ? lineup : null;
+}
+
+function deserializeCompactLineup(serialized) {
+  const code = String(serialized ?? "").trim().toLowerCase();
+  const expectedLength = XI_SLOTS.length * 2;
+  if (code.length !== expectedLength) return null;
+  const lineup = [];
+  for (let offset = 0; offset < code.length; offset += 2) {
+    const token = code.slice(offset, offset + 2);
+    if (!/^[0-9a-z]{2}$/u.test(token)) return null;
+    const player = ASHES_CATALOG[Number.parseInt(token, 36)] ?? null;
+    if (!player) return null;
+    lineup.push(player);
+  }
+
+  return decodeChallengeLineup(lineup);
+}
+
+function serializeCompactChallengeCode(lineup, mode = "classic") {
+  return `${challengeModeCode(mode)}${serializeCompactLineup(lineup)}`;
+}
+
+function deserializeCompactChallengeCode(serialized) {
+  const code = String(serialized ?? "").trim().toLowerCase();
+  const expectedLength = 1 + XI_SLOTS.length * 2;
+  if (code.length !== expectedLength) return null;
+
+  const mode = challengeModeFromCode(code[0]);
+  if (!mode) return null;
+
+  const lineup = deserializeCompactLineup(code.slice(1));
+  if (!lineup) return null;
+  return { code, lineup, mode };
+}
+
+function deserializeLegacyChallengeLineup(serialized) {
+  if (!serialized) return null;
+
+  const ids = serialized
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (ids.length !== XI_SLOTS.length || new Set(ids).size !== XI_SLOTS.length) {
+    return null;
+  }
+
+  const byId = new Map(ASHES_CATALOG.map((player) => [player.id, player]));
+  const lineup = ids.map((id) => byId.get(id) ?? null);
+  return decodeChallengeLineup(lineup);
+}
+
+function challengeInviteText(url, creatorName = "", mode = "classic") {
+  const normalizedCreatorName = normalizeChallengeCreatorName(creatorName);
+  const modeName = normalizePlayableMode(mode) === "memory" ? "Memory" : "Classic";
+  return normalizedCreatorName
+    ? `${normalizedCreatorName} has challenged you to an Ashes 5-0 ${modeName} Challenge: ${url}`
+    : `Play this Ashes 5-0 ${modeName} Challenge: ${url}`;
+}
+
+function challengeUrlForLineup(lineup, creatorName = "", mode = "classic", origin = currentSiteOrigin()) {
+  const url = pageUrlForOrigin(origin);
+  url.searchParams.set(CHALLENGE_QUERY_KEY, serializeCompactChallengeCode(lineup, mode));
+  const normalizedCreatorName = normalizeChallengeCreatorName(creatorName);
+  if (normalizedCreatorName) {
+    url.searchParams.set(CHALLENGE_CREATOR_QUERY_KEY, normalizedCreatorName);
+  } else {
+    url.searchParams.delete(CHALLENGE_CREATOR_QUERY_KEY);
+  }
+  return url.toString();
+}
+
+function currentChallengeUrl() {
+  const lineup = challengeLineupLoaded() ? STATE.challenge.lineup : lineupComplete() ? userLineup() : null;
+  return lineup?.length === XI_SLOTS.length
+    ? challengeUrlForLineup(lineup, currentChallengeCreatorName(), currentChallengePlayableMode())
+    : "";
+}
+
+function sanitizeResultText(value, maxLength = 160) {
+  return String(value ?? "")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .slice(0, maxLength);
+}
+
+function encodeLeaderSnapshot(entry) {
+  if (!entry) return null;
+  return [
+    entry.side === "star" ? "s" : "y",
+    sanitizeResultText(entry.name, 60),
+    clamp(Math.round(entry.runs ?? 0), 0, 9999),
+    clamp(Math.round(entry.wickets ?? 0), 0, 999),
+    clamp(Math.round(entry.centuries ?? 0), 0, 99),
+    clamp(Math.round(entry.fiveFors ?? 0), 0, 99),
+    clamp(Math.round(entry.points ?? 0), 0, 9999),
+  ];
+}
+
+function decodeLeaderSnapshot(entry) {
+  if (!Array.isArray(entry) || entry.length < 7) return null;
+  const side = entry[0] === "s" ? "star" : "your";
+  const name = sanitizeResultText(entry[1], 60);
+  if (!name) return null;
+  return {
+    side,
+    name,
+    runs: clamp(Math.round(Number(entry[2]) || 0), 0, 9999),
+    wickets: clamp(Math.round(Number(entry[3]) || 0), 0, 999),
+    centuries: clamp(Math.round(Number(entry[4]) || 0), 0, 99),
+    fiveFors: clamp(Math.round(Number(entry[5]) || 0), 0, 99),
+    points: clamp(Math.round(Number(entry[6]) || 0), 0, 9999),
+  };
+}
+
+function encodeSeriesLeaders(leaders) {
+  if (!leaders) return null;
+  return {
+    o: encodeLeaderSnapshot(leaders.overallLeader),
+    r: encodeLeaderSnapshot(leaders.mostRuns),
+    w: encodeLeaderSnapshot(leaders.mostWickets),
+    c: encodeLeaderSnapshot(leaders.mostCenturies),
+    f: encodeLeaderSnapshot(leaders.mostFiveFors),
+    ur: clamp(Math.round(leaders.userRuns ?? 0), 0, 99999),
+    uw: clamp(Math.round(leaders.userWickets ?? 0), 0, 9999),
+  };
+}
+
+function decodeSeriesLeaders(payload) {
+  if (!payload || typeof payload !== "object") return null;
+  return {
+    overallLeader: decodeLeaderSnapshot(payload.o),
+    mostRuns: decodeLeaderSnapshot(payload.r),
+    mostWickets: decodeLeaderSnapshot(payload.w),
+    mostCenturies: decodeLeaderSnapshot(payload.c),
+    mostFiveFors: decodeLeaderSnapshot(payload.f),
+    userRuns: clamp(Math.round(Number(payload.ur) || 0), 0, 99999),
+    userWickets: clamp(Math.round(Number(payload.uw) || 0), 0, 9999),
+  };
+}
+
+function encodeResultBox(box) {
+  return {
+    bn: sanitizeResultText(box?.batter?.name, 60) || "Unknown",
+    br: clamp(Math.round(Number(box?.batter?.runs) || 0), 0, 999),
+    wn: sanitizeResultText(box?.bowler?.name, 60) || "Unknown",
+    wf: sanitizeResultText(box?.bowler?.figures, 24) || "0/0",
+  };
+}
+
+function decodeResultBox(payload) {
+  if (!payload || typeof payload !== "object") {
+    return {
+      batter: { name: "Unknown", runs: 0 },
+      bowler: { name: "Unknown", figures: "0/0" },
+    };
+  }
+
+  return {
+    batter: {
+      name: sanitizeResultText(payload.bn, 60) || "Unknown",
+      runs: clamp(Math.round(Number(payload.br) || 0), 0, 999),
+    },
+    bowler: {
+      name: sanitizeResultText(payload.wn, 60) || "Unknown",
+      figures: sanitizeResultText(payload.wf, 24) || "0/0",
+    },
+  };
+}
+
+function encodeResultMatch(match) {
+  return {
+    n: clamp(Math.round(match.matchNumber ?? match.testNumber ?? 0), 1, 5),
+    v: sanitizeResultText(match.venue, 60),
+    r: match.result === "loss" || match.result === "draw" ? match.result : "win",
+    h: sanitizeResultText(match.headline, 120),
+    s: sanitizeResultText(match.summary, 120),
+    sc: sanitizeResultText(match.scoreline, 120),
+    i: (match.innings ?? []).map((innings) => [
+      sanitizeResultText(innings.label, 48),
+      sanitizeResultText(innings.score, 32),
+    ]),
+    ub: encodeResultBox(match.userBox),
+    sb: encodeResultBox(match.starBox),
+  };
+}
+
+function decodeResultMatch(payload) {
+  if (!payload || typeof payload !== "object") return null;
+  const matchNumber = clamp(Math.round(Number(payload.n) || 0), 1, 5);
+  const result = payload.r === "loss" || payload.r === "draw" ? payload.r : "win";
+  const innings = Array.isArray(payload.i)
+    ? payload.i
+        .map((entry) => {
+          if (!Array.isArray(entry) || entry.length < 2) return null;
+          return {
+            label: sanitizeResultText(entry[0], 48),
+            score: sanitizeResultText(entry[1], 32),
+          };
+        })
+        .filter(Boolean)
+    : [];
+
+  return {
+    format: "tests",
+    snapshotOnly: true,
+    testNumber: matchNumber,
+    matchNumber,
+    venue: sanitizeResultText(payload.v, 60) || "Historic venue",
+    result,
+    headline: sanitizeResultText(payload.h, 120) || "Series result",
+    summary: sanitizeResultText(payload.s, 120) || "Test complete",
+    scoreline: sanitizeResultText(payload.sc, 120) || "",
+    innings,
+    userBox: decodeResultBox(payload.ub),
+    starBox: decodeResultBox(payload.sb),
+  };
+}
+
+function encodeChallengeResultRecord(record) {
+  return encodeJsonPayload({
+    v: CHALLENGE_RESULT_VERSION,
+    rid: record.responseId,
+    cr: record.challengeRef,
+    m: record.mode,
+    cn: record.challengerDisplayName,
+    rn: record.responderDisplayName,
+    cl: serializeCompactLineup(record.challengerLineup),
+    rl: serializeCompactLineup(record.responderLineup),
+    uw: record.userWins,
+    sw: record.starWins,
+    dr: record.draws,
+    mt: record.matches.map(encodeResultMatch),
+    ld: encodeSeriesLeaders(record.leaders),
+    po: encodeLeaderSnapshot(record.playerOfSeries),
+    ac: Array.isArray(record.achievements) ? record.achievements.map((item) => sanitizeResultText(item, 40)).filter(Boolean) : [],
+    ca: record.completedAt,
+    sv: record.simulationVersion,
+  });
+}
+
+function decodeChallengeResultRecord(serialized) {
+  const payload = decodeJsonPayload(serialized);
+  if (!payload || payload.v !== CHALLENGE_RESULT_VERSION) return null;
+
+  const challengerLineup = deserializeCompactLineup(payload.cl);
+  const responderLineup = deserializeCompactLineup(payload.rl);
+  if (!challengerLineup || !responderLineup) return null;
+
+  const matches = Array.isArray(payload.mt) ? payload.mt.map(decodeResultMatch).filter(Boolean) : [];
+  if (!matches.length) return null;
+
+  return {
+    responseId: sanitizeResultText(payload.rid, 24) || createRandomId(),
+    challengeRef: sanitizeResultText(payload.cr, 24),
+    mode: normalizePlayableMode(payload.m),
+    challengerDisplayName: normalizeChallengeCreatorName(payload.cn),
+    responderDisplayName: normalizeChallengeCreatorName(payload.rn),
+    challengerLineup,
+    responderLineup,
+    userWins: clamp(Math.round(Number(payload.uw) || 0), 0, 5),
+    starWins: clamp(Math.round(Number(payload.sw) || 0), 0, 5),
+    draws: clamp(Math.round(Number(payload.dr) || 0), 0, 5),
+    matches,
+    leaders: decodeSeriesLeaders(payload.ld),
+    playerOfSeries: decodeLeaderSnapshot(payload.po),
+    achievements: Array.isArray(payload.ac)
+      ? payload.ac.map((item) => sanitizeResultText(item, 40)).filter(Boolean)
+      : [],
+    completedAt: sanitizeResultText(payload.ca, 40) || new Date().toISOString(),
+    simulationVersion: sanitizeResultText(payload.sv, 40) || RESULT_SIMULATION_VERSION,
+  };
+}
+
+function resultUrlForRecord(record, origin = currentSiteOrigin()) {
+  const url = pageUrlForOrigin(origin);
+  url.searchParams.set(RESULT_QUERY_KEY, encodeChallengeResultRecord(record));
+  url.searchParams.delete(CHALLENGE_QUERY_KEY);
+  url.searchParams.delete(CHALLENGE_CREATOR_QUERY_KEY);
+  url.searchParams.delete(LEGACY_CHALLENGE_QUERY_KEY);
+  url.searchParams.delete(LEGACY_CHALLENGE_CREATOR_QUERY_KEY);
+  url.searchParams.delete(LEGACY_CHALLENGE_MODE_QUERY_KEY);
+  return url.toString();
+}
+
+function currentResultUrl() {
+  return resultSnapshotLoaded() ? resultUrlForRecord(STATE.result) : "";
+}
+
+function clearResultUrlFromBrowser() {
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has(RESULT_QUERY_KEY)) return;
+  url.searchParams.delete(RESULT_QUERY_KEY);
+  window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+}
+
+function writeResultUrlToBrowser(record) {
+  const url = new URL(resultUrlForRecord(record, currentSiteOrigin()));
+  window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+}
+
+function clearChallengeUrlFromBrowser() {
+  const url = new URL(window.location.href);
+  const hasChallengeParams = [
+    CHALLENGE_QUERY_KEY,
+    CHALLENGE_CREATOR_QUERY_KEY,
+    LEGACY_CHALLENGE_QUERY_KEY,
+    LEGACY_CHALLENGE_CREATOR_QUERY_KEY,
+    LEGACY_CHALLENGE_MODE_QUERY_KEY,
+  ].some((key) => url.searchParams.has(key));
+  if (!hasChallengeParams) return;
+  url.searchParams.delete(CHALLENGE_QUERY_KEY);
+  url.searchParams.delete(CHALLENGE_CREATOR_QUERY_KEY);
+  url.searchParams.delete(LEGACY_CHALLENGE_QUERY_KEY);
+  url.searchParams.delete(LEGACY_CHALLENGE_CREATOR_QUERY_KEY);
+  url.searchParams.delete(LEGACY_CHALLENGE_MODE_QUERY_KEY);
+  window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+}
+
+function loadChallengeFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const compactCode = params.get(CHALLENGE_QUERY_KEY);
+  const legacySerialized = params.get(LEGACY_CHALLENGE_QUERY_KEY);
+  if (!compactCode && !legacySerialized) return null;
+
+  const compactChallenge = compactCode ? deserializeCompactChallengeCode(compactCode) : null;
+  const legacyLineup = compactChallenge ? null : deserializeLegacyChallengeLineup(legacySerialized);
+  const creatorName = normalizeChallengeCreatorName(
+    params.get(CHALLENGE_CREATOR_QUERY_KEY) ?? params.get(LEGACY_CHALLENGE_CREATOR_QUERY_KEY),
+  );
+
+  if (!compactChallenge && !legacyLineup) {
+    clearChallengeUrlFromBrowser();
+    return null;
+  }
+
+  const mode = compactChallenge
+    ? compactChallenge.mode
+    : normalizePlayableMode(params.get(LEGACY_CHALLENGE_MODE_QUERY_KEY));
+  const lineup = compactChallenge?.lineup ?? legacyLineup;
+  const code = compactChallenge?.code ?? String(legacySerialized ?? "");
+
+  return {
+    code,
+    creatorName,
+    mode,
+    lineup,
+    label: "Challenge XI",
+  };
+}
+
+function loadResultFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const serialized = params.get(RESULT_QUERY_KEY);
+  if (!serialized) return null;
+
+  const result = decodeChallengeResultRecord(serialized);
+  if (!result) {
+    clearResultUrlFromBrowser();
+    return null;
+  }
+
+  return result;
+}
+
+function challengerTeamLabelFromName(name) {
+  const normalized = normalizeChallengeCreatorName(name);
+  return normalized ? `${normalized}'s XI` : "Challenger's XI";
+}
+
+function responderTeamLabelFromName(name, fallback = "Your XI") {
+  const normalized = normalizeChallengeCreatorName(name);
+  return normalized ? `${normalized}'s XI` : fallback;
+}
+
+function currentSeriesUserLabel() {
+  if (resultSnapshotLoaded()) {
+    return responderTeamLabelFromName(STATE.result?.responderDisplayName, "Responder's XI");
+  }
+
+  if (challengeLineupLoaded()) {
+    return responderTeamLabelFromName(STATE.challengeResponseName, "Your XI");
+  }
+
+  return "Your XI";
+}
+
+function currentSeriesOppositionLabel() {
+  if (resultSnapshotLoaded()) {
+    return challengerTeamLabelFromName(STATE.result?.challengerDisplayName);
+  }
+
+  if (challengeLineupLoaded()) {
+    return challengerTeamLabelFromName(STATE.challenge?.creatorName);
+  }
+
+  return competitionConfig().oppositionShortTitle;
+}
+
+function currentChallengeSendTarget() {
+  const name = resultSnapshotLoaded()
+    ? loadedResultChallengerName()
+    : loadedChallengeCreatorName();
+  return name || "";
+}
+
+function challengeSeriesOutcome(seriesOrResult = STATE.result ?? STATE.series) {
+  if (!seriesOrResult) return "draw";
+  if ((seriesOrResult.userWins ?? 0) > (seriesOrResult.starWins ?? 0)) return "win";
+  if ((seriesOrResult.userWins ?? 0) < (seriesOrResult.starWins ?? 0)) return "loss";
+  return "draw";
+}
+
+function challengeSeriesScore(seriesOrResult = STATE.result ?? STATE.series) {
+  if (!seriesOrResult) return "0-0";
+  return `${seriesOrResult.userWins}-${seriesOrResult.starWins}${(seriesOrResult.draws ?? 0) ? `-${seriesOrResult.draws}` : ""}`;
+}
+
+function seriesFromResultRecord(result) {
+  const userLineup = [...result.responderLineup];
+  const starLineup = [...result.challengerLineup];
+  return {
+    snapshotResult: true,
+    userLineup,
+    starLineup,
+    userTeam: teamMetricsFromLineup(userLineup),
+    starTeam: teamMetricsFromLineup(starLineup),
+    matches: result.matches.map((match) => ({ ...match })),
+    revealed: result.matches.length,
+    userWins: result.userWins,
+    starWins: result.starWins,
+    draws: result.draws,
+    leaders: result.leaders,
+    achievements: result.achievements,
+    playerOfSeries: result.playerOfSeries ?? result.leaders?.overallLeader ?? null,
+  };
+}
+
+function buildChallengeResultRecord() {
+  if (!STATE.series || !challengeLineupLoaded() || !seriesComplete()) return null;
+
+  const leaders = STATE.series.leaders ?? collectSeriesStats(STATE.series);
+  const achievements = STATE.series.achievements ?? buildAchievementList(STATE.series, leaders);
+  const matches = STATE.series.matches.map((match) => decodeResultMatch(encodeResultMatch(match))).filter(Boolean);
+
+  return {
+    responseId: createRandomId(),
+    challengeRef: currentChallengeRef(),
+    mode: currentChallengePlayableMode(),
+    challengerDisplayName: loadedChallengeCreatorName(),
+    responderDisplayName: normalizeChallengeCreatorName(STATE.challengeResponseName),
+    challengerLineup: [...STATE.series.starLineup],
+    responderLineup: [...STATE.series.userLineup],
+    userWins: STATE.series.userWins,
+    starWins: STATE.series.starWins,
+    draws: STATE.series.draws,
+    matches,
+    leaders,
+    playerOfSeries: leaders.overallLeader,
+    achievements,
+    completedAt: new Date().toISOString(),
+    simulationVersion: RESULT_SIMULATION_VERSION,
+  };
+}
+
+function finalizeChallengeResultIfNeeded() {
+  if (STATE.result) return STATE.result;
+  const result = buildChallengeResultRecord();
+  if (!result) return null;
+
+  STATE.result = result;
+  STATE.seriesShareAsset = null;
+  STATE.seriesShareAssetPromise = null;
+  writeResultUrlToBrowser(result);
+  return result;
+}
+
 function clearRollAnimation() {
   if (STATE.rollAnimation?.timer) {
     clearInterval(STATE.rollAnimation.timer);
@@ -185,6 +955,13 @@ function clearRollAnimation() {
 }
 
 function competitionConfig() {
+  const loadedChallenge = challengeLineupLoaded();
+  const resultLoaded = resultSnapshotLoaded();
+  const creatorName = resultLoaded ? loadedResultChallengerName() : loadedChallengeCreatorName();
+  const challengerTeamLabel = challengerTeamLabelFromName(creatorName);
+  const challengeMode = currentChallengePlayableMode();
+  const challengeModeLabel = challengeMode === "memory" ? "memory" : "classic";
+
   if (STATE.competition === "worldcup") {
     return {
       name: "World Cup",
@@ -205,6 +982,7 @@ function competitionConfig() {
       seriesEyebrow: "World Cup series",
       seriesTitle: "Your XI navigates a World Cup group and knockout route.",
       oppositionTitle: "World Cup opposition",
+      oppositionShortTitle: "World Cup opposition",
       seriesProgressLabel: "Matches",
       matchLabel: "ODI",
       seriesDescriptor: "World Cup tournament",
@@ -220,26 +998,56 @@ function competitionConfig() {
     theme: "ashes",
     format: "tests",
     homeEyebrow: "Ashes XI",
-    homeTitle: "Roll an Ashes squad. Lock one player. Build your Test XI.",
-    homeLede:
-      "Each roll produces a historic Ashes squad. Pick one player from the squad to lock into your XI. Keep going until your dream Ashes line-up is complete and you are ready to take on the All-star XI.",
+    homeTitle: loadedChallenge
+      ? creatorName
+        ? `${creatorName} has challenged you.`
+        : "A Challenge XI is waiting. Draft your Ashes side and take it on."
+      : isChallengeMode()
+        ? "Build an Ashes XI and turn it into an invite link."
+        : "Roll an Ashes squad. Lock one player. Build your Test XI.",
+    homeLede: loadedChallenge
+      ? creatorName
+        ? `This link contains ${creatorName}'s saved Ashes XI. Accept the ${challengeModeLabel} challenge, draft your own side, and then play a five-Test series against it.`
+        : `This link contains a saved Ashes XI. Draft your own side in the required ${challengeModeLabel} mode, then simulate a five-Test challenge series against it.`
+      : isChallengeMode()
+        ? "Each roll produces a historic Ashes squad. Pick one player from the squad to lock into your XI. Once the side is complete, copy the Ashes 5-0 invite and send it to someone else so they can play against your team."
+        : "Each roll produces a historic Ashes squad. Pick one player from the squad to lock into your XI. Finish your side for a solo five-Test series, or use the new Challenge feature to send it to a friend.",
     squadsLabel: "Ashes squads",
     gameEyebrow: "XI builder",
-    gameTitle: "Roll a squad. Choose one player. Place them in the XI.",
+    gameTitle: loadedChallenge
+      ? "Roll a squad. Choose one player. Build an XI to face the Challenge XI."
+      : isChallengeMode()
+        ? "Roll a squad. Choose one player. Build the side you want to challenge others with."
+        : "Roll a squad. Choose one player. Place them in the XI.",
     rosterKicker: "Squad pool",
     boardTitle: "Your Test side",
-    seriesEyebrow: "Test series",
-    seriesTitle: "Your XI takes on an all-star Ashes XI.",
-    oppositionTitle: "All-star Ashes XI",
+    seriesEyebrow: resultLoaded ? "Challenge result" : loadedChallenge ? "Challenge series" : "Test series",
+    seriesTitle: resultLoaded
+      ? `${currentSeriesUserLabel()} versus ${challengerTeamLabel}.`
+      : loadedChallenge
+        ? `${currentSeriesUserLabel()} takes on ${challengerTeamLabel}.`
+        : "Your XI takes on an all-star Ashes XI.",
+    oppositionTitle: resultLoaded || loadedChallenge ? challengerTeamLabel : "All-star Ashes XI",
+    oppositionShortTitle: resultLoaded || loadedChallenge ? challengerTeamLabel : "All-star XI",
     seriesProgressLabel: "Tests",
     matchLabel: "Test",
-    seriesDescriptor: "5-Test series",
+    seriesDescriptor: resultLoaded || loadedChallenge ? "5-Test challenge" : "5-Test series",
     modeButton: "World Cup mode",
   };
 }
 
 function setCompetition(nextCompetition) {
   STATE.competition = nextCompetition === "worldcup" ? "worldcup" : "ashes";
+  if (STATE.competition !== "ashes") {
+    STATE.challenge = null;
+    STATE.result = null;
+    STATE.challengeResponseName = "";
+    clearChallengeUrlFromBrowser();
+    clearResultUrlFromBrowser();
+    if (isChallengeMode()) {
+      STATE.mode = "classic";
+    }
+  }
   STATE.squads = STATE.competition === "worldcup" ? WORLD_CUP_SQUADS : ASHES_SQUADS;
   STATE.lineup.clear();
   STATE.currentSquad = null;
@@ -253,16 +1061,7 @@ function setCompetition(nextCompetition) {
 }
 
 function addCatalogMetadata() {
-  STATE.catalog = STATE.squads.flatMap((squad) =>
-    squad.players.map((player, index) => ({
-      ...player,
-      id: `${squad.id}:${index}`,
-      squadId: squad.id,
-      squadLabel: squad.label,
-      squadTeam: squad.team,
-      squadYear: squad.year,
-    })),
-  );
+  STATE.catalog = STATE.competition === "worldcup" ? WORLD_CUP_CATALOG : ASHES_CATALOG;
 }
 
 function decorateSquad(squad) {
@@ -305,7 +1104,7 @@ function seriesComplete() {
 }
 
 function ratingLabel(value) {
-  return STATE.mode === "memory" && !seriesComplete() ? "??" : String(value);
+  return isMemoryMode() && !seriesComplete() ? "??" : String(value);
 }
 
 function ratingPairLabel(player) {
@@ -483,10 +1282,11 @@ function draftMetricsFromLineup(lineup) {
 }
 
 function seriesWinnerLabel() {
+  const competition = competitionConfig();
   if (!STATE.series) return "Simulation ready";
   if (STATE.series.statusText) return STATE.series.statusText;
-  if (STATE.series.userWins > STATE.series.starWins) return "Your XI lead the series";
-  if (STATE.series.starWins > STATE.series.userWins) return "All-star XI lead the series";
+  if (STATE.series.userWins > STATE.series.starWins) return `${currentSeriesUserLabel()} lead the series`;
+  if (STATE.series.starWins > STATE.series.userWins) return `${competition.oppositionShortTitle} lead the series`;
   return "Series level";
 }
 
@@ -734,6 +1534,7 @@ function buildMatchBoxScore(sideInnings) {
 }
 
 function summariseResult(match) {
+  const opponentLabel = competitionConfig().oppositionShortTitle;
   const { user1, star1, user2, star2 } = match.innings;
   const userTotal = user1.total + user2.total;
   const starTotal = star1.total + star2.total;
@@ -772,20 +1573,20 @@ function summariseResult(match) {
 
   if ((userWon && user2.chaseComplete) || (!userWon && star2.chaseComplete)) {
     const wicketsLeft = 10 - winningSecond.wickets;
-    return `${userWon ? "Your XI" : "All-star XI"} won by ${wicketsLeft} ${pluralize(wicketsLeft, "wicket")}`;
+    return `${userWon ? "Your XI" : opponentLabel} won by ${wicketsLeft} ${pluralize(wicketsLeft, "wicket")}`;
   }
 
   if (winningSecond.wickets >= 10 && loserTotal > 0) {
     const runsMargin = winnerTotal - loserTotal;
-    return `${userWon ? "Your XI" : "All-star XI"} won by ${runsMargin} ${pluralize(runsMargin, "run")}`;
+    return `${userWon ? "Your XI" : opponentLabel} won by ${runsMargin} ${pluralize(runsMargin, "run")}`;
   }
 
   const inningsMargin = (userWon ? star1.total + star2.total : user1.total + user2.total) - (userWon ? userTotal : starTotal);
   if (inningsMargin > 0) {
-    return `${userWon ? "Your XI" : "All-star XI"} won by an innings and ${inningsMargin} ${pluralize(inningsMargin, "run")}`;
+    return `${userWon ? "Your XI" : opponentLabel} won by an innings and ${inningsMargin} ${pluralize(inningsMargin, "run")}`;
   }
 
-  return match.result === "win" ? "Your XI won" : "All-star XI won";
+  return match.result === "win" ? "Your XI won" : `${opponentLabel} won`;
 }
 
 function generateHeadline(match) {
@@ -1349,14 +2150,15 @@ function renderSeriesInsights() {
 
   const competition = competitionConfig();
   const completed = seriesComplete();
-  const leaders = collectSeriesStats(STATE.series);
-  const achievements = completed ? buildAchievementList(STATE.series, leaders) : [];
+  const leaders = STATE.series.leaders ?? collectSeriesStats(STATE.series);
+  const achievements = completed ? (STATE.series.achievements ?? buildAchievementList(STATE.series, leaders)) : [];
   const userMetrics = teamMetricsFromLineup(STATE.series.userLineup);
   const starMetrics = teamMetricsFromLineup(STATE.series.starLineup);
   const isWorldCup = STATE.series.tournamentType === "worldcup";
   const strengthPercent = clamp(Math.round(50 + (userMetrics.overall - 60) * 2.2), 1, 99);
-  const playerOfSeries = leaders.overallLeader
-    ? `${leaders.overallLeader.name} (${leaders.overallLeader.side === "your" ? "Your XI" : competition.oppositionTitle})`
+  const playerOfSeriesEntry = STATE.series.playerOfSeries ?? leaders.overallLeader;
+  const playerOfSeries = playerOfSeriesEntry
+    ? `${playerOfSeriesEntry.name} (${playerOfSeriesEntry.side === "your" ? currentSeriesUserLabel() : competition.oppositionTitle})`
     : "Awaiting";
   const tournamentLeader = STATE.series.statusText ?? "Tournament complete";
   const pathSummary = isWorldCup
@@ -1549,27 +2351,53 @@ function renderDetailedInnings(match, innings, label) {
 
 function renderStats() {
   const competition = competitionConfig();
+  const loadedChallenge = challengeLineupLoaded();
   els.totalSquads.textContent = String(STATE.squads.length);
   els.totalPlayers.textContent = String(STATE.catalog.length);
   els.gameSquadCount.textContent = `${STATE.squads.length} squads`;
   els.gamePlayerCount.textContent = `${STATE.catalog.length} players`;
-  els.homeMode.value = STATE.mode;
+  els.homeMode.value = isMemoryMode() ? "memory" : "classic";
+  els.homeMode.disabled = loadedChallenge;
   document.title = pageTitleForCompetition(competition);
   els.homeEyebrow.textContent = competition.homeEyebrow;
   els.homeTitle.textContent = competition.homeTitle;
   els.homeLede.textContent = competition.homeLede;
+  els.homePanelKicker.textContent = loadedChallenge ? "Challenge received" : "How it works";
+  els.homePanelTitle.textContent = loadedChallenge ? "Accept challenge" : "Squad Roller";
+  els.homePanelCopy.hidden = loadedChallenge || STATE.competition !== "ashes";
+  els.homePanelCopy.textContent = loadedChallenge || STATE.competition !== "ashes"
+    ? ""
+    : "New feature: turn your completed Ashes XI into a private challenge link.";
+  els.homeConfigGrid.hidden = loadedChallenge;
+  els.homeResponseNameRow.hidden = !loadedChallenge;
+  els.homeResponseName.value = currentChallengeResponseName();
+  els.homeRulesGrid.hidden = loadedChallenge;
   els.homeSquadsLabel.textContent = competition.squadsLabel;
   els.homePlayersLabel.textContent = "Total players";
   els.homeFormatLabel.textContent = "Series format";
   els.homeFormatValue.textContent = competition.format === "limited-overs" ? "ODI" : "5 Tests";
   els.homeRuleOne.textContent = `Roll a previous ${competition.name} squad.`;
+  els.homeRuleThree.textContent = challengeLineupLoaded()
+    ? "Repeat until your XI is full, then simulate the challenge series."
+    : challengeCreationMode()
+      ? "Repeat until your XI is full, then copy the invite."
+      : "Repeat until your XI is full, then simulate the series.";
   els.homeCompetition.textContent = competition.modeButton;
+  els.homeChallenge.hidden = loadedChallenge || STATE.competition !== "ashes";
+  els.homeCompetition.hidden = loadedChallenge;
+  els.playGame.textContent = loadedChallenge
+    ? "Accept challenge"
+    : STATE.competition === "worldcup"
+      ? "Start World Cup game"
+      : "Start a solo game";
   els.gameEyebrow.textContent = competition.gameEyebrow;
   els.gameTitle.textContent = competition.gameTitle;
   els.rosterKicker.textContent = competition.rosterKicker;
   els.boardTitle.textContent = competition.boardTitle;
   els.seriesEyebrow.textContent = competition.seriesEyebrow;
   els.seriesTitle.textContent = competition.seriesTitle;
+  els.seriesUserLabel.textContent = currentSeriesUserLabel();
+  els.seriesOppositionLabel.textContent = competition.oppositionShortTitle;
   if (els.starTitle) els.starTitle.textContent = competition.oppositionTitle;
   document.body.dataset.competition = competition.theme;
 }
@@ -1584,13 +2412,16 @@ function renderView() {
 function renderGameMeta() {
   const competition = competitionConfig();
   const rolling = Boolean(STATE.rollAnimation?.active);
-  els.gameMode.textContent = STATE.mode === "memory" ? "Memory" : "Classic";
+  const buildingChallenge = challengeCreationMode();
+  els.gameMode.textContent = modeLabel();
   els.currentSquad.textContent = currentSquadLabel();
   els.lineupStatus.textContent = `${STATE.lineup.size} / ${XI_SLOTS.length} locked`;
-  els.startSeries.hidden = STATE.view !== "game";
-  els.startSeries.disabled = !lineupComplete() || STATE.view !== "game";
+  els.startSeries.hidden = STATE.view !== "game" || buildingChallenge;
+  els.startSeries.disabled = !lineupComplete() || STATE.view !== "game" || buildingChallenge;
   els.startSeries.textContent = lineupComplete()
-    ? "Simulate the series"
+    ? challengeLineupLoaded()
+      ? "Simulate the challenge series"
+      : "Simulate the series"
     : `Fill XI to simulate (${STATE.lineup.size}/11)`;
   els.rollSquad.textContent = rolling ? "Rolling..." : `Roll ${competition.name} squad`;
   els.rollSquad.disabled = STATE.view !== "game" || lineupComplete() || Boolean(STATE.currentSquad) || rolling;
@@ -1611,7 +2442,11 @@ function renderRoster() {
     els.rosterSummary.textContent = "Rolling through squads...";
   } else if (!STATE.currentSquad) {
     els.rosterSummary.textContent = lineupComplete()
-      ? "Your XI is complete. Start the series."
+      ? challengeCreationMode()
+        ? "Your XI is complete. Copy the invite below."
+        : challengeLineupLoaded()
+          ? "Your XI is complete. Start the challenge series."
+          : "Your XI is complete. Start the series."
       : STATE.lineup.size
         ? "A player has been locked. Roll another squad to continue."
         : `Roll a ${competition.name} squad to begin.`;
@@ -1629,7 +2464,11 @@ function renderRoster() {
           rolling
             ? "Rolling squad..."
             : lineupComplete()
-            ? "XI complete. Simulate the series."
+            ? challengeCreationMode()
+              ? "XI complete. Copy the invite below."
+              : challengeLineupLoaded()
+                ? "XI complete. Simulate the challenge series."
+                : "XI complete. Simulate the series."
             : STATE.lineup.size
               ? "Player locked. Roll another squad."
               : "Roll a squad to see its players."
@@ -1711,6 +2550,16 @@ function renderBoard() {
       if (lineupContainsName(player.name)) return;
 
       STATE.lineup.set(index, player);
+      if (STATE.lineup.size === XI_SLOTS.length && isChallengeMode()) {
+        const role = challengeLineupLoaded() ? "recipient" : "creator";
+        trackChallengeEvent("challenge_team_completed", { role });
+        if (role === "creator") {
+          trackChallengeEvent("challenge_link_generated", {
+            role,
+            challenge_ref: challengeRefForCode(challengeCodeForLineup(userLineup(), currentChallengePlayableMode())),
+          });
+        }
+      }
       STATE.selectedPlayerId = null;
       STATE.currentSquad = null;
       renderAll();
@@ -1718,20 +2567,94 @@ function renderBoard() {
   });
 }
 
+function setChallengeStatus(message) {
+  if (!els.challengeStatus) return;
+  els.challengeStatus.textContent = message;
+}
+
+function renderChallengePanel() {
+  if (!els.challengePanel) return;
+
+  const showPanel = STATE.view === "game" && STATE.competition === "ashes" && isChallengeMode();
+  const loadedChallenge = challengeLineupLoaded();
+  const creatorName = loadedChallengeCreatorName();
+  const playableMode = currentChallengePlayableMode();
+  const playableModeLabel = playableMode === "memory" ? "Memory" : "Classic";
+  els.challengePanel.hidden = !showPanel;
+  if (!showPanel) {
+    setChallengeStatus("");
+    return;
+  }
+
+  const ready = loadedChallenge || lineupComplete();
+  const url = ready ? currentChallengeUrl() : "";
+  const challengeCreatorName = currentChallengeCreatorName();
+
+  els.challengeTitle.textContent = loadedChallenge
+    ? creatorName
+      ? `${creatorName}'s ${playableModeLabel.toLowerCase()} challenge`
+      : `${playableModeLabel} challenge loaded`
+    : "Create your invite link";
+  els.challengeCopy.textContent = loadedChallenge
+    ? creatorName
+      ? `Draft your XI in ${playableModeLabel.toLowerCase()} mode, then simulate a five-Test series against ${creatorName}'s saved side.`
+      : `Draft your XI in ${playableModeLabel.toLowerCase()} mode, then simulate a five-Test series against the saved side.`
+    : ready
+      ? "Your XI is locked. Copy the Ashes 5-0 invite below and send it to someone else."
+      : `Complete your XI in ${playableModeLabel.toLowerCase()} mode to generate an Ashes 5-0 invite link.`;
+  els.challengeNameRow.hidden = loadedChallenge;
+  els.challengeName.value = loadedChallenge ? "" : STATE.challengeDraftName;
+  els.challengeMeta.hidden = !loadedChallenge;
+  els.challengeMeta.textContent = loadedChallenge
+    ? creatorName
+      ? `Challenge created by ${creatorName} · ${playableModeLabel} mode.`
+      : `${playableModeLabel} mode challenge.`
+    : "";
+  els.challengeLink.value = url;
+  if (!ready) {
+    setChallengeStatus("");
+  }
+  els.copyChallengeLink.disabled = !ready;
+  els.copyChallengeLink.textContent = "Copy invite";
+  if (!loadedChallenge && challengeCreatorName && !ready) {
+    els.challengeMeta.hidden = false;
+    els.challengeMeta.textContent = `Invite will be shared as ${challengeCreatorName} · ${playableModeLabel} mode.`;
+  }
+}
+
 function renderSeriesSummary() {
   if (!STATE.series) return;
   const competition = competitionConfig();
   const completed = seriesComplete();
   const revealedAll = STATE.series.revealed >= STATE.series.matches.length;
+  const resultLoaded = resultSnapshotLoaded();
+  const canSendBack = completed && (challengeLineupLoaded() || resultLoaded);
+  const sendTarget = currentChallengeSendTarget();
   els.seriesProgress.textContent = `${STATE.series.revealed} / ${STATE.series.matches.length} ${competition.seriesProgressLabel}`;
   els.seriesStatus.textContent = completed
     ? "Series complete"
     : STATE.series.revealed === 0
       ? "Ready to simulate"
       : "Simulation in progress";
+  els.backBuilder.textContent = resultLoaded ? "Home" : "Back to XI";
   els.seriesUserStrength.textContent = `${STATE.series.userTeam.overall} · ${STATE.series.userTeam.grade}`;
   els.seriesStarStrength.textContent = `${STATE.series.starTeam.overall} · ${STATE.series.starTeam.grade}`;
+  els.seriesUserLabel.textContent = currentSeriesUserLabel();
+  els.seriesOppositionLabel.textContent = competition.oppositionShortTitle;
   els.seriesActions.hidden = !completed;
+  els.seriesControlsPanel.hidden = resultLoaded || completed;
+  els.sendResultBack.hidden = !canSendBack;
+  els.sendResultBack.textContent = sendTarget ? `Send result back to ${sendTarget}` : "Send result back";
+  if (els.challengeBack) {
+    els.challengeBack.hidden = !completed || (!challengeLineupLoaded() && !resultLoaded);
+  }
+  els.playAgain.classList.toggle("primary", !canSendBack);
+  els.playAgain.classList.toggle("secondary", canSendBack);
+  els.sendResultBack.classList.toggle("primary", canSendBack);
+  els.sendResultBack.classList.toggle("secondary", !canSendBack);
+  els.shareResult.textContent = canSendBack ? "Share result" : "Share to X";
+  els.copyLink.textContent = canSendBack ? "Copy result link" : "Copy link";
+  els.downloadShare.textContent = canSendBack ? "Download result image" : "Download image";
   els.seriesTitle.textContent = competition.seriesTitle;
   if (els.seriesNext) {
     els.seriesNext.disabled = revealedAll;
@@ -1752,8 +2675,8 @@ function renderSeriesFeed() {
       const resultClass =
         match.result === "win" ? "result-win" : match.result === "loss" ? "result-loss" : "result-draw";
       const limitedOvers = match.format === "limited-overs";
-      const homeLabel = match.homeTeam?.label ?? "Your XI";
-      const awayLabel = match.awayTeam?.label ?? competition.oppositionTitle;
+      const homeLabel = match.homeTeam?.label ?? currentSeriesUserLabel();
+      const awayLabel = match.awayTeam?.label ?? currentSeriesOppositionLabel();
       const awayCategory = match.awayTeam?.category ? ` · ${match.awayTeam.category}` : "";
       const innings = limitedOvers
         ? match.innings.slice(0, 2)
@@ -1795,15 +2718,21 @@ function renderSeriesFeed() {
               <span>Top bowl: ${escapeHtml(match.starBox.bowler.name)} ${escapeHtml(match.starBox.bowler.figures)}</span>
             </div>
           </div>
-          <details class="scorecard-toggle">
-            <summary>Full scorecard</summary>
-            <div class="scorecard-stack">
-              ${renderDetailedInnings(match, match.inningsData.user1, limitedOvers ? `${homeLabel} innings` : `${homeLabel} 1st innings`)}
-              ${renderDetailedInnings(match, match.inningsData.star1, limitedOvers ? `${awayLabel} innings` : `${awayLabel} 1st innings`)}
-              ${limitedOvers ? "" : renderDetailedInnings(match, match.inningsData.user2, `${homeLabel} 2nd innings`)}
-              ${limitedOvers ? "" : renderDetailedInnings(match, match.inningsData.star2, `${awayLabel} 2nd innings`)}
-            </div>
-          </details>
+          ${
+            match.snapshotOnly
+              ? ""
+              : `
+                <details class="scorecard-toggle">
+                  <summary>Full scorecard</summary>
+                  <div class="scorecard-stack">
+                    ${renderDetailedInnings(match, match.inningsData.user1, limitedOvers ? `${homeLabel} innings` : `${homeLabel} 1st innings`)}
+                    ${renderDetailedInnings(match, match.inningsData.star1, limitedOvers ? `${awayLabel} innings` : `${awayLabel} 1st innings`)}
+                    ${limitedOvers ? "" : renderDetailedInnings(match, match.inningsData.user2, `${homeLabel} 2nd innings`)}
+                    ${limitedOvers ? "" : renderDetailedInnings(match, match.inningsData.star2, `${awayLabel} 2nd innings`)}
+                  </div>
+                </details>
+              `
+          }
         </article>
       `;
     })
@@ -1862,8 +2791,10 @@ function renderSeriesTable() {
   }
 
   const { userWins, starWins, draws } = STATE.series;
+  const opponentLabel = competitionConfig().oppositionShortTitle;
+  const userLabel = currentSeriesUserLabel();
   const winner =
-    userWins > starWins ? "Your XI" : starWins > userWins ? "All-star XI" : "Series drawn";
+    userWins > starWins ? userLabel : starWins > userWins ? opponentLabel : "Series drawn";
 
   els.seriesTableWrap.innerHTML = `
     <table class="series-table">
@@ -1876,14 +2807,14 @@ function renderSeriesTable() {
         </tr>
       </thead>
       <tbody>
-        <tr class="${winner === "Your XI" ? "highlight" : ""}">
-          <td>Your XI</td>
+        <tr class="${winner === userLabel ? "highlight" : ""}">
+          <td>${escapeHtml(userLabel)}</td>
           <td>${userWins}</td>
           <td>${draws}</td>
           <td>${starWins}</td>
         </tr>
-        <tr class="${winner === "All-star XI" ? "highlight" : ""}">
-          <td>All-star XI</td>
+        <tr class="${winner === opponentLabel ? "highlight" : ""}">
+          <td>${escapeHtml(opponentLabel)}</td>
           <td>${starWins}</td>
           <td>${draws}</td>
           <td>${userWins}</td>
@@ -1896,7 +2827,7 @@ function renderSeriesTable() {
 function renderStarLineup() {
   if (!STATE.series || !els.starLineup) return;
   const competition = competitionConfig();
-  const revealRatings = seriesComplete() || STATE.mode !== "memory";
+  const revealRatings = seriesComplete() || !isMemoryMode();
   els.starLineup.innerHTML = STATE.series.starLineup
     .map(
       (player, index) => `
@@ -1913,7 +2844,7 @@ function renderStarLineup() {
 
 function renderSeriesReveal() {
   if (!STATE.series || !els.seriesReveal || !els.seriesRevealGrid) return;
-  const showReveal = STATE.mode === "memory" && seriesComplete();
+  const showReveal = seriesComplete() && (isMemoryMode() || resultSnapshotLoaded());
   els.seriesReveal.hidden = !showReveal;
   els.seriesReveal.open = showReveal;
 
@@ -1922,7 +2853,7 @@ function renderSeriesReveal() {
     return;
   }
 
-  const revealRatings = seriesComplete() || STATE.mode !== "memory";
+  const revealRatings = seriesComplete() || !isMemoryMode();
   const buildSide = (title, lineup, metrics, sideClass) => `
     <article class="season-reveal-card ${sideClass}">
       <div class="season-reveal-slot">${escapeHtml(title)}</div>
@@ -1947,8 +2878,8 @@ function renderSeriesReveal() {
   `;
 
   els.seriesRevealGrid.innerHTML = `
-    ${buildSide("Your XI", STATE.series.userLineup, teamMetricsFromLineup(STATE.series.userLineup), "your-side")}
-    ${buildSide("All-star XI", STATE.series.starLineup, teamMetricsFromLineup(STATE.series.starLineup), "star-side")}
+    ${buildSide(currentSeriesUserLabel(), STATE.series.userLineup, teamMetricsFromLineup(STATE.series.userLineup), "your-side")}
+    ${buildSide(currentSeriesOppositionLabel(), STATE.series.starLineup, teamMetricsFromLineup(STATE.series.starLineup), "star-side")}
   `;
 }
 
@@ -1962,10 +2893,12 @@ function renderSeries() {
 }
 
 function renderAll() {
+  syncSeoMetadata();
   renderStats();
   renderView();
   renderGameMeta();
   renderDraftMeter();
+  renderChallengePanel();
   renderRoster();
   renderBoard();
   renderSeries();
@@ -2672,10 +3605,10 @@ function buildSeries() {
   }
 
   const competition = competitionConfig();
-
   const userLine = userLineup();
+  const opponentLabel = competition.oppositionShortTitle;
   const excludedNames = new Set(userLine.map((player) => normalizeName(player.name)));
-  const starLine = buildAllStarXI(excludedNames);
+  const starLine = challengeLineupLoaded() ? STATE.challenge.lineup : buildAllStarXI(excludedNames);
   const userTeam = teamMetricsFromLineup(userLine);
   const starTeam = teamMetricsFromLineup(starLine);
   const matches = [];
@@ -2728,13 +3661,13 @@ function buildSeries() {
       innings: format === "limited-overs"
         ? [
             { label: "Your XI innings", score: inningsScoreLabel(userInnings1) },
-            { label: "All-star XI innings", score: inningsScoreLabel(starInnings1) },
+            { label: `${opponentLabel} innings`, score: inningsScoreLabel(starInnings1) },
           ]
         : [
             { label: "Your XI 1st inns", score: inningsScoreLabel(userInnings1) },
-            { label: "All-star XI 1st inns", score: inningsScoreLabel(starInnings1) },
+            { label: `${opponentLabel} 1st inns`, score: inningsScoreLabel(starInnings1) },
             { label: "Your XI 2nd inns", score: inningsScoreLabel(userInnings2) },
-            { label: "All-star XI 2nd inns", score: inningsScoreLabel(starInnings2) },
+            { label: `${opponentLabel} 2nd inns`, score: inningsScoreLabel(starInnings2) },
           ],
       scoreline: format === "limited-overs"
         ? `${inningsScoreLabel(userInnings1)} | ${inningsScoreLabel(starInnings1)}`
@@ -2746,12 +3679,12 @@ function buildSeries() {
           match.innings.user1.bowling,
         ),
         star1: buildInningsSummary(
-          format === "limited-overs" ? "All-star XI innings" : "All-star XI 1st innings",
+          format === "limited-overs" ? `${opponentLabel} innings` : `${opponentLabel} 1st innings`,
           starInnings1,
           match.innings.star1.bowling,
         ),
         user2: buildInningsSummary("Your XI 2nd innings", userInnings2, match.innings.user2.bowling),
-        star2: buildInningsSummary("All-star XI 2nd innings", starInnings2, match.innings.star2.bowling),
+        star2: buildInningsSummary(`${opponentLabel} 2nd innings`, starInnings2, match.innings.star2.bowling),
       },
     });
 
@@ -2807,16 +3740,20 @@ function clearTimer() {
 }
 
 function startSeries() {
-  if (!lineupComplete()) return;
+  if (!lineupComplete() || challengeCreationMode()) return;
   clearTimer();
   const competition = competitionConfig();
   try {
     STATE.achievementDetail = null;
     STATE.achievementPinned = false;
+    STATE.result = null;
     STATE.seriesShareAsset = null;
     STATE.seriesShareAssetPromise = null;
+    clearResultUrlFromBrowser();
     STATE.series = buildSeries();
-    prepareSeriesShareAsset(STATE.series, STATE.mode, competitionConfig().title, competitionConfig().theme);
+    if (!challengeLineupLoaded()) {
+      prepareSeriesShareAsset(STATE.series, modeLabel(), competitionConfig().title, competitionConfig().theme);
+    }
     setShareStatus("");
     STATE.view = "series";
     renderAll();
@@ -2833,12 +3770,45 @@ function startSeries() {
 function revealNextSeriesMatch() {
   if (!STATE.series || STATE.series.revealed >= STATE.series.matches.length) return;
   STATE.series.revealed += 1;
+  if (challengeLineupLoaded() && STATE.series.revealed === STATE.series.matches.length) {
+    const seriesResult = challengeSeriesOutcome(STATE.series);
+    trackChallengeEvent("challenge_completed", {
+      role: "recipient",
+      series_result: seriesResult,
+    });
+    const result = finalizeChallengeResultIfNeeded();
+    if (result) {
+      trackChallengeEvent("challenge_response_completed", {
+        role: "recipient",
+        series_result: seriesResult,
+      });
+    }
+    renderAll();
+    return;
+  }
   renderSeries();
 }
 
 function revealAllSeriesMatches() {
   if (!STATE.series) return;
+  const wasComplete = STATE.series.revealed >= STATE.series.matches.length;
   STATE.series.revealed = STATE.series.matches.length;
+  if (challengeLineupLoaded() && !wasComplete) {
+    const seriesResult = challengeSeriesOutcome(STATE.series);
+    trackChallengeEvent("challenge_completed", {
+      role: "recipient",
+      series_result: seriesResult,
+    });
+    const result = finalizeChallengeResultIfNeeded();
+    if (result) {
+      trackChallengeEvent("challenge_response_completed", {
+        role: "recipient",
+        series_result: seriesResult,
+      });
+    }
+    renderAll();
+    return;
+  }
   renderSeries();
 }
 
@@ -2846,6 +3816,17 @@ function goHome() {
   clearTimer();
   clearRollAnimation();
   STATE.view = "home";
+  if (resultSnapshotLoaded()) {
+    STATE.result = null;
+    STATE.challenge = null;
+    STATE.challengeResponseName = "";
+    clearResultUrlFromBrowser();
+    clearChallengeUrlFromBrowser();
+  }
+  if (!challengeLineupLoaded() && isChallengeMode()) {
+    STATE.mode = normalizePlayableMode(STATE.challengeDraftMode);
+    STATE.challengeDraftName = "";
+  }
   STATE.lineup.clear();
   STATE.currentSquad = null;
   STATE.selectedPlayerId = null;
@@ -2859,6 +3840,10 @@ function goHome() {
 }
 
 function goBuilder() {
+  if (resultSnapshotLoaded()) {
+    goHome();
+    return;
+  }
   clearTimer();
   clearRollAnimation();
   STATE.view = "game";
@@ -2871,7 +3856,41 @@ function goBuilder() {
   renderAll();
 }
 
+function startChallengeBack() {
+  const mode = currentChallengePlayableMode();
+  trackChallengeEvent("challenge_back_clicked", { role: "recipient", source: "series-complete" });
+  trackChallengeEvent("challenge_create_clicked", { role: "creator", source: "challenge-back" });
+  trackChallengeEvent("challenge_started", { role: "creator", source: "challenge-back" });
+  trackChallengeEvent("challenge_back_created", { role: "creator", source: "challenge-back" });
+  STATE.challenge = null;
+  STATE.result = null;
+  STATE.challengeResponseName = "";
+  clearChallengeUrlFromBrowser();
+  clearResultUrlFromBrowser();
+  STATE.competition = "ashes";
+  STATE.squads = ASHES_SQUADS;
+  STATE.challengeDraftMode = mode;
+  STATE.challengeDraftName = "";
+  STATE.mode = "challenge";
+  STATE.view = "game";
+  STATE.lineup.clear();
+  STATE.currentSquad = null;
+  STATE.selectedPlayerId = null;
+  STATE.series = null;
+  STATE.seriesShareAsset = null;
+  STATE.seriesShareAssetPromise = null;
+  setShareStatus("");
+  STATE.achievementDetail = null;
+  STATE.achievementPinned = false;
+  addCatalogMetadata();
+  renderAll();
+}
+
 function resetBuilder() {
+  if (resultSnapshotLoaded()) {
+    goHome();
+    return;
+  }
   clearTimer();
   clearRollAnimation();
   STATE.lineup.clear();
@@ -2889,6 +3908,11 @@ function resetBuilder() {
 
 function wireControls() {
   els.playGame.addEventListener("click", () => {
+    if (challengeLineupLoaded()) {
+      STATE.challengeResponseName = normalizeChallengeCreatorName(els.homeResponseName.value);
+      trackChallengeEvent("challenge_accepted", { role: "recipient", source: "invite" });
+      trackChallengeEvent("challenge_started", { role: "recipient", source: "invite" });
+    }
     STATE.view = "game";
     renderAll();
   });
@@ -2896,59 +3920,132 @@ function wireControls() {
   els.backBuilder.addEventListener("click", goBuilder);
   els.rollSquad.addEventListener("click", rollSquad);
   els.startSeries.addEventListener("click", startSeries);
+  els.copyChallengeLink.addEventListener("click", async () => {
+    try {
+      await copyChallengeLink();
+    } catch (error) {
+      console.error("Copy challenge invite failed:", error);
+      setChallengeStatus("Could not copy the invite.");
+    }
+  });
+  els.challengeBack.addEventListener("click", startChallengeBack);
   els.seriesNext.addEventListener("click", revealNextSeriesMatch);
   els.seriesAll.addEventListener("click", revealAllSeriesMatches);
   els.playAgain.addEventListener("click", goHome);
+  els.homeChallenge.addEventListener("click", () => {
+    trackChallengeEvent("challenge_create_clicked", { role: "creator", source: "homepage" });
+    trackChallengeEvent("challenge_started", { role: "creator", source: "homepage" });
+    STATE.challengeDraftMode = normalizePlayableMode(STATE.mode);
+    STATE.mode = "challenge";
+    STATE.view = "game";
+    renderAll();
+  });
   els.homeCompetition.addEventListener("click", () => {
     STATE.view = "home";
     setCompetition(STATE.competition === "worldcup" ? "ashes" : "worldcup");
   });
-  els.shareResult.addEventListener("click", async () => {
-    if (!STATE.series) return;
-    const text = formatShareText();
-    const title = competitionConfig().title;
-    const file = await ensureSeriesShareAsset();
+  els.challengeName.addEventListener("input", () => {
+    STATE.challengeDraftName = els.challengeName.value;
+    els.challengeLink.value = currentChallengeUrl();
+    if (!lineupComplete()) {
+      setChallengeStatus("");
+    }
+  });
+  els.challengeName.addEventListener("blur", () => {
+    STATE.challengeDraftName = normalizeChallengeCreatorName(els.challengeName.value);
+    renderChallengePanel();
+  });
+  els.homeResponseName.addEventListener("input", () => {
+    STATE.challengeResponseName = els.homeResponseName.value;
+  });
+  els.homeResponseName.addEventListener("blur", () => {
+    STATE.challengeResponseName = normalizeChallengeCreatorName(els.homeResponseName.value);
+    renderAll();
+  });
+  els.homeMode.addEventListener("change", () => {
+    if (challengeLineupLoaded()) {
+      renderAll();
+      return;
+    }
 
-    if (file && navigator.share && navigator.canShare?.({ files: [file] })) {
-      try {
-        await navigator.share({
-          title,
-          text,
-          files: [file],
-        });
+    if (STATE.mode === "challenge") {
+      STATE.challengeDraftMode = normalizePlayableMode(els.homeMode.value);
+      STATE.mode = STATE.challengeDraftMode;
+      setChallengeStatus("");
+      renderAll();
+      return;
+    }
+
+    STATE.mode = normalizePlayableMode(els.homeMode.value);
+    renderAll();
+  });
+  els.shareResult.addEventListener("click", async () => {
+    try {
+      if (!STATE.series) return;
+      if (resultSnapshotLoaded() || (challengeLineupLoaded() && seriesComplete())) {
+        await shareChallengeResult("series-actions");
         return;
-      } catch (error) {
-        if (!(error instanceof DOMException && error.name === "AbortError")) {
-          console.warn("Native share with image failed:", error);
-        } else {
+      }
+      const text = formatShareText();
+      const title = competitionConfig().title;
+      const file = await ensureSeriesShareAsset();
+
+      if (file && navigator.share && navigator.canShare?.({ files: [file] })) {
+        try {
+          await navigator.share({
+            title,
+            text,
+            files: [file],
+          });
           return;
+        } catch (error) {
+          if (!(error instanceof DOMException && error.name === "AbortError")) {
+            console.warn("Native share with image failed:", error);
+          } else {
+            return;
+          }
         }
       }
-    }
 
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title,
-          text,
-          url: shareUrl(),
-        });
-        return;
-      } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError") return;
-        console.warn("Native share failed:", error);
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title,
+            text,
+            url: shareUrl(),
+          });
+          return;
+        } catch (error) {
+          if (error instanceof DOMException && error.name === "AbortError") return;
+          console.warn("Native share failed:", error);
+        }
       }
-    }
 
-    window.open(
-      `https://x.com/intent/post?text=${encodeURIComponent(text)}`,
-      "_blank",
-      "noopener,noreferrer",
-    );
+      window.open(
+        `https://x.com/intent/post?text=${encodeURIComponent(text)}`,
+        "_blank",
+        "noopener,noreferrer",
+      );
+    } catch (error) {
+      console.error("Share action failed:", error);
+      setShareStatus("Could not prepare the share.");
+    }
+  });
+  els.sendResultBack.addEventListener("click", async () => {
+    try {
+      await shareChallengeResult("send-result-back");
+    } catch (error) {
+      console.error("Result send-back failed:", error);
+      setShareStatus("Could not prepare the result.");
+    }
   });
   els.copyLink.addEventListener("click", async () => {
     try {
-      await copySeriesLink();
+      if (resultSnapshotLoaded() || (challengeLineupLoaded() && seriesComplete())) {
+        await copyChallengeResultLink();
+      } else {
+        await copySeriesLink();
+      }
     } catch (error) {
       console.error("Copy link failed:", error);
       setShareStatus("Could not copy the link.");
@@ -2956,18 +4053,17 @@ function wireControls() {
   });
   els.downloadShare.addEventListener("click", async () => {
     try {
-      await downloadSeriesShareImage();
+      if (resultSnapshotLoaded() || (challengeLineupLoaded() && seriesComplete())) {
+        await downloadChallengeResultImage();
+      } else {
+        await downloadSeriesShareImage();
+      }
     } catch (error) {
       console.error("Download image failed:", error);
       setShareStatus("Could not download the image.");
     }
   });
   els.resetBuilder.addEventListener("click", resetBuilder);
-
-  els.homeMode.addEventListener("change", () => {
-    STATE.mode = els.homeMode.value === "memory" ? "memory" : "classic";
-    renderAll();
-  });
 
   els.feedbackToggle.addEventListener("click", () => {
     toggleFeedbackPanel();
@@ -3067,13 +4163,25 @@ function wireControls() {
 }
 
 function shareUrl() {
-  return canonicalUrlForCurrentPage();
+  if (resultSnapshotLoaded()) return currentResultUrl();
+  return challengeLineupLoaded() ? currentChallengeUrl() : canonicalUrlForCurrentPage();
 }
 
 function canonicalUrlForCurrentPage() {
-  const pathname = window.location.pathname.replace(/\/index\.html$/i, "/");
-  const normalizedPath = pathname === "" ? "/" : pathname.replace(/\/+$/u, "") || "/";
-  return new URL(normalizedPath, CANONICAL_SITE_ORIGIN).href;
+  if (resultSnapshotLoaded()) {
+    return resultUrlForRecord(STATE.result, CANONICAL_SITE_ORIGIN);
+  }
+
+  if (challengeLineupLoaded()) {
+    return challengeUrlForLineup(
+      STATE.challenge.lineup,
+      loadedChallengeCreatorName(),
+      currentChallengePlayableMode(),
+      CANONICAL_SITE_ORIGIN,
+    );
+  }
+
+  return pageUrlForOrigin(CANONICAL_SITE_ORIGIN).href;
 }
 
 function ensureHeadNode(selector, tagName, attributes) {
@@ -3092,6 +4200,25 @@ function ensureHeadNode(selector, tagName, attributes) {
 
 function syncSeoMetadata() {
   const canonicalUrl = canonicalUrlForCurrentPage();
+  const creatorName = currentChallengeCreatorName();
+  const challengeMode = currentChallengePlayableMode() === "memory" ? "Memory" : "Classic";
+  const resultLoaded = resultSnapshotLoaded();
+  const resultTitle = resultLoaded
+    ? `${currentSeriesUserLabel()} vs ${currentSeriesOppositionLabel()} | Ashes 5-0`
+    : null;
+  const resultDescription = resultLoaded
+    ? `${currentSeriesUserLabel()} completed an Ashes 5-0 ${challengeMode.toLowerCase()} challenge against ${currentSeriesOppositionLabel()}. Final score: ${challengeSeriesScore(STATE.result)}.`
+    : null;
+  const challengeTitle = challengeLineupLoaded()
+    ? creatorName
+      ? `${creatorName}'s Ashes 5-0 ${challengeMode} Challenge`
+      : `Ashes 5-0 ${challengeMode} Challenge`
+    : null;
+  const challengeDescription = challengeLineupLoaded()
+    ? creatorName
+      ? `Open ${creatorName}'s Ashes 5-0 ${challengeMode.toLowerCase()} challenge, draft your XI, and play the five-Test series.`
+      : `Open an Ashes 5-0 ${challengeMode.toLowerCase()} challenge, draft your XI, and play the five-Test series.`
+    : SEO_HOME_DESCRIPTION;
   ensureHeadNode('link[rel="canonical"]', "link", {
     rel: "canonical",
     href: canonicalUrl,
@@ -3100,17 +4227,37 @@ function syncSeoMetadata() {
     property: "og:url",
     content: canonicalUrl,
   });
+  ensureHeadNode('meta[name="description"]', "meta", {
+    name: "description",
+    content: resultDescription ?? challengeDescription,
+  });
   ensureHeadNode('meta[property="og:title"]', "meta", {
     property: "og:title",
-    content: SEO_HOME_TITLE,
+    content: resultTitle ?? challengeTitle ?? SEO_HOME_TITLE,
   });
   ensureHeadNode('meta[property="og:description"]', "meta", {
     property: "og:description",
-    content: SEO_HOME_DESCRIPTION,
+    content: resultDescription ?? challengeDescription,
+  });
+  ensureHeadNode('meta[name="robots"]', "meta", {
+    name: "robots",
+    content: resultLoaded ? "noindex, follow" : "index, follow",
   });
 }
 
 function pageTitleForCompetition(competition) {
+  if (resultSnapshotLoaded()) {
+    return `${currentSeriesUserLabel()} vs ${currentSeriesOppositionLabel()} | Challenge Result | Ashes 5-0`;
+  }
+
+  if (challengeLineupLoaded()) {
+    const creatorName = loadedChallengeCreatorName();
+    const challengeMode = currentChallengePlayableMode() === "memory" ? "Memory" : "Classic";
+    return creatorName
+      ? `${creatorName}'s ${challengeMode} Challenge | Ashes 5-0`
+      : `${challengeMode} Challenge | Ashes 5-0`;
+  }
+
   return competition.theme === "worldcup"
     ? "Historic Cricket XI Draft Game | World Cup Mode | Ashes 5-0"
     : SEO_HOME_TITLE;
@@ -3319,6 +4466,163 @@ async function createSeriesShareFile(series, modeLabel, competitionTitle, compet
   return new File([blob], `${isWorldCup ? "world-cup" : "ashes"}-xi-team.png`, { type: "image/png" });
 }
 
+async function createChallengeResultShareFile(result) {
+  if (!result) return null;
+  if (document.fonts?.ready) {
+    try {
+      await document.fonts.ready;
+    } catch {
+      // Ignore font load failures and fall back to system fonts.
+    }
+  }
+
+  const width = 1400;
+  const height = 980;
+  const scale = Math.min(2, Math.max(1, Math.floor(window.devicePixelRatio || 1)));
+  const canvas = document.createElement("canvas");
+  canvas.width = width * scale;
+  canvas.height = height * scale;
+  canvas.style.width = `${width}px`;
+  canvas.style.height = `${height}px`;
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.scale(scale, scale);
+
+  const bg = ctx.createLinearGradient(0, 0, width, height);
+  bg.addColorStop(0, "#123524");
+  bg.addColorStop(0.5, "#0f2d1f");
+  bg.addColorStop(1, "#08150f");
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.fillStyle = "rgba(212, 175, 55, 0.16)";
+  ctx.beginPath();
+  ctx.arc(width - 160, 150, 220, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "rgba(245, 240, 230, 0.08)";
+  ctx.beginPath();
+  ctx.arc(160, height - 160, 240, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = "rgba(255,255,255,0.1)";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(24, 24, width - 48, height - 48);
+
+  ctx.fillStyle = "#f8f8f8";
+  fitCanvasText(ctx, "Ashes 5-0 Challenge", 640, 64, 38, 800, "Oswald");
+  ctx.fillText("Ashes 5-0 Challenge", 80, 110);
+
+  ctx.fillStyle = "rgba(248,248,248,0.76)";
+  fitCanvasText(ctx, `${currentChallengePlayableMode() === "memory" ? "Memory" : "Classic"} result`, 420, 24, 18, 600, "Inter");
+  ctx.fillText(`${currentChallengePlayableMode() === "memory" ? "Memory" : "Classic"} result`, 80, 144);
+
+  const responderLabel = responderTeamLabelFromName(result.responderDisplayName, "Your XI");
+  const challengerLabel = challengerTeamLabelFromName(result.challengerDisplayName);
+  const score = challengeSeriesScore(result);
+  const outcome = challengeSeriesOutcome(result);
+  const outcomeText = outcome === "win"
+    ? `${responderLabel} won ${score}`
+    : outcome === "loss"
+      ? `${challengerLabel} won ${score}`
+      : `Series drawn ${score}`;
+
+  ctx.fillStyle = "#d4af37";
+  fitCanvasText(ctx, outcomeText, width - 160, 30, 18, 700, "Inter");
+  ctx.fillText(outcomeText, 80, 188);
+
+  const cardY = 240;
+  const cardH = 140;
+  const cardW = 580;
+  [
+    { x: 80, label: "Responder", value: responderLabel },
+    { x: width - 80 - cardW, label: "Challenger", value: challengerLabel },
+  ].forEach((card, index) => {
+    ctx.fillStyle = index === 0 ? "rgba(245, 240, 230, 0.95)" : "rgba(236, 228, 210, 0.95)";
+    roundRectPath(ctx, card.x, cardY, cardW, cardH, 24);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(31,31,31,0.08)";
+    ctx.stroke();
+
+    ctx.fillStyle = "#b8860b";
+    fitCanvasText(ctx, card.label, 180, 18, 14, 800, "Inter");
+    ctx.fillText(card.label, card.x + 24, cardY + 38);
+
+    ctx.fillStyle = "#1f1f1f";
+    fitCanvasText(ctx, card.value, cardW - 48, 38, 24, 800, "Oswald");
+    ctx.fillText(card.value, card.x + 24, cardY + 92);
+  });
+
+  ctx.fillStyle = "#f8f8f8";
+  fitCanvasText(ctx, score, 340, 92, 48, 800, "Oswald");
+  const scoreWidth = ctx.measureText(score).width;
+  ctx.fillText(score, width / 2 - scoreWidth / 2, 455);
+
+  ctx.fillStyle = "rgba(248,248,248,0.76)";
+  fitCanvasText(ctx, "Five-Test series score", 260, 18, 12, 600, "Roboto Mono");
+  const labelWidth = ctx.measureText("Five-Test series score").width;
+  ctx.fillText("Five-Test series score", width / 2 - labelWidth / 2, 486);
+
+  ctx.fillStyle = "#d4af37";
+  fitCanvasText(ctx, "Test-by-test", 220, 22, 16, 800, "Inter");
+  ctx.fillText("Test-by-test", 80, 560);
+
+  result.matches.forEach((match, index) => {
+    const x = 80 + index * 252;
+    const y = 590;
+    ctx.fillStyle = match.result === "win"
+      ? "rgba(34, 93, 65, 0.96)"
+      : match.result === "loss"
+        ? "rgba(84, 40, 34, 0.96)"
+        : "rgba(77, 74, 66, 0.96)";
+    roundRectPath(ctx, x, y, 220, 116, 22);
+    ctx.fill();
+
+    ctx.fillStyle = "#f8f8f8";
+    fitCanvasText(ctx, `Test ${index + 1}`, 120, 18, 14, 800, "Inter");
+    ctx.fillText(`Test ${index + 1}`, x + 18, y + 34);
+    fitCanvasText(ctx, match.summary, 184, 22, 12, 700, "Oswald");
+    ctx.fillText(match.summary, x + 18, y + 72);
+
+    ctx.fillStyle = "rgba(248,248,248,0.72)";
+    fitCanvasText(ctx, match.venue, 184, 13, 10, 600, "Roboto Mono");
+    ctx.fillText(match.venue, x + 18, y + 98);
+  });
+
+  const playerOfSeries = result.playerOfSeries?.name
+    ? `${result.playerOfSeries.name} (${result.playerOfSeries.side === "your" ? responderLabel : challengerLabel})`
+    : "Awaiting";
+  ctx.fillStyle = "rgba(245, 240, 230, 0.95)";
+  roundRectPath(ctx, 80, 760, width - 160, 140, 24);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(31,31,31,0.08)";
+  ctx.stroke();
+
+  ctx.fillStyle = "#b8860b";
+  fitCanvasText(ctx, "Player of the series", 260, 18, 14, 800, "Inter");
+  ctx.fillText("Player of the series", 104, 798);
+
+  ctx.fillStyle = "#1f1f1f";
+  fitCanvasText(ctx, playerOfSeries, width - 220, 36, 20, 800, "Oswald");
+  ctx.fillText(playerOfSeries, 104, 852);
+
+  ctx.fillStyle = "#5f5d56";
+  fitCanvasText(ctx, "ashes-5-0.co.uk", 260, 18, 12, 600, "Roboto Mono");
+  ctx.fillText("ashes-5-0.co.uk", 104, 884);
+
+  const blob = await new Promise((resolve, reject) => {
+    canvas.toBlob((value) => {
+      if (!value) {
+        reject(new Error("Could not render result image."));
+        return;
+      }
+      resolve(value);
+    }, "image/png");
+  });
+
+  return new File([blob], "ashes-5-0-challenge-result.png", { type: "image/png" });
+}
+
 function prepareSeriesShareAsset(series, modeLabel, competitionTitle, competitionTheme) {
   if (!series || STATE.seriesShareAsset || STATE.seriesShareAssetPromise) return;
   const seriesRef = series;
@@ -3340,17 +4644,74 @@ function prepareSeriesShareAsset(series, modeLabel, competitionTitle, competitio
     });
 }
 
+function prepareChallengeResultShareAsset(result) {
+  if (!result || STATE.seriesShareAsset || STATE.seriesShareAssetPromise) return;
+  const resultRef = result;
+  STATE.seriesShareAssetPromise = createChallengeResultShareFile(resultRef)
+    .then((file) => {
+      if (STATE.result === resultRef) {
+        STATE.seriesShareAsset = file;
+      }
+      return file;
+    })
+    .catch((error) => {
+      console.error("Challenge result image generation failed:", error);
+      return null;
+    })
+    .finally(() => {
+      if (STATE.result === resultRef) {
+        STATE.seriesShareAssetPromise = null;
+      }
+    });
+}
+
 function setShareStatus(message) {
   if (!els.shareStatus) return;
   els.shareStatus.textContent = message;
 }
 
+async function writeTextToClipboard(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const input = document.createElement("input");
+  input.value = text;
+  input.setAttribute("readonly", "readonly");
+  input.style.position = "fixed";
+  input.style.left = "-9999px";
+  document.body.appendChild(input);
+  input.select();
+  const copied = document.execCommand("copy");
+  input.remove();
+
+  if (!copied) {
+    throw new Error("Could not copy text.");
+  }
+}
+
 async function ensureSeriesShareAsset() {
+  const result = resultSnapshotLoaded() ? STATE.result : challengeLineupLoaded() && seriesComplete() ? finalizeChallengeResultIfNeeded() : null;
+  if (result) {
+    if (STATE.seriesShareAsset) return STATE.seriesShareAsset;
+    if (!STATE.seriesShareAssetPromise) {
+      prepareChallengeResultShareAsset(result);
+    }
+
+    try {
+      const file = await STATE.seriesShareAssetPromise;
+      return file ?? STATE.seriesShareAsset ?? null;
+    } catch {
+      return STATE.seriesShareAsset ?? null;
+    }
+  }
+
   if (!STATE.series) return null;
   if (STATE.seriesShareAsset) return STATE.seriesShareAsset;
   if (!STATE.seriesShareAssetPromise) {
     const competition = competitionConfig();
-    prepareSeriesShareAsset(STATE.series, STATE.mode, competition.title, competition.theme);
+    prepareSeriesShareAsset(STATE.series, modeLabel(), competition.title, competition.theme);
   }
 
   try {
@@ -3363,28 +4724,59 @@ async function ensureSeriesShareAsset() {
 
 async function copySeriesLink() {
   const url = shareUrl();
-
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(url);
-    setShareStatus("Link copied.");
-    return;
-  }
-
-  const input = document.createElement("input");
-  input.value = url;
-  input.setAttribute("readonly", "readonly");
-  input.style.position = "fixed";
-  input.style.left = "-9999px";
-  document.body.appendChild(input);
-  input.select();
-  const copied = document.execCommand("copy");
-  input.remove();
-
-  if (!copied) {
-    throw new Error("Could not copy link.");
-  }
-
+  await writeTextToClipboard(url);
   setShareStatus("Link copied.");
+}
+
+function currentChallengeResultRecord() {
+  return resultSnapshotLoaded() ? STATE.result : challengeLineupLoaded() && seriesComplete() ? finalizeChallengeResultIfNeeded() : null;
+}
+
+function challengeResultTitle(result) {
+  const responderLabel = responderTeamLabelFromName(result?.responderDisplayName, "Your XI");
+  const challengerLabel = challengerTeamLabelFromName(result?.challengerDisplayName);
+  return `${responderLabel} vs ${challengerLabel}`;
+}
+
+function formatChallengeResultShareText(result, url = currentResultUrl() || resultUrlForRecord(result)) {
+  const score = challengeSeriesScore(result);
+  const outcome = challengeSeriesOutcome(result);
+  if (outcome === "win") {
+    return `I took on your Ashes 5-0 XI and won the series ${score}. See both teams and the full result: ${url}`;
+  }
+  if (outcome === "loss") {
+    return `Your Ashes 5-0 XI beat mine ${score}. See how the series played out: ${url}`;
+  }
+  return `Our Ashes 5-0 XIs drew the series ${score}. We need a rematch: ${url}`;
+}
+
+async function copyChallengeLink() {
+  const url = currentChallengeUrl();
+  if (!url) {
+    throw new Error("Challenge invite is not ready.");
+  }
+
+  await writeTextToClipboard(
+    challengeInviteText(url, currentChallengeCreatorName(), currentChallengePlayableMode()),
+  );
+  trackChallengeEvent("challenge_link_copied", { role: challengeLineupLoaded() ? "recipient" : "creator" });
+  setChallengeStatus("Invite copied.");
+}
+
+async function copyChallengeResultLink() {
+  const result = currentChallengeResultRecord();
+  if (!result) {
+    throw new Error("Challenge result is not ready.");
+  }
+
+  const url = currentResultUrl() || resultUrlForRecord(result);
+  await writeTextToClipboard(url);
+  trackChallengeEvent("challenge_result_link_copied", {
+    role: "recipient",
+    source: "series-complete",
+    series_result: challengeSeriesOutcome(result),
+  });
+  setShareStatus("Result link copied.");
 }
 
 async function downloadSeriesShareImage() {
@@ -3406,6 +4798,89 @@ async function downloadSeriesShareImage() {
   setShareStatus("Download started.");
 }
 
+async function downloadChallengeResultImage() {
+  const result = currentChallengeResultRecord();
+  if (!result) {
+    throw new Error("Challenge result is not ready.");
+  }
+
+  const file = await ensureSeriesShareAsset();
+  if (!file) {
+    setShareStatus("Result image is still generating. Try again in a moment.");
+    return;
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+  const link = document.createElement("a");
+  link.href = objectUrl;
+  link.download = file.name || "ashes-5-0-challenge-result.png";
+  link.rel = "noopener";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+  trackChallengeEvent("challenge_result_image_downloaded", {
+    role: "recipient",
+    source: "series-complete",
+    series_result: challengeSeriesOutcome(result),
+  });
+  setShareStatus("Download started.");
+}
+
+async function shareChallengeResult(source = "series-complete") {
+  const result = currentChallengeResultRecord();
+  if (!result) {
+    throw new Error("Challenge result is not ready.");
+  }
+
+  const url = currentResultUrl() || resultUrlForRecord(result);
+  const text = formatChallengeResultShareText(result, url);
+  const title = challengeResultTitle(result);
+
+  trackChallengeEvent("challenge_result_share_clicked", {
+    role: "recipient",
+    source,
+    series_result: challengeSeriesOutcome(result),
+  });
+
+  const file = await ensureSeriesShareAsset();
+
+  if (file && navigator.share && navigator.canShare?.({ files: [file] })) {
+    try {
+      await navigator.share({ title, text, url, files: [file] });
+      trackChallengeEvent("challenge_result_share_api_resolved", {
+        role: "recipient",
+        source,
+        series_result: challengeSeriesOutcome(result),
+      });
+      setShareStatus("Result ready to share.");
+      return;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      console.warn("Native challenge result file share failed:", error);
+    }
+  }
+
+  if (navigator.share) {
+    try {
+      await navigator.share({ title, text, url });
+      trackChallengeEvent("challenge_result_share_api_resolved", {
+        role: "recipient",
+        source,
+        series_result: challengeSeriesOutcome(result),
+      });
+      setShareStatus("Result ready to share.");
+      return;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      console.warn("Native challenge result share failed:", error);
+    }
+  }
+
+  await writeTextToClipboard(text);
+  setShareStatus("Result link copied.");
+}
+
 function formatShareText() {
   if (!STATE.series) {
     return `I just played ${competitionConfig().title}. ${shareUrl()}`;
@@ -3417,13 +4892,46 @@ function formatShareText() {
       : STATE.series.userWins < STATE.series.starWins
         ? "lost"
         : "drew";
-  const modeLabel = STATE.mode === "memory" ? "Memory" : "Classic";
   const competition = competitionConfig();
-  return `I just finished a ${modeLabel} ${competition.title} series and ${seriesResult} the ${competition.seriesDescriptor} ${STATE.series.userWins}-${STATE.series.starWins}-${STATE.series.draws}. ${shareUrl()}`;
+  return `I just finished a ${modeLabel()} ${competition.title} series and ${seriesResult} the ${competition.seriesDescriptor} ${STATE.series.userWins}-${STATE.series.starWins}-${STATE.series.draws}. ${shareUrl()}`;
 }
 
 function init() {
   bindElements();
+  const result = loadResultFromUrl();
+  if (result) {
+    STATE.challenge = null;
+    STATE.result = result;
+    STATE.challengeDraftMode = result.mode;
+    STATE.challengeResponseName = result.responderDisplayName;
+    STATE.competition = "ashes";
+    STATE.squads = ASHES_SQUADS;
+    STATE.mode = "challenge";
+    STATE.series = seriesFromResultRecord(result);
+    STATE.view = "series";
+    prepareChallengeResultShareAsset(result);
+    trackChallengeEvent("challenge_result_page_viewed", {
+      role: "viewer",
+      source: "result-link",
+      series_result: challengeSeriesOutcome(result),
+      has_creator_name: result.challengerDisplayName ? "true" : "false",
+    });
+  } else {
+    const challenge = loadChallengeFromUrl();
+    if (challenge) {
+      STATE.challenge = challenge;
+      STATE.challengeDraftMode = challenge.mode;
+      STATE.competition = "ashes";
+      STATE.squads = ASHES_SQUADS;
+      STATE.mode = "challenge";
+      trackChallengeEvent("challenge_link_opened", {
+        role: "recipient",
+        challenge_mode: normalizePlayableMode(challenge.mode),
+        challenge_ref: challengeRefForCode(challenge.code),
+        has_creator_name: challenge.creatorName ? "true" : "false",
+      });
+    }
+  }
   addCatalogMetadata();
   syncSeoMetadata();
   wireControls();
