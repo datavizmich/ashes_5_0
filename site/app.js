@@ -2472,7 +2472,7 @@ function renderRoster() {
   } else if (!STATE.currentSquad) {
     els.rosterSummary.textContent = lineupComplete()
       ? challengeCreationMode()
-        ? "Your XI is complete. Copy the invite below."
+        ? "Your XI is complete. Copy the invite above."
         : challengeLineupLoaded()
           ? "Your XI is complete. Start the challenge series."
           : "Your XI is complete. Start the series."
@@ -2494,7 +2494,7 @@ function renderRoster() {
             ? "Rolling squad..."
             : lineupComplete()
             ? challengeCreationMode()
-              ? "XI complete. Copy the invite below."
+              ? "XI complete. Copy the invite above."
               : challengeLineupLoaded()
                 ? "XI complete. Simulate the challenge series."
                 : "XI complete. Simulate the series."
@@ -2635,7 +2635,7 @@ function renderChallengePanel() {
       ? `Draft your XI in ${playableModeLabel.toLowerCase()} mode, then simulate a five-Test series against ${creatorName}'s saved side.`
       : `Draft your XI in ${playableModeLabel.toLowerCase()} mode, then simulate a five-Test series against the saved side.`
     : ready
-      ? "Your XI is locked. Copy the Ashes 5-0 invite below and send it to someone else."
+      ? "Your XI is locked. Copy the Ashes 5-0 invite above and send it to someone else."
       : `Complete your XI in ${playableModeLabel.toLowerCase()} mode to generate an Ashes 5-0 invite link.`;
   els.challengeNameRow.hidden = loadedChallenge;
   els.challengeName.value = loadedChallenge ? "" : STATE.challengeDraftName;
