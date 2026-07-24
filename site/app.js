@@ -176,6 +176,7 @@ function bindElements() {
     seriesReveal: "[data-series-reveal]",
     seriesRevealGrid: "[data-series-reveal-grid]",
     playAgain: "[data-play-again]",
+    seriesLeaderboard: "[data-series-leaderboard]",
     sendResultBack: "[data-send-result-back]",
     challengeBack: "[data-challenge-back]",
     shareResult: "[data-share-result]",
@@ -4379,6 +4380,9 @@ function wireControls() {
   els.seriesNext.addEventListener("click", revealNextSeriesMatch);
   els.seriesAll.addEventListener("click", revealAllSeriesMatches);
   els.playAgain.addEventListener("click", goHome);
+  els.seriesLeaderboard.addEventListener("click", () => {
+    window.location.assign("/leaderboard");
+  });
   els.homeChallenge.addEventListener("click", () => {
     if (STATE.routeError && routeUsesDedicatedPath()) {
       replaceBrowserPath("/");
