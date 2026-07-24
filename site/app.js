@@ -268,6 +268,24 @@ function currentPathname() {
   return pathname === "" ? "/" : pathname.replace(/\/+$/u, "") || "/";
 }
 
+function mobileBuilderViewport() {
+  return window.matchMedia("(max-width: 760px)").matches;
+}
+
+function scrollBuilderTargetIntoView(target, block = "start") {
+  if (!target || !mobileBuilderViewport()) return;
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
+      target.scrollIntoView({
+        behavior: reduceMotion ? "auto" : "smooth",
+        block,
+        inline: "nearest",
+      });
+    });
+  });
+}
+
 function currentSiteOrigin() {
   if (window.location.origin?.startsWith("http")) {
     return window.location.origin;
@@ -2502,9 +2520,13 @@ function renderRoster() {
   els.rosterGrid.querySelectorAll("[data-player-id]").forEach((button) => {
     button.addEventListener("click", () => {
       const playerId = button.dataset.playerId;
-      STATE.selectedPlayerId = STATE.selectedPlayerId === playerId ? null : playerId;
+      const nextPlayerId = STATE.selectedPlayerId === playerId ? null : playerId;
+      STATE.selectedPlayerId = nextPlayerId;
       renderRoster();
       renderBoard();
+      if (nextPlayerId) {
+        scrollBuilderTargetIntoView(els.board.closest(".board-panel") ?? els.board);
+      }
     });
   });
 }
@@ -2563,6 +2585,7 @@ function renderBoard() {
       STATE.selectedPlayerId = null;
       STATE.currentSquad = null;
       renderAll();
+      scrollBuilderTargetIntoView(els.rollSquad);
     });
   });
 }
