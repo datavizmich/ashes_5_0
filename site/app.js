@@ -1,7 +1,10 @@
 import { ASHES_SQUADS } from "./data/ashes-squads.js";
 import { WORLD_CUP_SQUADS } from "./data/wc-squads.js";
 
-const CANONICAL_SITE_URL = "https://ashes-5-0.co.uk/";
+const CANONICAL_SITE_ORIGIN = "https://ashes-5-0.co.uk";
+const SEO_HOME_TITLE = "Historic Cricket XI Draft Game | Ashes 5-0";
+const SEO_HOME_DESCRIPTION =
+  "Roll historic cricket squads, draft one player at a time, build your all-time XI and simulate a five-Test series. Free to play with no sign-up.";
 
 const XI_SLOTS = [
   { label: "Opener", accepts: ["Opener"], focus: "batting", row: 5, col: 2 },
@@ -1551,7 +1554,7 @@ function renderStats() {
   els.gameSquadCount.textContent = `${STATE.squads.length} squads`;
   els.gamePlayerCount.textContent = `${STATE.catalog.length} players`;
   els.homeMode.value = STATE.mode;
-  document.title = `${competition.title} Cricket Game | Roll Squads & Build a ${competition.name} XI`;
+  document.title = pageTitleForCompetition(competition);
   els.homeEyebrow.textContent = competition.homeEyebrow;
   els.homeTitle.textContent = competition.homeTitle;
   els.homeLede.textContent = competition.homeLede;
@@ -2999,7 +3002,7 @@ function wireControls() {
         },
         body: JSON.stringify({
           message,
-          pageUrl: window.location.href,
+          pageUrl: canonicalUrlForCurrentPage(),
           mode: STATE.mode,
         }),
       });
@@ -3064,7 +3067,53 @@ function wireControls() {
 }
 
 function shareUrl() {
-  return CANONICAL_SITE_URL;
+  return canonicalUrlForCurrentPage();
+}
+
+function canonicalUrlForCurrentPage() {
+  const pathname = window.location.pathname.replace(/\/index\.html$/i, "/");
+  const normalizedPath = pathname === "" ? "/" : pathname.replace(/\/+$/u, "") || "/";
+  return new URL(normalizedPath, CANONICAL_SITE_ORIGIN).href;
+}
+
+function ensureHeadNode(selector, tagName, attributes) {
+  let node = document.head.querySelector(selector);
+  if (!node) {
+    node = document.createElement(tagName);
+    document.head.append(node);
+  }
+
+  for (const [attribute, value] of Object.entries(attributes)) {
+    node.setAttribute(attribute, value);
+  }
+
+  return node;
+}
+
+function syncSeoMetadata() {
+  const canonicalUrl = canonicalUrlForCurrentPage();
+  ensureHeadNode('link[rel="canonical"]', "link", {
+    rel: "canonical",
+    href: canonicalUrl,
+  });
+  ensureHeadNode('meta[property="og:url"]', "meta", {
+    property: "og:url",
+    content: canonicalUrl,
+  });
+  ensureHeadNode('meta[property="og:title"]', "meta", {
+    property: "og:title",
+    content: SEO_HOME_TITLE,
+  });
+  ensureHeadNode('meta[property="og:description"]', "meta", {
+    property: "og:description",
+    content: SEO_HOME_DESCRIPTION,
+  });
+}
+
+function pageTitleForCompetition(competition) {
+  return competition.theme === "worldcup"
+    ? "Historic Cricket XI Draft Game | World Cup Mode | Ashes 5-0"
+    : SEO_HOME_TITLE;
 }
 
 function roundRectPath(ctx, x, y, width, height, radius) {
@@ -3376,8 +3425,10 @@ function formatShareText() {
 function init() {
   bindElements();
   addCatalogMetadata();
+  syncSeoMetadata();
   wireControls();
   renderAll();
+  document.body.classList.add("app-ready");
 }
 
 init();

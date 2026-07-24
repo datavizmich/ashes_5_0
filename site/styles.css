@@ -347,6 +347,18 @@ body[data-competition="worldcup"] .hero-card::before {
   font-size: 1.05rem;
 }
 
+.hero-card .stat strong[data-total-squads],
+.hero-card .stat strong[data-total-players] {
+  display: inline-block;
+  min-width: 2ch;
+  text-align: right;
+}
+
+body:not(.app-ready) .hero-card .stat strong[data-total-squads],
+body:not(.app-ready) .hero-card .stat strong[data-total-players] {
+  visibility: hidden;
+}
+
 .panel {
   border-radius: 1.35rem;
   padding: 1rem;
