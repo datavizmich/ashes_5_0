@@ -38,7 +38,7 @@ export async function renderSpaPage(context, options = {}) {
   const robots = options.robots ?? "index, follow";
   const bootstrapScript = buildBootstrapScript(options.bootstrap);
 
-  const response = await context.env.ASSETS.fetch(new Request(new URL("/index.html", context.request.url), context.request));
+  const response = await context.env.ASSETS.fetch(new URL("/", context.request.url));
   const originalHtml = await response.text();
 
   let html = originalHtml;
