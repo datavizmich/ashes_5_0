@@ -3,6 +3,7 @@ import { errorResponse, json, methodNotAllowed } from "../../_lib/http.js";
 const METRICS = new Set(["selected"]);
 const PERIODS = new Set(["all", "30d"]);
 const MODES = new Set(["all", "classic", "memory"]);
+const MAX_LEADERBOARD_ROWS = 20;
 
 function buildFilters(period, mode) {
   const whereClauses = [];
@@ -39,39 +40,52 @@ export async function onRequestGet(context) {
     return errorResponse(400, "Unsupported leaderboard mode.");
   }
 
-  const filters = buildFilters(period, mode);
-  const totalTeamsQuery = context.env.DB.prepare(
-    `SELECT COUNT(*) AS total_teams
-     FROM teams t
-     ${filters.whereSql}`,
-  ).bind(...filters.bindings);
+  if (!context.env.DB || typeof context.env.DB.prepare !== "function") {
+    return errorResponse(500, "DB binding 'DB' is missing for the leaderboard function.");
+  }
 
-  const rowsQuery = context.env.DB.prepare(
-    `SELECT p.id, p.name, COUNT(*) AS count
-     FROM team_players tp
-     JOIN teams t ON t.id = tp.team_id
-     JOIN players p ON p.id = tp.player_id
-     ${filters.whereSql || ""}
-     GROUP BY p.id, p.name
-     ORDER BY count DESC, p.name ASC`,
-  ).bind(...filters.bindings);
+  try {
+    const filters = buildFilters(period, mode);
+    const totalTeamsQuery = context.env.DB.prepare(
+      `SELECT COUNT(*) AS total_teams
+       FROM teams t
+       ${filters.whereSql}`,
+    ).bind(...filters.bindings);
 
-  const [totalTeamsResult, rowsResult] = await context.env.DB.batch([totalTeamsQuery, rowsQuery]);
-  const totalTeams = Number(totalTeamsResult.results?.[0]?.total_teams ?? 0);
-  const entries = (rowsResult.results ?? []).map((row) => ({
-    playerId: row.id,
-    name: row.name,
-    count: Number(row.count ?? 0),
-  }));
+    const rowsQuery = context.env.DB.prepare(
+      `SELECT p.id, p.name, COUNT(*) AS count
+       FROM team_players tp
+       JOIN teams t ON t.id = tp.team_id
+       JOIN players p ON p.id = tp.player_id
+       ${filters.whereSql}
+       GROUP BY p.id, p.name
+       ORDER BY count DESC, p.name ASC
+       LIMIT ?`,
+    ).bind(...filters.bindings, MAX_LEADERBOARD_ROWS);
 
-  return json({
-    ok: true,
-    metric,
-    period,
-    mode,
-    totalTeams,
-    entries,
-  });
+    const [totalTeamsResult, rowsResult] = await context.env.DB.batch([totalTeamsQuery, rowsQuery]);
+    const totalTeams = Number(totalTeamsResult.results?.[0]?.total_teams ?? 0);
+    const entries = (rowsResult.results ?? []).map((row) => ({
+      playerId: row.id,
+      name: row.name,
+      count: Number(row.count ?? 0),
+    }));
+
+    return json({
+      ok: true,
+      metric,
+      period,
+      mode,
+      totalTeams,
+      entries,
+      limit: MAX_LEADERBOARD_ROWS,
+    });
+  } catch (error) {
+    return errorResponse(
+      500,
+      error instanceof Error ? `Leaderboard query failed: ${error.message}` : "Leaderboard query failed.",
+    );
+  }
 }
 
 export function onRequest() {

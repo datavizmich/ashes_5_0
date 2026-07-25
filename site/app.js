@@ -55,6 +55,7 @@ const STATE = {
     metric: "selected",
     period: "all",
     mode: "all",
+    limit: 20,
     totalTeams: 0,
     entries: [],
     loading: false,
@@ -1140,9 +1141,13 @@ async function postJsonRequest(url, payload) {
 }
 
 function currentTeamSubmissionPayload(displayName = "") {
+  const mode = isChallengeMode()
+    ? currentChallengePlayableMode()
+    : normalizePlayableMode(STATE.mode);
+
   return {
     submissionKey: STATE.teamSubmissionKey,
-    mode: currentChallengePlayableMode() ?? normalizePlayableMode(STATE.mode) ?? "classic",
+    mode: mode ?? "classic",
     displayName: normalizeChallengeCreatorName(displayName),
     lineupPlayerIds: userLineup().map((player) => player.id),
     dataVersion: TEAM_DATA_VERSION,
@@ -3241,12 +3246,22 @@ async function loadLeaderboard() {
       mode: STATE.leaderboard.mode,
     });
     const response = await fetch(`/api/leaderboards/players?${params.toString()}`);
-    const payload = await response.json().catch(() => ({}));
+    const responseText = await response.text();
+    let payload = {};
+    try {
+      payload = responseText ? JSON.parse(responseText) : {};
+    } catch {
+      payload = {};
+    }
     if (!response.ok || payload.ok === false) {
-      throw new Error(payload.error || "Could not load the leaderboard.");
+      const message = payload.error
+        || responseText.trim()
+        || `Could not load the leaderboard (HTTP ${response.status}).`;
+      throw new Error(message);
     }
 
     STATE.leaderboard.totalTeams = Number(payload.totalTeams ?? 0);
+    STATE.leaderboard.limit = Number(payload.limit ?? 20);
     STATE.leaderboard.entries = Array.isArray(payload.entries) ? payload.entries : [];
   } catch (error) {
     STATE.leaderboard.error = error instanceof Error ? error.message : "Could not load the leaderboard.";
@@ -3275,7 +3290,7 @@ function renderLeaderboard() {
   }
 
   els.leaderboardStatus.textContent = leaderboard.totalTeams
-    ? `${leaderboard.totalTeams} completed ${leaderboard.totalTeams === 1 ? "team" : "teams"} represented.`
+    ? `${leaderboard.totalTeams} completed ${leaderboard.totalTeams === 1 ? "team" : "teams"} represented. Showing the top ${leaderboard.limit} players.`
     : "No completed Ashes teams match these filters yet.";
 
   if (!leaderboard.entries.length) {
