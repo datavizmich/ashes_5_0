@@ -1,5 +1,6 @@
 import { errorResponse, json, methodNotAllowed, readJson } from "../../../_lib/http.js";
 import {
+  ensureDailyStoreSchema,
   createDailyAttempt,
   createOrFetchRankedDailyAttempt,
   fetchDailyAttemptState,
@@ -25,6 +26,8 @@ export async function onRequestPost(context) {
   }
 
   try {
+    await ensureDailyStoreSchema(context.env.DB);
+
     const payload = validateDailyStartPayload(await readJson(context.request));
     let attempt;
 

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { buildDailyAttemptResponse, buildDailySimulationResult } from "../functions/_lib/daily.js";
+import { ensureDailyStoreSchema } from "../functions/_lib/daily-store.js";
 import {
   buildDailyCompletedXI,
   buildDailyCommunityStats,
@@ -53,6 +54,28 @@ test("daily challenge uses the same deterministic sequence for July 26, 2026", (
   assert.deepEqual(first.rolls, second.rolls);
   assert.deepEqual(first.oppositionStableIds, second.oppositionStableIds);
   assert.deepEqual(first.conditions, second.conditions);
+});
+
+test("daily schema bootstrap creates the daily tables once per database binding", async () => {
+  const prepared = [];
+  let batchCalls = 0;
+  const db = {
+    prepare(statement) {
+      prepared.push(statement);
+      return statement;
+    },
+    async batch(statements) {
+      batchCalls += 1;
+      return statements;
+    },
+  };
+
+  await ensureDailyStoreSchema(db);
+  await ensureDailyStoreSchema(db);
+
+  assert.equal(batchCalls, 1);
+  assert.equal(prepared.length, 5);
+  assert.match(prepared[0], /CREATE TABLE IF NOT EXISTS daily_attempts/);
 });
 
 test("attempt response only exposes the current roll before drafting is complete", () => {

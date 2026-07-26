@@ -1,6 +1,6 @@
 import { errorResponse, json, methodNotAllowed } from "../../../../_lib/http.js";
 import { assertDailyAttemptOwnership, buildDailyAttemptResponse, validateDailyParticipantId } from "../../../../_lib/daily.js";
-import { fetchDailyAttemptState, listCompletedRankedDailyAttempts } from "../../../../_lib/daily-store.js";
+import { ensureDailyStoreSchema, fetchDailyAttemptState, listCompletedRankedDailyAttempts } from "../../../../_lib/daily-store.js";
 import { getDailyChallengeById } from "../../../../../site/shared/daily-ashes.js";
 
 export async function onRequestGet(context) {
@@ -10,6 +10,8 @@ export async function onRequestGet(context) {
   }
 
   try {
+    await ensureDailyStoreSchema(context.env.DB);
+
     const url = new URL(context.request.url);
     const participantId = validateDailyParticipantId(url.searchParams.get("participantId"));
     const attemptState = await fetchDailyAttemptState(context.env.DB, context.params.attemptId);

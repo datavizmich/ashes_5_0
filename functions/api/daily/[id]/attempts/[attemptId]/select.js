@@ -7,6 +7,7 @@ import {
   validateDailySelectPayload,
 } from "../../../../../_lib/daily.js";
 import {
+  ensureDailyStoreSchema,
   addDailySelection,
   fetchDailyAttemptState,
   listCompletedRankedDailyAttempts,
@@ -30,6 +31,8 @@ export async function onRequestPost(context) {
   }
 
   try {
+    await ensureDailyStoreSchema(context.env.DB);
+
     const payload = validateDailySelectPayload(await readJson(context.request));
     const attemptState = await fetchDailyAttemptState(context.env.DB, context.params.attemptId);
     assertDailyAttemptOwnership(definition, attemptState?.attempt, payload.participantId);

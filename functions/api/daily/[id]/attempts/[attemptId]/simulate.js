@@ -6,6 +6,7 @@ import {
   validateDailySimulatePayload,
 } from "../../../../../_lib/daily.js";
 import {
+  ensureDailyStoreSchema,
   fetchDailyAttemptState,
   listCompletedRankedDailyAttempts,
   saveDailyAttemptResult,
@@ -28,6 +29,8 @@ export async function onRequestPost(context) {
   }
 
   try {
+    await ensureDailyStoreSchema(context.env.DB);
+
     const payload = validateDailySimulatePayload(await readJson(context.request));
     const attemptState = await fetchDailyAttemptState(context.env.DB, context.params.attemptId);
     assertDailyAttemptOwnership(definition, attemptState?.attempt, payload.participantId);

@@ -1,10 +1,12 @@
 import { errorResponse, json, methodNotAllowed } from "../../_lib/http.js";
-import { fetchRankedDailyAttemptByParticipant } from "../../_lib/daily-store.js";
+import { ensureDailyStoreSchema, fetchRankedDailyAttemptByParticipant } from "../../_lib/daily-store.js";
 import { buildDailyChallengeSummary, getCurrentDailyChallenge } from "../../../site/shared/daily-ashes.js";
 import { validateDailyParticipantId } from "../../_lib/daily.js";
 
 export async function onRequestGet(context) {
   try {
+    await ensureDailyStoreSchema(context.env.DB);
+
     const definition = getCurrentDailyChallenge(new Date().toISOString());
     const url = new URL(context.request.url);
     const participantIdParam = url.searchParams.get("participantId");
