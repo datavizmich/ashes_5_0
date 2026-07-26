@@ -95,12 +95,11 @@ for (const player of ASHES_CATALOG) {
       name: player.name,
       roles: [...player.roles],
     });
-    continue;
-  }
-
-  for (const role of player.roles) {
-    if (!existing.roles.includes(role)) {
-      existing.roles.push(role);
+  } else {
+    for (const role of player.roles) {
+      if (!existing.roles.includes(role)) {
+        existing.roles.push(role);
+      }
     }
   }
 

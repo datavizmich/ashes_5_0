@@ -8,6 +8,7 @@ import {
   buildDailyCommunityStats,
   buildDailyRollPublicState,
   canSelectDailyPlayer,
+  getDailyFixedPlayers,
   getCurrentDailyChallenge,
 } from "../site/shared/daily-ashes.js";
 
@@ -54,6 +55,16 @@ test("daily challenge uses the same deterministic sequence for July 26, 2026", (
   assert.deepEqual(first.rolls, second.rolls);
   assert.deepEqual(first.oppositionStableIds, second.oppositionStableIds);
   assert.deepEqual(first.conditions, second.conditions);
+});
+
+test("daily challenge resolves all seven fixed players and offers valid roll-one choices", () => {
+  const fixedPlayers = getDailyFixedPlayers(definition);
+  const rollOne = buildDailyRollPublicState(definition, 1, []);
+
+  assert.equal(fixedPlayers.length, 7);
+  assert.ok(rollOne);
+  assert.equal(rollOne.players.length, 5);
+  assert.ok(rollOne.players.some((player) => player.selectable));
 });
 
 test("daily schema bootstrap creates the daily tables once per database binding", async () => {
