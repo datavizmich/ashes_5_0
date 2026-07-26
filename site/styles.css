@@ -444,6 +444,13 @@ select {
   font-size: 0.92rem;
 }
 
+.panel-subtitle-rich {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
 .rules-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -752,6 +759,114 @@ button:disabled {
 
 .player-meta {
   font-size: 0.84rem;
+}
+
+.player-card.static {
+  cursor: default;
+}
+
+.player-card.static:hover,
+.player-card.static:focus-visible {
+  transform: none;
+  border-color: rgba(31, 31, 31, 0.08);
+  box-shadow: none;
+}
+
+.daily-board,
+.daily-community,
+.daily-community-grid,
+.daily-recap-grid {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.daily-community-list {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.daily-recap-card,
+.daily-community-card,
+.daily-confirm {
+  padding: 0.9rem 1rem;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(31, 31, 31, 0.08);
+}
+
+.daily-help {
+  position: relative;
+  display: inline-flex;
+  margin: 0;
+}
+
+.daily-help summary {
+  list-style: none;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid rgba(31, 31, 31, 0.12);
+  background: rgba(255, 255, 255, 0.86);
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.daily-help summary::-webkit-details-marker {
+  display: none;
+}
+
+.daily-help summary::marker {
+  content: "";
+}
+
+.daily-help-card {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  z-index: 9;
+  width: min(320px, calc(100vw - 3rem));
+  padding: 0.8rem 0.9rem;
+  border-radius: 0.95rem;
+  background: rgba(31, 31, 31, 0.96);
+  color: #f4efe3;
+  border: 1px solid rgba(212, 175, 55, 0.28);
+  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.26);
+  font-size: 0.84rem;
+  line-height: 1.45;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px);
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease,
+    visibility 140ms ease;
+}
+
+.daily-help:hover .daily-help-card,
+.daily-help:focus-within .daily-help-card,
+.daily-help[open] .daily-help-card {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.daily-community-list {
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+}
+
+.daily-community-list span {
+  font-size: 0.84rem;
+  color: var(--muted);
+}
+
+.daily-confirm p,
+.daily-recap-card p {
+  margin: 0;
+  color: var(--muted);
 }
 
 .board {
@@ -1496,6 +1611,12 @@ button.achievement-badge:focus-visible {
   .topbar {
     flex-direction: column;
     align-items: start;
+  }
+
+  .daily-help-card {
+    right: auto;
+    left: 0;
+    width: min(320px, calc(100vw - 2.2rem));
   }
 
   .meta-badges {

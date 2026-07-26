@@ -29,6 +29,29 @@ const CHALLENGE_RESULT_VERSION = "challenge-result-v1";
 const RESULT_SIMULATION_VERSION = "ashes-5-0-sim-v1";
 const TEAM_DATA_VERSION = "ashes-5-0-data-v1";
 const BOOTSTRAP = window.__ASHES_BOOTSTRAP__ ?? null;
+const DAILY_PARTICIPANT_STORAGE_KEY = "ashes-daily-participant-id";
+const DAILY_ATTEMPT_STORAGE_KEY_PREFIX = "ashes-daily-attempt";
+
+function buildInitialDailyState() {
+  return {
+    active: false,
+    loadingSummary: false,
+    loadingAction: false,
+    summary: null,
+    participantId: "",
+    challenge: null,
+    attempt: null,
+    fixedPlayers: [],
+    lockedSelections: [],
+    currentRoll: null,
+    currentTeamPool: [],
+    completedXI: [],
+    recap: [],
+    communityStats: null,
+    result: null,
+    pendingPlayerId: null,
+  };
+}
 
 const STATE = {
   view: "home",
@@ -71,6 +94,7 @@ const STATE = {
   seriesShareAsset: null,
   seriesShareAssetPromise: null,
   rollAnimation: null,
+  daily: buildInitialDailyState(),
 };
 
 const ACHIEVEMENT_DEFS = {
@@ -116,6 +140,7 @@ function bindElements() {
     totalSquads: "[data-total-squads]",
     totalPlayers: "[data-total-players]",
     homeChallenge: "[data-home-challenge]",
+    homeDaily: "[data-home-daily]",
     homeLeaderboard: "[data-home-leaderboard]",
     homeCompetition: "[data-home-competition]",
     leaderboardHome: "[data-leaderboard-home]",
@@ -138,6 +163,7 @@ function bindElements() {
     rosterSummary: "[data-roster-summary]",
     rosterKicker: "[data-roster-kicker]",
     boardTitle: "[data-board-title]",
+    boardCopy: "[data-board-copy]",
     rosterGrid: "[data-roster-grid]",
     board: "[data-board]",
     rollSquad: "[data-roll-squad]",
@@ -177,6 +203,7 @@ function bindElements() {
     seriesReveal: "[data-series-reveal]",
     seriesRevealGrid: "[data-series-reveal-grid]",
     playAgain: "[data-play-again]",
+    dailyPractice: "[data-daily-practice]",
     seriesLeaderboard: "[data-series-leaderboard]",
     sendResultBack: "[data-send-result-back]",
     challengeBack: "[data-challenge-back]",
@@ -263,7 +290,159 @@ const ASHES_CATALOG = buildCatalogFromSquads(ASHES_SQUADS);
 const WORLD_CUP_CATALOG = buildCatalogFromSquads(WORLD_CUP_SQUADS);
 const ASHES_CATALOG_INDEX_BY_ID = new Map(ASHES_CATALOG.map((player, index) => [player.id, index]));
 
+function dailyAttemptStorageKey(challengeId, attemptMode = "ranked") {
+  return `${DAILY_ATTEMPT_STORAGE_KEY_PREFIX}:${challengeId}:${attemptMode}`;
+}
+
+function loadStoredDailyAttemptId(challengeId, attemptMode = "ranked") {
+  if (!challengeId) return "";
+  try {
+    return window.localStorage.getItem(dailyAttemptStorageKey(challengeId, attemptMode)) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function persistStoredDailyAttemptId(challengeId, attemptMode, attemptId) {
+  if (!challengeId || !attemptId) return;
+  try {
+    window.localStorage.setItem(dailyAttemptStorageKey(challengeId, attemptMode), attemptId);
+  } catch {}
+}
+
+function clearStoredDailyAttemptId(challengeId, attemptMode = "ranked") {
+  if (!challengeId) return;
+  try {
+    window.localStorage.removeItem(dailyAttemptStorageKey(challengeId, attemptMode));
+  } catch {}
+}
+
+function dailyChallengeActive() {
+  return STATE.competition === "ashes" && STATE.daily.active;
+}
+
+function currentDailyStage() {
+  if (!dailyChallengeActive()) return "idle";
+  if (!STATE.daily.attempt) return "intro";
+  if (STATE.daily.attempt.draftComplete) return "recap";
+  return "draft";
+}
+
+function currentDailyChallengeId() {
+  return String(STATE.daily.challenge?.id ?? STATE.daily.summary?.id ?? "");
+}
+
+function currentDailyAttemptMode() {
+  return STATE.daily.attempt?.attemptMode ?? "ranked";
+}
+
+function currentDailyPlayerPool() {
+  if (STATE.daily.currentTeamPool.length) {
+    return STATE.daily.currentTeamPool;
+  }
+
+  return [
+    ...STATE.daily.fixedPlayers,
+    ...STATE.daily.lockedSelections.map((selection) => selection.player).filter(Boolean),
+  ];
+}
+
+function buildLineupMapFromArray(lineup) {
+  const lineupMap = new Map();
+  lineup.forEach((player, index) => {
+    if (player) {
+      lineupMap.set(index, player);
+    }
+  });
+  return lineupMap;
+}
+
+function buildBestPartialLineupMap(players) {
+  const pool = [];
+  const seen = new Set();
+
+  for (const player of Array.isArray(players) ? players : []) {
+    if (!player) continue;
+    const key = playerKey(player);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    pool.push(player);
+  }
+
+  if (!pool.length) {
+    return new Map();
+  }
+
+  const order = pool
+    .map((player) => ({
+      player,
+      candidates: XI_SLOTS
+        .map((slot, index) => ({
+          index,
+          score: playerSlotScore(player, slot),
+        }))
+        .filter(({ index }) => slotAcceptsPlayer(XI_SLOTS[index], player))
+        .sort((left, right) => right.score - left.score),
+    }))
+    .sort((left, right) => {
+      const candidateDelta = left.candidates.length - right.candidates.length;
+      if (candidateDelta !== 0) return candidateDelta;
+      return playerOverall(right.player) - playerOverall(left.player);
+    });
+
+  let bestPlaced = -1;
+  let bestScore = Number.NEGATIVE_INFINITY;
+  let bestAssignment = new Map();
+  const usedSlots = new Array(XI_SLOTS.length).fill(false);
+  const assignment = new Map();
+
+  function search(orderIndex, placedCount, totalScore) {
+    if (placedCount + (order.length - orderIndex) < bestPlaced) {
+      return;
+    }
+
+    if (orderIndex >= order.length) {
+      if (placedCount > bestPlaced || (placedCount === bestPlaced && totalScore > bestScore)) {
+        bestPlaced = placedCount;
+        bestScore = totalScore;
+        bestAssignment = new Map(assignment);
+      }
+      return;
+    }
+
+    const { player, candidates } = order[orderIndex];
+    for (const candidate of candidates) {
+      if (usedSlots[candidate.index]) continue;
+      usedSlots[candidate.index] = true;
+      assignment.set(candidate.index, player);
+      search(orderIndex + 1, placedCount + 1, totalScore + candidate.score);
+      assignment.delete(candidate.index);
+      usedSlots[candidate.index] = false;
+    }
+
+    search(orderIndex + 1, placedCount, totalScore);
+  }
+
+  search(0, 0, 0);
+  return bestAssignment;
+}
+
+function currentDailyLineupMap() {
+  if (STATE.daily.completedXI.length === XI_SLOTS.length) {
+    return buildLineupMapFromArray(STATE.daily.completedXI);
+  }
+  return buildBestPartialLineupMap(currentDailyPlayerPool());
+}
+
+function resetDailyState({ preserveSummary = true, preserveParticipant = true } = {}) {
+  const next = buildInitialDailyState();
+  next.summary = preserveSummary ? STATE.daily.summary : null;
+  next.participantId = preserveParticipant ? STATE.daily.participantId : "";
+  STATE.daily = next;
+}
+
 function isMemoryMode() {
+  if (dailyChallengeActive()) return true;
   if (isChallengeMode()) {
     return currentChallengePlayableMode() === "memory";
   }
@@ -285,10 +464,17 @@ function challengeLineupLoaded() {
 }
 
 function challengeCreationMode() {
-  return STATE.competition === "ashes" && isChallengeMode() && !challengeLineupLoaded() && !resultSnapshotLoaded();
+  return STATE.competition === "ashes"
+    && !dailyChallengeActive()
+    && isChallengeMode()
+    && !challengeLineupLoaded()
+    && !resultSnapshotLoaded();
 }
 
 function modeLabel() {
+  if (dailyChallengeActive()) {
+    return currentDailyAttemptMode() === "practice" ? "Daily Practice" : "Daily Challenge";
+  }
   if (isChallengeMode()) {
     return isMemoryMode() ? "Memory Challenge" : "Challenge";
   }
@@ -483,6 +669,34 @@ function trackChallengeEvent(name, overrides = {}) {
   trackEvent(name, baseChallengeAnalyticsProps(overrides));
 }
 
+function baseDailyAnalyticsProps(overrides = {}) {
+  const props = {
+    competition: "ashes",
+    challenge_mode: "memory",
+    daily_challenge_date: STATE.daily.challenge?.date ?? STATE.daily.summary?.date ?? "",
+    attempt_mode: currentDailyAttemptMode(),
+    ...overrides,
+  };
+
+  return Object.fromEntries(
+    Object.entries(props).filter(
+      ([key, value]) => !DISALLOWED_ANALYTICS_KEYS.has(key)
+        && key !== "participant_id"
+        && key !== "submission_key"
+        && key !== "simulation_seed"
+        && key !== "future_squads"
+        && key !== "candidate_list"
+        && value !== ""
+        && value !== null
+        && value !== undefined,
+    ),
+  );
+}
+
+function trackDailyEvent(name, overrides = {}) {
+  trackEvent(name, baseDailyAnalyticsProps(overrides));
+}
+
 function base64UrlEncodeBytes(bytes) {
   const binary = Array.from(bytes, (value) => String.fromCharCode(value)).join("");
   return window.btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "");
@@ -517,6 +731,21 @@ function createRandomId(byteLength = 9) {
 
 function createSubmissionKey() {
   return createRandomId(10);
+}
+
+function loadOrCreateDailyParticipantId() {
+  try {
+    const existing = window.localStorage.getItem(DAILY_PARTICIPANT_STORAGE_KEY);
+    if (existing && /^[A-Za-z0-9_-]{12,80}$/u.test(existing)) {
+      return existing;
+    }
+  } catch {}
+
+  const participantId = createRandomId(12);
+  try {
+    window.localStorage.setItem(DAILY_PARTICIPANT_STORAGE_KEY, participantId);
+  } catch {}
+  return participantId;
 }
 
 function resetSubmissionState() {
@@ -1140,6 +1369,260 @@ async function postJsonRequest(url, payload) {
   return data;
 }
 
+async function getJsonRequest(url) {
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || data.ok === false) {
+    throw new Error(data.error || "Request failed.");
+  }
+
+  return data;
+}
+
+function applyDailySummaryPayload(challengeSummary) {
+  if (!challengeSummary) return null;
+  STATE.daily.summary = challengeSummary;
+  STATE.daily.challenge = challengeSummary;
+  STATE.daily.fixedPlayers = Array.isArray(challengeSummary.fixedPlayers) ? challengeSummary.fixedPlayers : [];
+  STATE.daily.currentTeamPool = [...STATE.daily.fixedPlayers];
+  STATE.daily.lockedSelections = [];
+  STATE.daily.currentRoll = null;
+  STATE.daily.completedXI = [];
+  STATE.daily.recap = [];
+  STATE.daily.communityStats = null;
+  STATE.daily.result = null;
+  STATE.daily.pendingPlayerId = null;
+  STATE.daily.attempt = null;
+  return challengeSummary;
+}
+
+function applyDailyAttemptPayload(payload) {
+  if (!payload?.challenge || !payload?.attempt) return null;
+
+  STATE.daily.summary = {
+    ...STATE.daily.summary,
+    ...payload.challenge,
+    rankedAttempt: payload.attempt.attemptMode === "ranked"
+      ? {
+          attemptId: payload.attempt.id,
+          draftComplete: Boolean(payload.attempt.draftComplete),
+          simulationComplete: Boolean(payload.attempt.simulationComplete),
+          attemptMode: payload.attempt.attemptMode,
+          currentRollNumber: payload.attempt.currentRollNumber,
+        }
+      : STATE.daily.summary?.rankedAttempt ?? null,
+  };
+  STATE.daily.challenge = payload.challenge;
+  STATE.daily.attempt = payload.attempt;
+  STATE.daily.fixedPlayers = Array.isArray(payload.fixedPlayers) ? payload.fixedPlayers : [];
+  STATE.daily.lockedSelections = Array.isArray(payload.lockedSelections) ? payload.lockedSelections : [];
+  STATE.daily.currentRoll = payload.currentRoll ?? null;
+  STATE.daily.currentTeamPool = Array.isArray(payload.currentTeamPool) ? payload.currentTeamPool : currentDailyPlayerPool();
+  STATE.daily.completedXI = Array.isArray(payload.completedXI) ? payload.completedXI : [];
+  STATE.daily.recap = Array.isArray(payload.recap) ? payload.recap : [];
+  STATE.daily.communityStats = payload.communityStats ?? null;
+  STATE.daily.result = payload.result ?? null;
+  STATE.daily.pendingPlayerId = null;
+  STATE.daily.active = true;
+  persistStoredDailyAttemptId(payload.challenge.id, payload.attempt.attemptMode, payload.attempt.id);
+
+  if (payload.result) {
+    STATE.series = payload.result;
+    STATE.view = "series";
+  } else {
+    STATE.series = null;
+    STATE.view = "game";
+  }
+
+  return payload;
+}
+
+function prepareDailyView() {
+  clearTimer();
+  clearRollAnimation();
+  STATE.challenge = null;
+  STATE.result = null;
+  clearChallengeUrlFromBrowser();
+  clearResultUrlFromBrowser();
+  STATE.challengeDraftName = "";
+  STATE.challengeResponseName = "";
+  STATE.lineup.clear();
+  STATE.currentSquad = null;
+  STATE.selectedPlayerId = null;
+  STATE.series = null;
+  STATE.seriesShareAsset = null;
+  STATE.seriesShareAssetPromise = null;
+  setShareStatus("");
+  STATE.achievementDetail = null;
+  STATE.achievementPinned = false;
+  STATE.competition = "ashes";
+  STATE.squads = ASHES_SQUADS;
+  addCatalogMetadata();
+  STATE.daily.active = true;
+}
+
+async function loadDailySummary({ force = false } = {}) {
+  if (!STATE.daily.participantId) {
+    STATE.daily.participantId = loadOrCreateDailyParticipantId();
+  }
+
+  if (!force && STATE.daily.summary?.id && !STATE.daily.loadingSummary) {
+    return STATE.daily.summary;
+  }
+
+  STATE.daily.loadingSummary = true;
+  renderAll();
+  try {
+    const payload = await getJsonRequest(`/api/daily/current?participantId=${encodeURIComponent(STATE.daily.participantId)}`);
+    return applyDailySummaryPayload(payload.challenge);
+  } finally {
+    STATE.daily.loadingSummary = false;
+    renderAll();
+  }
+}
+
+async function resumeDailyAttempt(attemptId) {
+  const challengeId = currentDailyChallengeId();
+  if (!challengeId || !attemptId) {
+    throw new Error("Daily attempt is unavailable.");
+  }
+
+  const payload = await getJsonRequest(
+    `/api/daily/${challengeId}/attempts/${attemptId}?participantId=${encodeURIComponent(STATE.daily.participantId)}`,
+  );
+  applyDailyAttemptPayload(payload);
+  if (!payload.attempt.draftComplete) {
+    trackDailyEvent("daily_draft_resumed", { roll_number: payload.attempt.currentRollNumber });
+    if (payload.currentRoll?.rollNumber) {
+      trackDailyEvent("daily_roll_revealed", { roll_number: payload.currentRoll.rollNumber, source: "resume" });
+    }
+  } else {
+    trackDailyEvent("daily_draft_recap_viewed", { source: "resume" });
+  }
+  renderAll();
+  return payload;
+}
+
+async function startDailyAttempt(attemptMode = "ranked") {
+  const challengeId = currentDailyChallengeId();
+  if (!challengeId) {
+    throw new Error("Daily challenge is unavailable.");
+  }
+
+  STATE.daily.loadingAction = true;
+  renderAll();
+  try {
+    const payload = await postJsonRequest(`/api/daily/${challengeId}/start`, {
+      participantId: STATE.daily.participantId,
+      submissionKey: createSubmissionKey(),
+      attemptMode,
+    });
+    applyDailyAttemptPayload(payload);
+    trackDailyEvent("daily_attempt_started", { attempt_mode: attemptMode });
+    if (payload.currentRoll?.rollNumber) {
+      trackDailyEvent("daily_roll_revealed", { roll_number: payload.currentRoll.rollNumber, source: "start" });
+    }
+    renderAll();
+    return payload;
+  } finally {
+    STATE.daily.loadingAction = false;
+    renderAll();
+  }
+}
+
+async function openDailyChallenge() {
+  prepareDailyView();
+  const summary = await loadDailySummary({ force: true });
+  STATE.view = "game";
+  STATE.daily.active = true;
+  STATE.daily.challenge = summary;
+  STATE.daily.fixedPlayers = Array.isArray(summary?.fixedPlayers) ? summary.fixedPlayers : [];
+  STATE.daily.currentTeamPool = [...STATE.daily.fixedPlayers];
+
+  if (summary?.rankedAttempt?.attemptId) {
+    await resumeDailyAttempt(summary.rankedAttempt.attemptId);
+    return;
+  }
+
+  renderAll();
+}
+
+async function lockDailySelection() {
+  if (!dailyChallengeActive() || !STATE.daily.currentRoll || !STATE.daily.pendingPlayerId) return;
+
+  STATE.daily.loadingAction = true;
+  renderAll();
+  try {
+    const player = STATE.daily.currentRoll.players.find((entry) => entry.id === STATE.daily.pendingPlayerId);
+    if (!player?.selectable) {
+      throw new Error(player?.unavailableReason || "That choice is unavailable.");
+    }
+
+    trackDailyEvent("daily_player_lock_confirmed", {
+      roll_number: STATE.daily.currentRoll.rollNumber,
+      attempt_mode: currentDailyAttemptMode(),
+    });
+
+    const payload = await postJsonRequest(
+      `/api/daily/${currentDailyChallengeId()}/attempts/${STATE.daily.attempt.id}/select`,
+      {
+        participantId: STATE.daily.participantId,
+        currentRollNumber: STATE.daily.currentRoll.rollNumber,
+        selectedPlayerId: player.id,
+      },
+    );
+
+    applyDailyAttemptPayload(payload);
+    if (payload.attempt.draftComplete) {
+      if (payload.attempt.attemptMode === "ranked") {
+        trackDailyEvent("daily_ranked_draft_completed", { total_rolls: payload.challenge.totalRolls });
+      }
+      trackDailyEvent("daily_draft_recap_viewed", { source: "post-lock" });
+    } else if (payload.currentRoll?.rollNumber) {
+      trackDailyEvent("daily_next_roll_revealed", { roll_number: payload.currentRoll.rollNumber });
+      trackDailyEvent("daily_roll_revealed", { roll_number: payload.currentRoll.rollNumber, source: "next-roll" });
+    }
+  } finally {
+    STATE.daily.loadingAction = false;
+    renderAll();
+  }
+}
+
+async function simulateDailyTest() {
+  if (!dailyChallengeActive() || !STATE.daily.attempt?.draftComplete) return;
+
+  STATE.daily.loadingAction = true;
+  renderAll();
+  try {
+    const payload = await postJsonRequest(
+      `/api/daily/${currentDailyChallengeId()}/attempts/${STATE.daily.attempt.id}/simulate`,
+      { participantId: STATE.daily.participantId },
+    );
+    applyDailyAttemptPayload(payload);
+    renderAll();
+  } finally {
+    STATE.daily.loadingAction = false;
+    renderAll();
+  }
+}
+
+async function startDailyPractice() {
+  prepareDailyView();
+  const summary = await loadDailySummary({ force: true });
+  STATE.view = "game";
+  STATE.daily.active = true;
+  STATE.daily.challenge = summary;
+  STATE.daily.fixedPlayers = Array.isArray(summary?.fixedPlayers) ? summary.fixedPlayers : [];
+  STATE.daily.currentTeamPool = [...STATE.daily.fixedPlayers];
+  await startDailyAttempt("practice");
+}
+
 function currentTeamSubmissionPayload(displayName = "") {
   const mode = isChallengeMode()
     ? currentChallengePlayableMode()
@@ -1274,6 +1757,44 @@ function clearRollAnimation() {
 }
 
 function competitionConfig() {
+  if (dailyChallengeActive()) {
+    const stage = currentDailyStage();
+    const challengeDate = STATE.daily.challenge?.date ?? STATE.daily.summary?.date ?? "2026-07-26";
+    const oppositionLabel = STATE.daily.challenge?.opposition?.label ?? "Today's opposition";
+    const rollNumber = STATE.daily.currentRoll?.rollNumber ?? STATE.daily.attempt?.currentRollNumber ?? 1;
+    const totalRolls = STATE.daily.challenge?.totalRolls ?? 4;
+
+    return {
+      name: "Ashes",
+      title: "Daily Ashes Challenge",
+      plural: "Ashes",
+      accentLabel: "green",
+      theme: "ashes",
+      format: "tests",
+      homeEyebrow: "Daily Ashes Challenge",
+      homeTitle: "Daily Ashes Challenge",
+      homeLede:
+        "Same four hidden rolls for everyone. Start with 7 locked players and play one Test.",
+      squadsLabel: "Daily rolls",
+      gameEyebrow: "Daily challenge",
+      gameTitle: stage === "intro"
+        ? "Reveal the first squad"
+        : stage === "recap"
+          ? "Your four selections"
+          : `Squad ${rollNumber} of ${totalRolls}`,
+      rosterKicker: stage === "recap" ? "Draft recap" : "Current squad",
+      boardTitle: stage === "recap" ? "Completed XI" : "Your daily XI",
+      seriesEyebrow: "Daily Test",
+      seriesTitle: `${currentSeriesUserLabel()} versus ${oppositionLabel}.`,
+      oppositionTitle: oppositionLabel,
+      oppositionShortTitle: oppositionLabel,
+      seriesProgressLabel: "Tests",
+      matchLabel: "Test",
+      seriesDescriptor: `Daily Test · ${challengeDate}`,
+      modeButton: "World Cup mode",
+    };
+  }
+
   const loadedChallenge = challengeLineupLoaded();
   const resultLoaded = resultSnapshotLoaded();
   const creatorName = resultLoaded ? loadedResultChallengerName() : loadedChallengeCreatorName();
@@ -1358,6 +1879,7 @@ function competitionConfig() {
 function setCompetition(nextCompetition) {
   STATE.competition = nextCompetition === "worldcup" ? "worldcup" : "ashes";
   if (STATE.competition !== "ashes") {
+    resetDailyState({ preserveSummary: false });
     STATE.challenge = null;
     STATE.result = null;
     STATE.challengeResponseName = "";
@@ -1517,15 +2039,27 @@ function teamLabelFromSquad(squad) {
 }
 
 function currentSquadLabel() {
+  if (dailyChallengeActive()) {
+    if (STATE.daily.currentRoll?.squadTeam && STATE.daily.currentRoll?.squadYear) {
+      return `${STATE.daily.currentRoll.squadTeam} ${STATE.daily.currentRoll.squadYear}`;
+    }
+    return currentDailyStage() === "recap" ? "Draft complete" : "Daily challenge";
+  }
   if (STATE.rollAnimation?.active) return STATE.rollAnimation.label;
   return STATE.currentSquad ? STATE.currentSquad.label : "Roll a squad";
 }
 
 function lineupComplete() {
+  if (dailyChallengeActive()) {
+    return Boolean(STATE.daily.attempt?.draftComplete);
+  }
   return STATE.lineup.size === XI_SLOTS.length;
 }
 
 function userLineup() {
+  if (dailyChallengeActive()) {
+    return buildLineupFromMap(currentDailyLineupMap());
+  }
   return buildLineupFromMap(STATE.lineup);
 }
 
@@ -2672,11 +3206,22 @@ function renderStats() {
   const competition = competitionConfig();
   const loadedChallenge = challengeLineupLoaded();
   const routeError = STATE.view === "home" ? STATE.routeError : null;
+  const dailySummary = STATE.daily.summary;
+  const dailyRankedAttempt = dailySummary?.rankedAttempt ?? null;
+  const dailyLabelNode = els.homeDaily?.querySelector(".feature-action-label") ?? null;
   els.totalSquads.textContent = String(STATE.squads.length);
   els.totalPlayers.textContent = String(STATE.catalog.length);
-  els.gameSquadCount.textContent = `${STATE.squads.length} squads`;
-  els.gamePlayerCount.textContent = `${STATE.catalog.length} players`;
-  els.homeMode.value = isMemoryMode() ? "memory" : "classic";
+  els.gameSquadCount.textContent = dailyChallengeActive()
+    ? (STATE.daily.challenge?.date ?? "Daily challenge")
+    : `${STATE.squads.length} squads`;
+  els.gamePlayerCount.textContent = dailyChallengeActive()
+    ? `${STATE.daily.challenge?.totalRolls ?? 4} hidden rolls`
+    : `${STATE.catalog.length} players`;
+  els.homeMode.value = dailyChallengeActive()
+    ? STATE.mode
+    : isMemoryMode()
+      ? "memory"
+      : "classic";
   els.homeMode.disabled = loadedChallenge;
   document.title = pageTitleForCompetition(competition);
   els.homeEyebrow.textContent = routeError ? "Link problem" : competition.homeEyebrow;
@@ -2706,6 +3251,16 @@ function renderStats() {
       : "Repeat until your XI is full, then simulate the series.";
   els.homeCompetition.textContent = competition.modeButton;
   els.homeChallenge.hidden = loadedChallenge || STATE.competition !== "ashes";
+  els.homeDaily.hidden = loadedChallenge || STATE.competition !== "ashes";
+  if (dailyLabelNode) {
+    dailyLabelNode.textContent = STATE.daily.loadingSummary
+      ? "Loading daily..."
+      : dailyRankedAttempt?.simulationComplete
+        ? "Today's daily result"
+        : dailyRankedAttempt?.attemptId
+          ? "Resume daily challenge"
+          : "Daily challenge";
+  }
   els.homeLeaderboard.hidden = loadedChallenge || STATE.competition !== "ashes";
   els.homeCompetition.hidden = loadedChallenge;
   els.playGame.textContent = routeError
@@ -2722,6 +3277,13 @@ function renderStats() {
   els.gameTitle.textContent = competition.gameTitle;
   els.rosterKicker.textContent = competition.rosterKicker;
   els.boardTitle.textContent = competition.boardTitle;
+  if (els.boardCopy) {
+    if (dailyChallengeActive()) {
+      els.boardCopy.innerHTML = dailyBoardCopyHtml();
+    } else {
+      els.boardCopy.textContent = "Click a player first, then click a valid slot.";
+    }
+  }
   els.seriesEyebrow.textContent = competition.seriesEyebrow;
   els.seriesTitle.textContent = competition.seriesTitle;
   els.seriesUserLabel.textContent = currentSeriesUserLabel();
@@ -2738,13 +3300,116 @@ function renderView() {
   document.body.dataset.view = STATE.view;
 }
 
+function dailyDraftHelpHtml() {
+  const challengeDate = STATE.daily.challenge?.date ?? STATE.daily.summary?.date ?? "2026-07-26";
+  return `
+    <details class="daily-help">
+      <summary aria-label="Daily challenge help" title="Daily challenge help">?</summary>
+      <div class="daily-help-card">
+        Complete your XI through four squad rolls. Choose one player from each squad, but choose carefully - you will not see the next squad until your current pick is locked. Everyone gets the same hidden sequence on ${escapeHtml(challengeDate)}.
+      </div>
+    </details>
+  `;
+}
+
+function dailyBoardCopyHtml() {
+  const stage = currentDailyStage();
+  if (stage === "recap") {
+    return "Draft complete. Your XI is ready for the Test.";
+  }
+
+  const label = stage === "draft" ? "Future squads are hidden." : "7 players locked.";
+  return `<span>${escapeHtml(label)}</span>${dailyDraftHelpHtml()}`;
+}
+
+function dailyBoardGridHtml(lineupMap) {
+  return `
+    <div class="board-grid">
+      ${XI_SLOTS.map((slot, index) => {
+        const player = lineupMap.get(index) ?? null;
+        return `
+          <button
+            class="slot ${player ? "filled" : "empty"}"
+            type="button"
+            style="grid-row: ${slot.row}; grid-column: ${slot.col};"
+            disabled
+          >
+            <span class="slot-label">${escapeHtml(slot.label)}</span>
+            ${
+              player
+                ? `<span class="slot-name">${escapeHtml(player.name)}</span><span class="slot-sub">${escapeHtml(player.roles[0])}</span>`
+                : `<span class="slot-sub">Waiting for a player</span>`
+            }
+          </button>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function dailyCommunityStatsHtml() {
+  const stats = STATE.daily.communityStats;
+  if (!stats?.rolls?.length) {
+    return `
+      <section class="daily-community">
+        <h3>Community picks</h3>
+        <p class="panel-subtitle">Community percentages will appear after more ranked drafts are completed.</p>
+      </section>
+    `;
+  }
+
+  const unusual = stats.mostUnusualSelection?.player
+    ? `Most unusual selection: ${stats.mostUnusualSelection.player.name} on Roll ${stats.mostUnusualSelection.rollNumber} (${stats.mostUnusualSelection.percentage}%).`
+    : "Most unusual selection data will appear once more ranked attempts are complete.";
+  const samePath = `${stats.sameFourChoicesPercentage}% of ranked players made the same four choices.`;
+
+  return `
+    <section class="daily-community">
+      <h3>Community picks</h3>
+      <p class="panel-subtitle">${escapeHtml(samePath)} ${escapeHtml(unusual)}</p>
+      <div class="daily-community-grid">
+        ${stats.rolls.map((roll) => `
+          <article class="daily-community-card">
+            <strong>Roll ${roll.rollNumber} - ${escapeHtml(roll.squadLabel)}</strong>
+            <div class="daily-community-list">
+              ${roll.selections.map((player) => `
+                <span>${escapeHtml(player.name)}: ${player.percentage}%</span>
+              `).join("")}
+            </div>
+          </article>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
 function renderGameMeta() {
   const competition = competitionConfig();
   const rolling = Boolean(STATE.rollAnimation?.active);
   const buildingChallenge = challengeCreationMode();
+  if (dailyChallengeActive()) {
+    const stage = currentDailyStage();
+    const selectedCount = STATE.daily.fixedPlayers.length + STATE.daily.lockedSelections.length;
+    els.gameMode.textContent = currentDailyAttemptMode() === "practice" ? "Memory Practice" : "Memory Daily";
+    els.currentSquad.textContent = stage === "draft"
+      ? `Squad ${STATE.daily.currentRoll?.rollNumber ?? 1} of ${STATE.daily.challenge?.totalRolls ?? 4}`
+      : stage === "recap"
+        ? "Draft complete"
+        : "Reveal the first squad";
+    els.lineupStatus.textContent = `${selectedCount} / 11 selected`;
+    els.rollSquad.hidden = STATE.view !== "game" || stage !== "intro";
+    els.rollSquad.textContent = STATE.daily.loadingAction || STATE.daily.loadingSummary ? "Loading..." : "Reveal the first squad";
+    els.rollSquad.disabled = STATE.view !== "game" || stage !== "intro" || STATE.daily.loadingAction || STATE.daily.loadingSummary;
+    els.startSeries.hidden = STATE.view !== "game" || stage !== "recap";
+    els.startSeries.disabled = STATE.view !== "game" || stage !== "recap" || STATE.daily.loadingAction;
+    els.startSeries.textContent = STATE.daily.loadingAction ? "Preparing Test..." : "Play the Test";
+    return;
+  }
+
   els.gameMode.textContent = modeLabel();
   els.currentSquad.textContent = currentSquadLabel();
   els.lineupStatus.textContent = `${STATE.lineup.size} / ${XI_SLOTS.length} locked`;
+  els.rollSquad.hidden = false;
   els.startSeries.hidden = STATE.view !== "game" || buildingChallenge;
   els.startSeries.disabled = !lineupComplete() || STATE.view !== "game" || buildingChallenge;
   els.startSeries.textContent = lineupComplete()
@@ -2757,6 +3422,90 @@ function renderGameMeta() {
 }
 
 function renderRoster() {
+  if (dailyChallengeActive()) {
+    const stage = currentDailyStage();
+    const players = STATE.daily.currentRoll?.players ?? [];
+    const selected = players.find((player) => player.id === STATE.daily.pendingPlayerId) ?? null;
+    els.rosterGrid.dataset.competition = "ashes";
+
+    if (stage === "intro") {
+      const oppositionLabel = STATE.daily.challenge?.opposition?.label ?? "today's opposition";
+      els.rosterTitle.textContent = "Reveal the first squad";
+      els.rosterSummary.textContent = `One Test against ${oppositionLabel}.`;
+      els.rosterGrid.innerHTML = `
+        <div class="placeholder">Reveal the first squad to continue the daily draft.</div>
+      `;
+      return;
+    }
+
+    if (stage === "recap") {
+      els.rosterTitle.textContent = "Your four selections";
+      els.rosterSummary.textContent = "This is the first point where all four squads can be reviewed together.";
+      els.rosterGrid.innerHTML = `
+        <div class="daily-recap-grid">
+          ${STATE.daily.recap.map((roll) => `
+            <article class="daily-recap-card">
+              <strong>Roll ${roll.rollNumber} - ${escapeHtml(roll.squadLabel)}</strong>
+              <p>Locked: ${escapeHtml(roll.selectedPlayer?.name ?? "No selection")}</p>
+              <div class="daily-community-list">
+                ${roll.players.map((player) => `<span>${escapeHtml(player.name)}</span>`).join("")}
+              </div>
+            </article>
+          `).join("")}
+        </div>
+      `;
+      return;
+    }
+
+    els.rosterTitle.textContent = STATE.daily.currentRoll?.squadLabel ?? "Current squad";
+    els.rosterSummary.textContent = selected
+      ? `Lock in ${selected.name}?`
+      : "Choose one player from this squad.";
+
+    if (!players.length) {
+      els.rosterGrid.innerHTML = `<div class="placeholder">Loading the next squad...</div>`;
+      return;
+    }
+
+    els.rosterGrid.innerHTML = players
+      .map((player) => {
+        const selectedClass = player.id === STATE.daily.pendingPlayerId ? "selected" : "";
+        const unavailable = !player.selectable || STATE.daily.loadingAction;
+        const subtitle = `${player.roles[0]} · ${ratingPairLabel(player)}`;
+        return `
+          <button
+            class="player-card ${selectedClass} ${unavailable ? "unavailable" : ""}"
+            type="button"
+            data-daily-player-id="${player.id}"
+            ${unavailable ? "disabled" : ""}
+            aria-disabled="${unavailable ? "true" : "false"}"
+          >
+            <span class="player-name">${escapeHtml(player.name)}</span>
+            <span class="player-meta">${escapeHtml(subtitle)}</span>
+            ${!player.selectable ? `<span class="player-meta">${escapeHtml(player.unavailableReason || "Unavailable")}</span>` : ""}
+          </button>
+        `;
+      })
+      .join("");
+
+    els.rosterGrid.querySelectorAll("[data-daily-player-id]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const playerId = button.dataset.dailyPlayerId;
+        const nextPlayerId = STATE.daily.pendingPlayerId === playerId ? null : playerId;
+        STATE.daily.pendingPlayerId = nextPlayerId;
+        if (nextPlayerId) {
+          trackDailyEvent("daily_player_previewed", {
+            roll_number: STATE.daily.currentRoll?.rollNumber ?? 0,
+            attempt_mode: currentDailyAttemptMode(),
+          });
+        }
+        renderRoster();
+        renderBoard();
+      });
+    });
+    return;
+  }
+
   const competition = competitionConfig();
   const players = STATE.currentSquad?.players ?? [];
   const selected = STATE.catalog.find((player) => player.id === STATE.selectedPlayerId) ?? null;
@@ -2844,9 +3593,61 @@ function renderRoster() {
 
 function renderBoard() {
   const competition = competitionConfig();
+  els.board.dataset.competition = competition.theme;
+
+  if (dailyChallengeActive()) {
+    const stage = currentDailyStage();
+    const pendingPlayer = STATE.daily.currentRoll?.players?.find((player) => player.id === STATE.daily.pendingPlayerId) ?? null;
+    const lineupMap = currentDailyLineupMap();
+
+    if (stage === "recap") {
+      els.board.innerHTML = `
+        <div class="daily-board">
+          ${dailyBoardGridHtml(lineupMap)}
+          ${dailyCommunityStatsHtml()}
+        </div>
+      `;
+      return;
+    }
+
+    els.board.innerHTML = `
+      <div class="daily-board">
+        ${dailyBoardGridHtml(lineupMap)}
+        ${pendingPlayer ? `
+          <div class="daily-confirm">
+            <strong>Lock in ${escapeHtml(pendingPlayer.name)}?</strong>
+            <p>You will not be able to change this choice after the next squad is revealed.</p>
+            <div class="controls">
+              <button class="secondary" data-daily-review type="button">Review choice</button>
+              <button class="primary" data-daily-lock type="button">${STATE.daily.lockedSelections.length === 3 ? "Lock player and complete XI" : "Lock player and reveal next squad"}</button>
+            </div>
+          </div>
+        ` : `
+          <div class="placeholder">${stage === "intro" ? "Reveal the first squad to begin." : "Select one player from the current squad to continue."}</div>
+        `}
+      </div>
+    `;
+
+    const reviewButton = els.board.querySelector("[data-daily-review]");
+    if (reviewButton) {
+      reviewButton.addEventListener("click", () => {
+        STATE.daily.pendingPlayerId = null;
+        renderRoster();
+        renderBoard();
+      });
+    }
+
+    const lockButton = els.board.querySelector("[data-daily-lock]");
+    if (lockButton) {
+      lockButton.addEventListener("click", () => {
+        void lockDailySelection();
+      });
+    }
+    return;
+  }
+
   const selected = STATE.catalog.find((player) => player.id === STATE.selectedPlayerId) ?? null;
   const rolling = Boolean(STATE.rollAnimation?.active);
-  els.board.dataset.competition = competition.theme;
 
   els.board.innerHTML = `
     <div class="board-grid">
@@ -2910,7 +3711,7 @@ function setChallengeStatus(message) {
 function renderChallengePanel() {
   if (!els.challengePanel) return;
 
-  const showPanel = STATE.view === "game" && STATE.competition === "ashes" && isChallengeMode();
+  const showPanel = STATE.view === "game" && STATE.competition === "ashes" && isChallengeMode() && !dailyChallengeActive();
   const loadedChallenge = challengeLineupLoaded();
   const creatorName = loadedChallengeCreatorName();
   const playableMode = currentChallengePlayableMode();
@@ -2970,6 +3771,7 @@ function renderSeriesSummary() {
   const completed = seriesComplete();
   const revealedAll = STATE.series.revealed >= STATE.series.matches.length;
   const resultLoaded = resultSnapshotLoaded();
+  const dailyRankedComplete = dailyChallengeActive() && completed && STATE.daily.attempt?.attemptMode === "ranked";
   const canSendBack = completed && (challengeLineupLoaded() || resultLoaded);
   const sendTarget = currentChallengeSendTarget();
   els.seriesProgress.textContent = `${STATE.series.revealed} / ${STATE.series.matches.length} ${competition.seriesProgressLabel}`;
@@ -2978,17 +3780,20 @@ function renderSeriesSummary() {
     : STATE.series.revealed === 0
       ? "Ready to simulate"
       : "Simulation in progress";
-  els.backBuilder.textContent = resultLoaded ? "Home" : "Back to XI";
+  els.backBuilder.textContent = resultLoaded || dailyChallengeActive() ? "Home" : "Back to XI";
   els.seriesUserStrength.textContent = `${STATE.series.userTeam.overall} · ${STATE.series.userTeam.grade}`;
   els.seriesStarStrength.textContent = `${STATE.series.starTeam.overall} · ${STATE.series.starTeam.grade}`;
   els.seriesUserLabel.textContent = currentSeriesUserLabel();
   els.seriesOppositionLabel.textContent = competition.oppositionShortTitle;
   els.seriesActions.hidden = !completed;
   els.seriesControlsPanel.hidden = resultLoaded || completed;
-  els.sendResultBack.hidden = !canSendBack;
+  els.sendResultBack.hidden = dailyChallengeActive() || !canSendBack;
   els.sendResultBack.textContent = sendTarget ? `Send result back to ${sendTarget}` : "Send result back";
+  if (els.dailyPractice) {
+    els.dailyPractice.hidden = !dailyRankedComplete;
+  }
   if (els.challengeBack) {
-    els.challengeBack.hidden = !completed || (!challengeLineupLoaded() && !resultLoaded);
+    els.challengeBack.hidden = dailyChallengeActive() || !completed || (!challengeLineupLoaded() && !resultLoaded);
   }
   els.playAgain.classList.toggle("primary", !canSendBack);
   els.playAgain.classList.toggle("secondary", canSendBack);
@@ -3343,6 +4148,14 @@ function renderAll() {
 }
 
 function rollSquad() {
+  if (dailyChallengeActive()) {
+    if (currentDailyStage() !== "intro" || STATE.daily.loadingAction || STATE.daily.loadingSummary) return;
+    void startDailyAttempt("ranked").catch((error) => {
+      console.error("Daily challenge could not start:", error);
+      window.alert(error instanceof Error ? error.message : "Could not start the daily challenge.");
+    });
+    return;
+  }
   if (STATE.view !== "game" || STATE.currentSquad || lineupComplete() || STATE.rollAnimation?.active) return;
 
   const pool = STATE.squads.filter(squadHasAvailablePlayer);
@@ -4178,6 +4991,13 @@ function clearTimer() {
 }
 
 function startSeries() {
+  if (dailyChallengeActive()) {
+    void simulateDailyTest().catch((error) => {
+      console.error("Daily Test could not start:", error);
+      window.alert(error instanceof Error ? error.message : "Could not play the daily Test.");
+    });
+    return;
+  }
   if (!lineupComplete() || challengeCreationMode()) return;
   clearTimer();
   const competition = competitionConfig();
@@ -4263,6 +5083,9 @@ function goHome() {
   clearRollAnimation();
   STATE.view = "home";
   clearRouteError();
+  if (dailyChallengeActive()) {
+    resetDailyState({ preserveSummary: true });
+  }
   if (resultSnapshotLoaded()) {
     STATE.result = null;
     STATE.challenge = null;
@@ -4288,6 +5111,10 @@ function goHome() {
 }
 
 function goBuilder() {
+  if (dailyChallengeActive()) {
+    goHome();
+    return;
+  }
   if (resultSnapshotLoaded()) {
     goHome();
     return;
@@ -4339,6 +5166,10 @@ function startChallengeBack() {
 }
 
 function resetBuilder() {
+  if (dailyChallengeActive()) {
+    goHome();
+    return;
+  }
   if (resultSnapshotLoaded()) {
     goHome();
     return;
@@ -4395,6 +5226,14 @@ function wireControls() {
   els.seriesNext.addEventListener("click", revealNextSeriesMatch);
   els.seriesAll.addEventListener("click", revealAllSeriesMatches);
   els.playAgain.addEventListener("click", goHome);
+  if (els.dailyPractice) {
+    els.dailyPractice.addEventListener("click", () => {
+      void startDailyPractice().catch((error) => {
+        console.error("Practice mode failed:", error);
+        window.alert(error instanceof Error ? error.message : "Could not start practice mode.");
+      });
+    });
+  }
   els.seriesLeaderboard.addEventListener("click", () => {
     window.location.assign("/leaderboard");
   });
@@ -4410,6 +5249,16 @@ function wireControls() {
     STATE.mode = "challenge";
     STATE.view = "game";
     renderAll();
+  });
+  els.homeDaily.addEventListener("click", () => {
+    if (STATE.routeError && routeUsesDedicatedPath()) {
+      replaceBrowserPath("/");
+    }
+    clearRouteError();
+    void openDailyChallenge().catch((error) => {
+      console.error("Open daily challenge failed:", error);
+      window.alert(error instanceof Error ? error.message : "Could not load the daily challenge.");
+    });
   });
   els.homeCompetition.addEventListener("click", () => {
     if (STATE.routeError && routeUsesDedicatedPath()) {
@@ -4786,6 +5635,11 @@ function pageTitleForCompetition(competition) {
     return creatorName
       ? `${creatorName}'s ${challengeMode} Challenge | Ashes 5-0`
       : `${challengeMode} Challenge | Ashes 5-0`;
+  }
+
+  if (dailyChallengeActive()) {
+    const challengeDate = STATE.daily.challenge?.date ?? "2026-07-26";
+    return `Daily Ashes Challenge | ${challengeDate} | Ashes 5-0`;
   }
 
   return competition.theme === "worldcup"
@@ -5437,6 +6291,7 @@ function formatShareText() {
 function init() {
   bindElements();
   resetSubmissionState();
+  STATE.daily.participantId = loadOrCreateDailyParticipantId();
 
   const result = loadResultFromUrl();
   if (result) {
@@ -5546,6 +6401,11 @@ function init() {
   renderAll();
   if (STATE.view === "leaderboard") {
     void loadLeaderboard();
+  }
+  if (STATE.competition === "ashes") {
+    void loadDailySummary().catch((error) => {
+      console.error("Daily summary preload failed:", error);
+    });
   }
   document.body.classList.add("app-ready");
 }

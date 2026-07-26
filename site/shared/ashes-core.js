@@ -64,11 +64,29 @@ export function slotAcceptsPlayer(slot, player) {
   return slot.accepts.some((role) => player.roles.includes(role));
 }
 
+export function playerOverall(player) {
+  return Math.round(player.batting * 0.4 + player.bowling * 0.3 + player.fielding * 0.2 + player.experience * 0.1);
+}
+
+export function playerSlotScore(player, slot) {
+  const roleBonus = slotAcceptsPlayer(slot, player) ? 22 : 0;
+  const batting = player.batting * 0.35;
+  const bowling = player.bowling * 0.35;
+  const fielding = player.fielding * 0.2;
+  const experience = player.experience * 0.1;
+
+  if (slot.focus === "batting") return batting + fielding + experience + roleBonus;
+  if (slot.focus === "bowling") return bowling + fielding + experience + roleBonus;
+  return batting * 0.35 + bowling * 0.35 + fielding * 0.2 + experience * 0.1 + roleBonus;
+}
+
 export const ASHES_CATALOG = buildCatalogFromSquads(ASHES_SQUADS);
 export const ASHES_CATALOG_INDEX_BY_ID = new Map(ASHES_CATALOG.map((player, index) => [player.id, index]));
 export const ASHES_PLAYER_BY_ID = new Map(ASHES_CATALOG.map((player) => [player.id, player]));
+export const ASHES_SQUAD_BY_ID = new Map(ASHES_SQUADS.map((squad) => [squad.id, squad]));
 
 const stablePlayers = new Map();
+const bestCatalogPlayers = new Map();
 for (const player of ASHES_CATALOG) {
   const existing = stablePlayers.get(player.stableId);
   if (!existing) {
@@ -85,10 +103,16 @@ for (const player of ASHES_CATALOG) {
       existing.roles.push(role);
     }
   }
+
+  const bestExisting = bestCatalogPlayers.get(player.stableId);
+  if (!bestExisting || playerOverall(player) > playerOverall(bestExisting)) {
+    bestCatalogPlayers.set(player.stableId, player);
+  }
 }
 
 export const ASHES_PLAYERS = [...stablePlayers.values()].sort((left, right) => left.name.localeCompare(right.name));
 export const ASHES_PLAYER_BY_STABLE_ID = new Map(ASHES_PLAYERS.map((player) => [player.id, player]));
+export const BEST_ASHES_PLAYER_BY_STABLE_ID = new Map(bestCatalogPlayers);
 
 export function lineupIdsToPlayers(lineupPlayerIds) {
   if (!Array.isArray(lineupPlayerIds)) return null;
@@ -111,6 +135,73 @@ export function validateLineupPlayerIds(lineupPlayerIds) {
 
   const valid = lineup.every((player, index) => slotAcceptsPlayer(XI_SLOTS[index], player));
   return valid ? lineup : null;
+}
+
+export function assignBestValidLineup(players) {
+  if (!Array.isArray(players) || players.length !== XI_SLOTS.length) {
+    return null;
+  }
+
+  const pool = [...players];
+  const seenStableIds = new Set();
+  for (const player of pool) {
+    const stableId = player?.stableId ?? stablePlayerIdFromName(player?.name ?? "");
+    if (seenStableIds.has(stableId)) {
+      return null;
+    }
+    seenStableIds.add(stableId);
+  }
+
+  const slotOrder = XI_SLOTS
+    .map((slot, index) => ({
+      slot,
+      index,
+      candidates: pool
+        .map((player, playerIndex) => ({
+          player,
+          playerIndex,
+          score: playerSlotScore(player, slot),
+        }))
+        .filter(({ player }) => slotAcceptsPlayer(slot, player))
+        .sort((left, right) => right.score - left.score || playerOverall(right.player) - playerOverall(left.player)),
+    }))
+    .sort((left, right) => left.candidates.length - right.candidates.length);
+
+  if (slotOrder.some((entry) => !entry.candidates.length)) {
+    return null;
+  }
+
+  let bestAssignment = null;
+  let bestScore = Number.NEGATIVE_INFINITY;
+  const used = new Array(pool.length).fill(false);
+  const assignment = new Array(XI_SLOTS.length).fill(null);
+
+  function search(orderIndex, score) {
+    if (orderIndex >= slotOrder.length) {
+      if (score > bestScore) {
+        bestScore = score;
+        bestAssignment = [...assignment];
+      }
+      return;
+    }
+
+    const { slot, index, candidates } = slotOrder[orderIndex];
+    for (const candidate of candidates) {
+      if (used[candidate.playerIndex]) continue;
+      used[candidate.playerIndex] = true;
+      assignment[index] = candidate.player;
+      search(orderIndex + 1, score + playerSlotScore(candidate.player, slot));
+      assignment[index] = null;
+      used[candidate.playerIndex] = false;
+    }
+  }
+
+  search(0, 0);
+  return bestAssignment;
+}
+
+export function canAssignValidLineup(players) {
+  return Boolean(assignBestValidLineup(players));
 }
 
 export function challengeUrlForId(challengeId) {

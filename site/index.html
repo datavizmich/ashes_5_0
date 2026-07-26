@@ -118,6 +118,15 @@
               <span class="feature-action-label">Challenge a friend</span>
               <span class="feature-badge" aria-hidden="true">NEW</span>
             </button>
+            <button
+              class="secondary feature-action"
+              data-home-daily
+              type="button"
+              title="Play the ranked Daily Ashes Challenge with the same hidden roll sequence as everyone else."
+            >
+              <span class="feature-action-label">Daily challenge</span>
+              <span class="feature-badge" aria-hidden="true">NEW</span>
+            </button>
             <button class="secondary" data-home-leaderboard type="button">Player leaderboard</button>
             <button class="secondary" data-home-competition type="button">World Cup mode</button>
           </div>
@@ -281,7 +290,7 @@
                 <p class="panel-kicker">XI board</p>
                 <h2 data-board-title>Your Test side</h2>
               </div>
-              <p class="panel-subtitle">Click a player first, then click a valid slot.</p>
+              <div class="panel-subtitle panel-subtitle-rich" data-board-copy>Click a player first, then click a valid slot.</div>
             </div>
             <div class="board" data-board></div>
           </section>
@@ -400,6 +409,7 @@
           </div>
           <div class="controls">
             <button class="primary" data-play-again type="button">Play again</button>
+            <button class="secondary" data-daily-practice type="button" hidden>Practice the sequence</button>
             <button class="primary" data-send-result-back type="button" hidden>Send result back</button>
             <button class="secondary" data-challenge-back type="button" hidden>Challenge them back</button>
             <button class="secondary" data-series-leaderboard type="button">Player leaderboard</button>
