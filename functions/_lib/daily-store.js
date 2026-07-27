@@ -1,6 +1,6 @@
 import { createUniquePublicId } from "./store.js";
 
-const DAILY_SCHEMA_STATEMENTS = [
+const DAILY_SCHEMA_BASE_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS daily_attempts (
      id TEXT PRIMARY KEY,
      challenge_id TEXT NOT NULL,
@@ -37,6 +37,9 @@ const DAILY_SCHEMA_STATEMENTS = [
    ON daily_attempts(challenge_id, attempt_mode, draft_complete, simulation_complete)`,
   `CREATE INDEX IF NOT EXISTS idx_daily_attempt_selections_attempt
    ON daily_attempt_selections(attempt_id, roll_number)`,
+];
+
+const DAILY_SCHEMA_SLOT_INDEX_STATEMENTS = [
   `CREATE UNIQUE INDEX IF NOT EXISTS idx_daily_attempt_selections_slot
    ON daily_attempt_selections(attempt_id, slot_index)
    WHERE slot_index IS NOT NULL`,
@@ -73,8 +76,9 @@ export async function ensureDailyStoreSchema(db) {
   }
 
   const pending = db
-    .batch(DAILY_SCHEMA_STATEMENTS.map((statement) => db.prepare(statement)))
+    .batch(DAILY_SCHEMA_BASE_STATEMENTS.map((statement) => db.prepare(statement)))
     .then(() => ensureDailyStoreColumns(db))
+    .then(() => db.batch(DAILY_SCHEMA_SLOT_INDEX_STATEMENTS.map((statement) => db.prepare(statement))))
     .then(() => undefined)
     .catch((error) => {
       dailySchemaReady.delete(db);

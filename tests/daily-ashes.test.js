@@ -118,6 +118,7 @@ test("daily challenge resolves all seven fixed players and offers valid roll-one
 test("daily schema bootstrap creates the daily tables once per database binding", async () => {
   const prepared = [];
   let batchCalls = 0;
+  const alteredStatements = [];
   const db = {
     prepare(statement) {
       prepared.push(statement);
@@ -127,14 +128,15 @@ test("daily schema bootstrap creates the daily tables once per database binding"
         },
         async all() {
           if (statement === "PRAGMA table_info(daily_attempts)") {
-            return { results: [{ name: "id" }, { name: "display_name" }] };
+            return { results: [{ name: "id" }] };
           }
           if (statement === "PRAGMA table_info(daily_attempt_selections)") {
-            return { results: [{ name: "attempt_id" }, { name: "slot_index" }] };
+            return { results: [{ name: "attempt_id" }] };
           }
           return { results: [] };
         },
         async run() {
+          alteredStatements.push(statement);
           return {};
         },
       };
@@ -152,6 +154,11 @@ test("daily schema bootstrap creates the daily tables once per database binding"
   assert.equal(prepared.filter((statement) => /^CREATE /u.test(statement)).length, 6);
   assert.ok(prepared.includes("PRAGMA table_info(daily_attempts)"));
   assert.ok(prepared.includes("PRAGMA table_info(daily_attempt_selections)"));
+  assert.ok(alteredStatements.includes("ALTER TABLE daily_attempts ADD COLUMN display_name TEXT NOT NULL DEFAULT ''"));
+  assert.ok(alteredStatements.includes("ALTER TABLE daily_attempt_selections ADD COLUMN slot_index INTEGER"));
+  const slotIndexCreateIndex = prepared.findIndex((statement) => statement.includes("idx_daily_attempt_selections_slot"));
+  const slotIndexAlter = prepared.findIndex((statement) => statement === "ALTER TABLE daily_attempt_selections ADD COLUMN slot_index INTEGER");
+  assert.ok(slotIndexCreateIndex > slotIndexAlter);
 });
 
 test("attempt response only exposes the current roll before drafting is complete", () => {
