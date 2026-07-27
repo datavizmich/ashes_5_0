@@ -1636,6 +1636,9 @@ async function lockDailySelection(slotIndex) {
       trackDailyEvent("daily_next_roll_revealed", { roll_number: payload.currentRoll.rollNumber });
       trackDailyEvent("daily_roll_revealed", { roll_number: payload.currentRoll.rollNumber, source: "next-roll" });
     }
+  } catch (error) {
+    console.error("Daily selection lock failed:", error);
+    window.alert(error instanceof Error ? error.message : "Could not lock that selection.");
   } finally {
     STATE.daily.loadingAction = false;
     renderAll();
@@ -3759,12 +3762,7 @@ function renderBoard() {
     els.board.innerHTML = `
       <div class="daily-board">
         ${dailyBoardGridHtml(lineupMap, targetSlotIndexes)}
-        ${pendingPlayer ? `
-          <div class="daily-recap-card">
-            <strong>${escapeHtml(pendingPlayer.name)}</strong>
-            <p>Select a valid XI slot to lock this player in.</p>
-          </div>
-        ` : `
+        ${pendingPlayer ? "" : `
           <div class="placeholder">${stage === "intro" ? "Reveal the first squad to begin." : "Select one player from the current squad to continue."}</div>
         `}
       </div>
@@ -3772,6 +3770,7 @@ function renderBoard() {
 
     els.board.querySelectorAll("[data-daily-slot-index]").forEach((button) => {
       button.addEventListener("click", () => {
+        button.blur();
         const slotIndex = Number(button.dataset.dailySlotIndex);
         void lockDailySelection(slotIndex);
       });
