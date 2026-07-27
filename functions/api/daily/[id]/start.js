@@ -6,6 +6,7 @@ import {
   fetchDailyAttemptState,
   fetchRankedDailyAttemptByParticipant,
   listCompletedRankedDailyAttempts,
+  updateDailyAttemptDisplayName,
 } from "../../../_lib/daily-store.js";
 import { checkRateLimit } from "../../../_lib/security.js";
 import { buildDailyAttemptResponse, validateDailyStartPayload } from "../../../_lib/daily.js";
@@ -42,12 +43,14 @@ export async function onRequestPost(context) {
         participantId: payload.participantId,
         attemptMode: "practice",
         submissionKey: payload.submissionKey,
+        displayName: payload.displayName,
       }, isoTimestamp());
     } else {
       attempt = await createOrFetchRankedDailyAttempt(context.env.DB, {
         challengeId: definition.id,
         participantId: payload.participantId,
         submissionKey: payload.submissionKey,
+        displayName: payload.displayName,
       }, isoTimestamp());
     }
 
@@ -55,11 +58,15 @@ export async function onRequestPost(context) {
       return errorResponse(500, "Could not create the daily attempt.");
     }
 
+    if (payload.displayName !== attempt.displayName) {
+      await updateDailyAttemptDisplayName(context.env.DB, attempt.id, payload.displayName, isoTimestamp());
+    }
+
     const attemptState = await fetchDailyAttemptState(context.env.DB, attempt.id);
     if (!attemptState) {
       return errorResponse(500, "Daily attempt state could not be loaded.");
     }
-    const completedRankedAttempts = attemptState?.attempt?.draftComplete
+    const completedRankedAttempts = attemptState?.attempt?.simulationComplete
       ? await listCompletedRankedDailyAttempts(context.env.DB, definition.id)
       : null;
 

@@ -5,12 +5,14 @@ import {
   buildDailyCompletedXI,
   buildDailyPlayerPool,
   buildDailyRecap,
+  buildDailyResultsLeaderboard,
   buildDailyRollPublicState,
   canSelectDailyPlayer,
   getDailyFixedPlayers,
   getDailyOppositionPlayers,
   normalizeDailySelections,
 } from "../../site/shared/daily-ashes.js";
+import { normalizeDisplayName } from "../../site/shared/ashes-core.js";
 
 function asAttemptError(message, status = 400) {
   const error = new Error(message);
@@ -45,6 +47,7 @@ export function validateDailyStartPayload(payload) {
     participantId: validateDailyParticipantId(body.participantId),
     submissionKey: validateSubmissionKey(body.submissionKey, "Submission key"),
     attemptMode,
+    displayName: normalizeDisplayName(body.displayName),
   };
 }
 
@@ -64,10 +67,16 @@ export function validateDailySelectPayload(payload) {
     throw asAttemptError("Selected player id is invalid.");
   }
 
+  const slotIndex = Number(body.slotIndex);
+  if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex > 10) {
+    throw asAttemptError("Selected slot is invalid.");
+  }
+
   return {
     participantId: validateDailyParticipantId(body.participantId),
     currentRollNumber,
     selectedPlayerId,
+    slotIndex,
   };
 }
 
@@ -79,6 +88,7 @@ export function validateDailySimulatePayload(payload) {
 
   return {
     participantId: validateDailyParticipantId(body.participantId),
+    displayName: normalizeDisplayName(body.displayName),
   };
 }
 
@@ -104,6 +114,7 @@ function buildLockedSelectionsPayload(definition, selections) {
       squadLabel: roll.squadLabel,
       squadTeam: roll.squadTeam,
       squadYear: roll.squadYear,
+      slotIndex: roll.slotIndex,
       player: roll.selectedPlayer,
     }));
 }
@@ -136,6 +147,7 @@ export function buildDailyAttemptResponse(definition, attempt, selections, compl
     attempt: {
       id: attempt.id,
       attemptMode: attempt.attemptMode,
+      displayName: attempt.displayName ?? "",
       currentRollNumber: attempt.currentRollNumber,
       draftComplete: Boolean(attempt.draftComplete),
       simulationComplete: Boolean(attempt.simulationComplete),
@@ -158,8 +170,9 @@ export function buildDailyAttemptResponse(definition, attempt, selections, compl
   response.completedXI = buildCompletedXiPayload(definition, normalizedSelections);
   response.recap = buildDailyRecap(definition, normalizedSelections);
 
-  if (completedRankedAttempts) {
+  if (attempt.simulationComplete && completedRankedAttempts) {
     response.communityStats = buildDailyCommunityStats(definition, completedRankedAttempts, normalizedSelections);
+    response.dailyLeaderboard = buildDailyResultsLeaderboard(completedRankedAttempts, attempt.id);
   }
 
   if (attempt.simulationComplete && attempt.result) {
@@ -182,8 +195,8 @@ export function buildDailySimulationResult(definition, selections) {
   return buildSingleTestSeries(completedXI, oppositionLineup, definition.conditions, seed);
 }
 
-export function assertSelectableDailyPlayer(definition, selections, rollNumber, selectedPlayerId) {
-  if (!canSelectDailyPlayer(definition, selections, rollNumber, selectedPlayerId)) {
+export function assertSelectableDailyPlayer(definition, selections, rollNumber, selectedPlayerId, slotIndex = null) {
+  if (!canSelectDailyPlayer(definition, selections, rollNumber, selectedPlayerId, slotIndex)) {
     throw asAttemptError("That player cannot be locked from this roll.", 400);
   }
 }

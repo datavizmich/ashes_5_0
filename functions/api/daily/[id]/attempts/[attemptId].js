@@ -17,7 +17,7 @@ export async function onRequestGet(context) {
     const attemptState = await fetchDailyAttemptState(context.env.DB, context.params.attemptId);
     assertDailyAttemptOwnership(definition, attemptState?.attempt, participantId);
 
-    const completedRankedAttempts = attemptState.attempt.draftComplete
+    const completedRankedAttempts = attemptState.attempt.simulationComplete
       ? await listCompletedRankedDailyAttempts(context.env.DB, definition.id)
       : null;
 

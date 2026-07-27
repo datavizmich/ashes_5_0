@@ -10,6 +10,7 @@ import {
   fetchDailyAttemptState,
   listCompletedRankedDailyAttempts,
   saveDailyAttemptResult,
+  updateDailyAttemptDisplayName,
 } from "../../../../../_lib/daily-store.js";
 import { checkRateLimit } from "../../../../../_lib/security.js";
 import { isoTimestamp } from "../../../../../_lib/store.js";
@@ -37,6 +38,10 @@ export async function onRequestPost(context) {
 
     if (!attemptState.attempt.draftComplete) {
       return errorResponse(400, "Finish the draft before simulating the Test.");
+    }
+
+    if (payload.displayName !== attemptState.attempt.displayName) {
+      await updateDailyAttemptDisplayName(context.env.DB, attemptState.attempt.id, payload.displayName, isoTimestamp());
     }
 
     if (!attemptState.attempt.simulationComplete) {

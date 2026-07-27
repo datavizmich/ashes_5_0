@@ -48,7 +48,9 @@ function buildInitialDailyState() {
     completedXI: [],
     recap: [],
     communityStats: null,
+    resultsLeaderboard: null,
     result: null,
+    displayName: "",
     pendingPlayerId: null,
   };
 }
@@ -336,6 +338,14 @@ function currentDailyAttemptMode() {
   return STATE.daily.attempt?.attemptMode ?? "ranked";
 }
 
+function currentDailyDisplayName() {
+  return normalizeChallengeCreatorName(
+    STATE.daily.attempt?.displayName
+    ?? STATE.daily.summary?.rankedAttempt?.displayName
+    ?? STATE.daily.displayName,
+  );
+}
+
 function currentDailyPlayerPool() {
   if (STATE.daily.currentTeamPool.length) {
     return STATE.daily.currentTeamPool;
@@ -431,6 +441,22 @@ function currentDailyLineupMap() {
   if (STATE.daily.completedXI.length === XI_SLOTS.length) {
     return buildLineupMapFromArray(STATE.daily.completedXI);
   }
+
+  const fixedPlayersHaveSlots = STATE.daily.fixedPlayers.every((player) => Number.isInteger(player?.slotIndex));
+  const selectionsHaveSlots = STATE.daily.lockedSelections.every((selection) => Number.isInteger(selection?.slotIndex));
+  if (fixedPlayersHaveSlots && selectionsHaveSlots) {
+    const lineupMap = new Map();
+    STATE.daily.fixedPlayers.forEach((player) => {
+      lineupMap.set(player.slotIndex, player);
+    });
+    STATE.daily.lockedSelections.forEach((selection) => {
+      if (selection.player) {
+        lineupMap.set(selection.slotIndex, selection.player);
+      }
+    });
+    return lineupMap;
+  }
+
   return buildBestPartialLineupMap(currentDailyPlayerPool());
 }
 
@@ -438,6 +464,7 @@ function resetDailyState({ preserveSummary = true, preserveParticipant = true } 
   const next = buildInitialDailyState();
   next.summary = preserveSummary ? STATE.daily.summary : null;
   next.participantId = preserveParticipant ? STATE.daily.participantId : "";
+  next.displayName = currentDailyDisplayName();
   STATE.daily = next;
 }
 
@@ -731,6 +758,10 @@ function createRandomId(byteLength = 9) {
 
 function createSubmissionKey() {
   return createRandomId(10);
+}
+
+function currentDailyReferenceDateText() {
+  return new Date().toISOString().slice(0, 10);
 }
 
 function loadOrCreateDailyParticipantId() {
@@ -1246,6 +1277,10 @@ function responderTeamLabelFromName(name, fallback = "Your XI") {
 }
 
 function currentSeriesUserLabel() {
+  if (dailyChallengeActive()) {
+    return responderTeamLabelFromName(currentDailyDisplayName(), "Your XI");
+  }
+
   if (resultSnapshotLoaded()) {
     return responderTeamLabelFromName(STATE.result?.responderDisplayName, "Responder's XI");
   }
@@ -1396,7 +1431,9 @@ function applyDailySummaryPayload(challengeSummary) {
   STATE.daily.completedXI = [];
   STATE.daily.recap = [];
   STATE.daily.communityStats = null;
+  STATE.daily.resultsLeaderboard = null;
   STATE.daily.result = null;
+  STATE.daily.displayName = normalizeChallengeCreatorName(challengeSummary.rankedAttempt?.displayName ?? STATE.daily.displayName);
   STATE.daily.pendingPlayerId = null;
   STATE.daily.attempt = null;
   return challengeSummary;
@@ -1415,6 +1452,7 @@ function applyDailyAttemptPayload(payload) {
           simulationComplete: Boolean(payload.attempt.simulationComplete),
           attemptMode: payload.attempt.attemptMode,
           currentRollNumber: payload.attempt.currentRollNumber,
+          displayName: normalizeChallengeCreatorName(payload.attempt.displayName),
         }
       : STATE.daily.summary?.rankedAttempt ?? null,
   };
@@ -1427,7 +1465,9 @@ function applyDailyAttemptPayload(payload) {
   STATE.daily.completedXI = Array.isArray(payload.completedXI) ? payload.completedXI : [];
   STATE.daily.recap = Array.isArray(payload.recap) ? payload.recap : [];
   STATE.daily.communityStats = payload.communityStats ?? null;
+  STATE.daily.resultsLeaderboard = payload.dailyLeaderboard ?? null;
   STATE.daily.result = payload.result ?? null;
+  STATE.daily.displayName = normalizeChallengeCreatorName(payload.attempt.displayName);
   STATE.daily.pendingPlayerId = null;
   STATE.daily.active = true;
   persistStoredDailyAttemptId(payload.challenge.id, payload.attempt.attemptMode, payload.attempt.id);
@@ -1472,7 +1512,12 @@ async function loadDailySummary({ force = false } = {}) {
     STATE.daily.participantId = loadOrCreateDailyParticipantId();
   }
 
-  if (!force && STATE.daily.summary?.id && !STATE.daily.loadingSummary) {
+  if (
+    !force
+    && STATE.daily.summary?.id
+    && STATE.daily.summary?.date === currentDailyReferenceDateText()
+    && !STATE.daily.loadingSummary
+  ) {
     return STATE.daily.summary;
   }
 
@@ -1522,6 +1567,7 @@ async function startDailyAttempt(attemptMode = "ranked") {
       participantId: STATE.daily.participantId,
       submissionKey: createSubmissionKey(),
       attemptMode,
+      displayName: currentDailyDisplayName(),
     });
     applyDailyAttemptPayload(payload);
     trackDailyEvent("daily_attempt_started", { attempt_mode: attemptMode });
@@ -1553,14 +1599,15 @@ async function openDailyChallenge() {
   renderAll();
 }
 
-async function lockDailySelection() {
+async function lockDailySelection(slotIndex) {
   if (!dailyChallengeActive() || !STATE.daily.currentRoll || !STATE.daily.pendingPlayerId) return;
+  if (!Number.isInteger(slotIndex)) return;
 
   STATE.daily.loadingAction = true;
   renderAll();
   try {
     const player = STATE.daily.currentRoll.players.find((entry) => entry.id === STATE.daily.pendingPlayerId);
-    if (!player?.selectable) {
+    if (!player?.selectable || !(player.validSlotIndexes ?? []).includes(slotIndex)) {
       throw new Error(player?.unavailableReason || "That choice is unavailable.");
     }
 
@@ -1575,6 +1622,7 @@ async function lockDailySelection() {
         participantId: STATE.daily.participantId,
         currentRollNumber: STATE.daily.currentRoll.rollNumber,
         selectedPlayerId: player.id,
+        slotIndex,
       },
     );
 
@@ -1602,7 +1650,10 @@ async function simulateDailyTest() {
   try {
     const payload = await postJsonRequest(
       `/api/daily/${currentDailyChallengeId()}/attempts/${STATE.daily.attempt.id}/simulate`,
-      { participantId: STATE.daily.participantId },
+      {
+        participantId: STATE.daily.participantId,
+        displayName: currentDailyDisplayName(),
+      },
     );
     applyDailyAttemptPayload(payload);
     renderAll();
@@ -3114,6 +3165,10 @@ function renderSeriesInsights() {
       </div>
     `;
 
+  if (dailyChallengeActive() && completed) {
+    els.seriesInsights.insertAdjacentHTML("beforeend", `${dailyCommunityStatsHtml()}${dailyResultsLeaderboardHtml()}`);
+  }
+
   if (STATE.achievementDetail) {
     setAchievementDetail(STATE.achievementDetail, STATE.achievementPinned);
   }
@@ -3322,23 +3377,63 @@ function dailyBoardCopyHtml() {
   return `<span>${escapeHtml(label)}</span>${dailyDraftHelpHtml()}`;
 }
 
-function dailyBoardGridHtml(lineupMap) {
+function dailyDisplayNameFieldHtml(label = "Daily leaderboard name (optional)") {
+  return `
+    <label class="control challenge-name-control">
+      <span>${escapeHtml(label)}</span>
+      <input
+        class="challenge-name-input"
+        data-daily-display-name
+        type="text"
+        maxlength="40"
+        placeholder="Enter your name"
+        value="${escapeHtml(currentDailyDisplayName())}"
+      />
+    </label>
+  `;
+}
+
+function bindDailyDisplayNameInput() {
+  const input = els.rosterGrid.querySelector("[data-daily-display-name]");
+  if (!input) return;
+
+  input.addEventListener("input", () => {
+    STATE.daily.displayName = input.value;
+    if (STATE.daily.attempt) {
+      STATE.daily.attempt.displayName = input.value;
+    }
+  });
+
+  input.addEventListener("blur", () => {
+    const normalized = normalizeChallengeCreatorName(input.value);
+    STATE.daily.displayName = normalized;
+    if (STATE.daily.attempt) {
+      STATE.daily.attempt.displayName = normalized;
+    }
+    input.value = normalized;
+  });
+}
+
+function dailyBoardGridHtml(lineupMap, targetSlotIndexes = []) {
+  const targetSet = new Set(targetSlotIndexes);
   return `
     <div class="board-grid">
       ${XI_SLOTS.map((slot, index) => {
         const player = lineupMap.get(index) ?? null;
+        const canClick = targetSet.has(index) && !player && !STATE.daily.loadingAction;
         return `
           <button
-            class="slot ${player ? "filled" : "empty"}"
+            class="slot ${player ? "filled" : "empty"} ${canClick ? "target" : ""}"
             type="button"
             style="grid-row: ${slot.row}; grid-column: ${slot.col};"
-            disabled
+            ${canClick ? "" : "disabled"}
+            ${canClick ? `data-daily-slot-index="${index}"` : ""}
           >
             <span class="slot-label">${escapeHtml(slot.label)}</span>
             ${
               player
                 ? `<span class="slot-name">${escapeHtml(player.name)}</span><span class="slot-sub">${escapeHtml(player.roles[0])}</span>`
-                : `<span class="slot-sub">Waiting for a player</span>`
+                : `<span class="slot-sub">${canClick ? "Can fit here" : "Waiting for a player"}</span>`
             }
           </button>
         `;
@@ -3375,6 +3470,35 @@ function dailyCommunityStatsHtml() {
               ${roll.selections.map((player) => `
                 <span>${escapeHtml(player.name)}: ${player.percentage}%</span>
               `).join("")}
+            </div>
+          </article>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function dailyResultsLeaderboardHtml() {
+  const leaderboard = STATE.daily.resultsLeaderboard;
+  if (!leaderboard?.entries?.length) {
+    return `
+      <section class="daily-community">
+        <h3>Daily leaderboard</h3>
+        <p class="panel-subtitle">No ranked wins have been recorded yet for this daily challenge.</p>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="daily-community">
+      <h3>Daily leaderboard</h3>
+      <p class="panel-subtitle">Top 5 ranked winning margins for ${escapeHtml(STATE.daily.challenge?.date ?? STATE.daily.summary?.date ?? currentDailyReferenceDateText())}.</p>
+      <div class="daily-community-grid">
+        ${leaderboard.entries.map((entry, index) => `
+          <article class="daily-community-card">
+            <strong>${index + 1}. ${escapeHtml(entry.isCurrentUser ? `${entry.displayName} (You)` : entry.displayName)}</strong>
+            <div class="daily-community-list">
+              <span>${escapeHtml(entry.margin)}</span>
             </div>
           </article>
         `).join("")}
@@ -3433,34 +3557,53 @@ function renderRoster() {
       els.rosterTitle.textContent = "Reveal the first squad";
       els.rosterSummary.textContent = `One Test against ${oppositionLabel}.`;
       els.rosterGrid.innerHTML = `
-        <div class="placeholder">Reveal the first squad to continue the daily draft.</div>
+        <div class="daily-recap-grid">
+          <article class="daily-recap-card">
+            <strong>Four rolls. One Test.</strong>
+            <p>Seven players are already locked into your XI.</p>
+          </article>
+          <article class="daily-recap-card">
+            ${dailyDisplayNameFieldHtml()}
+          </article>
+        </div>
       `;
+      bindDailyDisplayNameInput();
       return;
     }
 
     if (stage === "recap") {
       els.rosterTitle.textContent = "Your four selections";
-      els.rosterSummary.textContent = "This is the first point where all four squads can be reviewed together.";
+      els.rosterSummary.textContent = currentDailyAttemptMode() === "ranked"
+        ? "This is the first point where all four squads can be reviewed together."
+        : "Practice result. This draft will not affect the ranked leaderboard.";
       els.rosterGrid.innerHTML = `
         <div class="daily-recap-grid">
           ${STATE.daily.recap.map((roll) => `
             <article class="daily-recap-card">
               <strong>Roll ${roll.rollNumber} - ${escapeHtml(roll.squadLabel)}</strong>
-              <p>Locked: ${escapeHtml(roll.selectedPlayer?.name ?? "No selection")}</p>
+              <p>Locked: ${escapeHtml(roll.selectedPlayer?.name ?? "No selection")}${Number.isInteger(roll.slotIndex) ? ` into ${escapeHtml(XI_SLOTS[roll.slotIndex]?.label ?? "XI")}` : ""}</p>
               <div class="daily-community-list">
                 ${roll.players.map((player) => `<span>${escapeHtml(player.name)}</span>`).join("")}
               </div>
             </article>
           `).join("")}
+          ${
+            currentDailyAttemptMode() === "ranked"
+              ? `<article class="daily-recap-card">${dailyDisplayNameFieldHtml()}</article>`
+              : ""
+          }
         </div>
       `;
+      if (currentDailyAttemptMode() === "ranked") {
+        bindDailyDisplayNameInput();
+      }
       return;
     }
 
     els.rosterTitle.textContent = STATE.daily.currentRoll?.squadLabel ?? "Current squad";
     els.rosterSummary.textContent = selected
-      ? `Lock in ${selected.name}?`
-      : "Choose one player from this squad.";
+      ? `${selected.name} is selected. Pick a valid slot to lock them in.`
+      : `${players.length} players available. Click one, then choose a slot.`;
 
     if (!players.length) {
       els.rosterGrid.innerHTML = `<div class="placeholder">Loading the next squad...</div>`;
@@ -3501,6 +3644,9 @@ function renderRoster() {
         }
         renderRoster();
         renderBoard();
+        if (nextPlayerId) {
+          scrollBuilderTargetIntoView(els.board.closest(".board-panel") ?? els.board);
+        }
       });
     });
     return;
@@ -3604,23 +3750,19 @@ function renderBoard() {
       els.board.innerHTML = `
         <div class="daily-board">
           ${dailyBoardGridHtml(lineupMap)}
-          ${dailyCommunityStatsHtml()}
         </div>
       `;
       return;
     }
 
+    const targetSlotIndexes = pendingPlayer?.validSlotIndexes ?? [];
     els.board.innerHTML = `
       <div class="daily-board">
-        ${dailyBoardGridHtml(lineupMap)}
+        ${dailyBoardGridHtml(lineupMap, targetSlotIndexes)}
         ${pendingPlayer ? `
-          <div class="daily-confirm">
-            <strong>Lock in ${escapeHtml(pendingPlayer.name)}?</strong>
-            <p>You will not be able to change this choice after the next squad is revealed.</p>
-            <div class="controls">
-              <button class="secondary" data-daily-review type="button">Review choice</button>
-              <button class="primary" data-daily-lock type="button">${STATE.daily.lockedSelections.length === 3 ? "Lock player and complete XI" : "Lock player and reveal next squad"}</button>
-            </div>
+          <div class="daily-recap-card">
+            <strong>${escapeHtml(pendingPlayer.name)}</strong>
+            <p>Select a valid XI slot to lock this player in.</p>
           </div>
         ` : `
           <div class="placeholder">${stage === "intro" ? "Reveal the first squad to begin." : "Select one player from the current squad to continue."}</div>
@@ -3628,21 +3770,12 @@ function renderBoard() {
       </div>
     `;
 
-    const reviewButton = els.board.querySelector("[data-daily-review]");
-    if (reviewButton) {
-      reviewButton.addEventListener("click", () => {
-        STATE.daily.pendingPlayerId = null;
-        renderRoster();
-        renderBoard();
+    els.board.querySelectorAll("[data-daily-slot-index]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const slotIndex = Number(button.dataset.dailySlotIndex);
+        void lockDailySelection(slotIndex);
       });
-    }
-
-    const lockButton = els.board.querySelector("[data-daily-lock]");
-    if (lockButton) {
-      lockButton.addEventListener("click", () => {
-        void lockDailySelection();
-      });
-    }
+    });
     return;
   }
 
@@ -5108,6 +5241,11 @@ function goHome() {
   STATE.achievementDetail = null;
   STATE.achievementPinned = false;
   renderAll();
+  if (STATE.competition === "ashes") {
+    void loadDailySummary().catch((error) => {
+      console.error("Daily summary reload failed:", error);
+    });
+  }
 }
 
 function goBuilder() {
@@ -5191,6 +5329,13 @@ function resetBuilder() {
 }
 
 function wireControls() {
+  const refreshDailySummaryOnReturn = () => {
+    if (STATE.competition !== "ashes" || STATE.view !== "home" || dailyChallengeActive()) return;
+    void loadDailySummary().catch((error) => {
+      console.error("Daily summary refresh failed:", error);
+    });
+  };
+
   els.playGame.addEventListener("click", () => {
     if (STATE.routeError && routeUsesDedicatedPath()) {
       replaceBrowserPath("/");
@@ -5314,6 +5459,12 @@ function wireControls() {
   els.leaderboardMode.addEventListener("change", () => {
     STATE.leaderboard.mode = els.leaderboardMode.value;
     void loadLeaderboard();
+  });
+  window.addEventListener("focus", refreshDailySummaryOnReturn);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      refreshDailySummaryOnReturn();
+    }
   });
   els.shareResult.addEventListener("click", async () => {
     try {

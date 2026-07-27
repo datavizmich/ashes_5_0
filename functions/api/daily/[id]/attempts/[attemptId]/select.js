@@ -45,7 +45,7 @@ export async function onRequestPost(context) {
       return errorResponse(409, "That is not the current unresolved roll.");
     }
 
-    assertSelectableDailyPlayer(definition, attemptState.selections, payload.currentRollNumber, payload.selectedPlayerId);
+    assertSelectableDailyPlayer(definition, attemptState.selections, payload.currentRollNumber, payload.selectedPlayerId, payload.slotIndex);
     const selectedPlayer = ASHES_PLAYER_BY_ID.get(payload.selectedPlayerId);
     if (!selectedPlayer) {
       return errorResponse(400, "Selected player is invalid.");
@@ -57,6 +57,7 @@ export async function onRequestPost(context) {
       squadId: selectedPlayer.squadId,
       stableId: selectedPlayer.stableId,
       playerId: selectedPlayer.id,
+      slotIndex: payload.slotIndex,
     }, timestamp);
 
     const draftComplete = payload.currentRollNumber >= definition.rolls.length;
@@ -64,7 +65,7 @@ export async function onRequestPost(context) {
     await updateDailyAttemptProgress(context.env.DB, attemptState.attempt.id, nextRollNumber, draftComplete, timestamp);
 
     const refreshed = await fetchDailyAttemptState(context.env.DB, attemptState.attempt.id);
-    const completedRankedAttempts = refreshed.attempt.draftComplete
+    const completedRankedAttempts = refreshed.attempt.simulationComplete
       ? await listCompletedRankedDailyAttempts(context.env.DB, definition.id)
       : null;
 
