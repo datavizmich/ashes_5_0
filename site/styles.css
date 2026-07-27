@@ -558,6 +558,26 @@ body[data-competition="worldcup"] [data-home-challenge] {
   z-index: 7;
 }
 
+.daily-name-inline {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+.daily-name-inline-card {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.daily-name-inline-card .challenge-name-control {
+  max-width: none;
+}
+
+.daily-name-inline-note {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
 .draft-meter {
   position: static;
   z-index: 1;
@@ -775,7 +795,10 @@ button:disabled {
 .daily-board,
 .daily-community,
 .daily-community-grid,
-.daily-recap-grid {
+.daily-community-body,
+.daily-recap-grid,
+.series-table-stack,
+.daily-results-card {
   display: grid;
   gap: 0.85rem;
 }
@@ -786,11 +809,19 @@ button:disabled {
 }
 
 .daily-recap-card,
-.daily-community-card {
+.daily-community-card,
+.daily-results-card {
   padding: 0.9rem 1rem;
   border-radius: 1rem;
   background: rgba(255, 255, 255, 0.7);
   border: 1px solid rgba(31, 31, 31, 0.08);
+}
+
+.daily-results-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
 }
 
 .daily-help {
@@ -1172,6 +1203,10 @@ button:disabled {
 .table-wrap {
   overflow: auto;
   border-radius: 1rem;
+}
+
+.daily-results-wrap {
+  overflow: visible;
 }
 
 .leaderboard-table-wrap {

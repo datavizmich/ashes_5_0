@@ -169,6 +169,7 @@ function bindElements() {
     rosterGrid: "[data-roster-grid]",
     board: "[data-board]",
     rollSquad: "[data-roll-squad]",
+    dailyNameInline: "[data-daily-name-inline]",
     startSeries: "[data-start-series]",
     challengePanel: "[data-challenge-panel]",
     challengeTitle: "[data-challenge-title]",
@@ -193,6 +194,8 @@ function bindElements() {
     seriesTitle: "[data-series-title]",
     seriesFeed: "[data-series-feed]",
     seriesTableWrap: "[data-series-table-wrap]",
+    dailyCommunityPanel: "[data-daily-community-panel]",
+    dailyCommunityContent: "[data-daily-community-content]",
     seriesNext: "[data-series-next]",
     seriesAll: "[data-series-all]",
     draftMeter: "[data-draft-meter]",
@@ -3168,10 +3171,6 @@ function renderSeriesInsights() {
       </div>
     `;
 
-  if (dailyChallengeActive() && completed) {
-    els.seriesInsights.insertAdjacentHTML("beforeend", `${dailyCommunityStatsHtml()}${dailyResultsLeaderboardHtml()}`);
-  }
-
   if (STATE.achievementDetail) {
     setAchievementDetail(STATE.achievementDetail, STATE.achievementPinned);
   }
@@ -3396,8 +3395,8 @@ function dailyDisplayNameFieldHtml(label = "Daily leaderboard name (optional)") 
   `;
 }
 
-function bindDailyDisplayNameInput() {
-  const input = els.rosterGrid.querySelector("[data-daily-display-name]");
+function bindDailyDisplayNameInput(root = document) {
+  const input = root?.querySelector?.("[data-daily-display-name]");
   if (!input) return;
 
   input.addEventListener("input", () => {
@@ -3415,6 +3414,36 @@ function bindDailyDisplayNameInput() {
     }
     input.value = normalized;
   });
+}
+
+function renderDailyNameInline() {
+  if (!els.dailyNameInline) return;
+
+  const showInline = STATE.view === "game"
+    && dailyChallengeActive()
+    && currentDailyAttemptMode() === "ranked";
+  els.dailyNameInline.hidden = !showInline;
+
+  if (!showInline) {
+    els.dailyNameInline.innerHTML = "";
+    return;
+  }
+
+  const stage = currentDailyStage();
+  const label = stage === "recap"
+    ? "Daily leaderboard name (optional)"
+    : "Set your daily leaderboard name (optional)";
+  const note = stage === "recap"
+    ? "This is the name that will appear on the ranked daily leaderboard if you win."
+    : "Set this now so it is ready when your ranked result is submitted.";
+
+  els.dailyNameInline.innerHTML = `
+    <div class="daily-name-inline-card">
+      ${dailyDisplayNameFieldHtml(label)}
+      <p class="daily-name-inline-note">${escapeHtml(note)}</p>
+    </div>
+  `;
+  bindDailyDisplayNameInput(els.dailyNameInline);
 }
 
 function dailyBoardGridHtml(lineupMap, targetSlotIndexes = []) {
@@ -3445,14 +3474,11 @@ function dailyBoardGridHtml(lineupMap, targetSlotIndexes = []) {
   `;
 }
 
-function dailyCommunityStatsHtml() {
+function dailyCommunityStatsBodyHtml() {
   const stats = STATE.daily.communityStats;
   if (!stats?.rolls?.length) {
     return `
-      <section class="daily-community">
-        <h3>Community picks</h3>
-        <p class="panel-subtitle">Community percentages will appear after more ranked drafts are completed.</p>
-      </section>
+      <p class="panel-subtitle">Community percentages will appear after more ranked drafts are completed.</p>
     `;
   }
 
@@ -3462,39 +3488,40 @@ function dailyCommunityStatsHtml() {
   const samePath = `${stats.sameFourChoicesPercentage}% of ranked players made the same four choices.`;
 
   return `
-    <section class="daily-community">
-      <h3>Community picks</h3>
-      <p class="panel-subtitle">${escapeHtml(samePath)} ${escapeHtml(unusual)}</p>
-      <div class="daily-community-grid">
-        ${stats.rolls.map((roll) => `
-          <article class="daily-community-card">
-            <strong>Roll ${roll.rollNumber} - ${escapeHtml(roll.squadLabel)}</strong>
-            <div class="daily-community-list">
-              ${roll.selections.map((player) => `
-                <span>${escapeHtml(player.name)}: ${player.percentage}%</span>
-              `).join("")}
-            </div>
-          </article>
-        `).join("")}
-      </div>
-    </section>
+    <p class="panel-subtitle">${escapeHtml(samePath)} ${escapeHtml(unusual)}</p>
+    <div class="daily-community-grid">
+      ${stats.rolls.map((roll) => `
+        <article class="daily-community-card">
+          <strong>Roll ${roll.rollNumber} - ${escapeHtml(roll.squadLabel)}</strong>
+          <div class="daily-community-list">
+            ${roll.selections.map((player) => `
+              <span>${escapeHtml(player.name)}: ${player.percentage}%</span>
+            `).join("")}
+          </div>
+        </article>
+      `).join("")}
+    </div>
   `;
 }
 
-function dailyResultsLeaderboardHtml() {
+function dailyResultsLeaderboardCardHtml() {
   const leaderboard = STATE.daily.resultsLeaderboard;
   if (!leaderboard?.entries?.length) {
     return `
-      <section class="daily-community">
-        <h3>Daily leaderboard</h3>
+      <section class="daily-results-card">
+        <div class="daily-results-card-header">
+          <h3>Daily leaderboard</h3>
+        </div>
         <p class="panel-subtitle">No ranked wins have been recorded yet for this daily challenge.</p>
       </section>
     `;
   }
 
   return `
-    <section class="daily-community">
-      <h3>Daily leaderboard</h3>
+    <section class="daily-results-card">
+      <div class="daily-results-card-header">
+        <h3>Daily leaderboard</h3>
+      </div>
       <p class="panel-subtitle">Top 5 ranked winning margins for ${escapeHtml(STATE.daily.challenge?.date ?? STATE.daily.summary?.date ?? currentDailyReferenceDateText())}.</p>
       <div class="daily-community-grid">
         ${leaderboard.entries.map((entry, index) => `
@@ -3508,6 +3535,20 @@ function dailyResultsLeaderboardHtml() {
       </div>
     </section>
   `;
+}
+
+function renderDailyCommunityPanel() {
+  if (!els.dailyCommunityPanel || !els.dailyCommunityContent) return;
+
+  const showPanel = dailyChallengeActive() && seriesComplete();
+  els.dailyCommunityPanel.hidden = !showPanel;
+
+  if (!showPanel) {
+    els.dailyCommunityContent.innerHTML = "";
+    return;
+  }
+
+  els.dailyCommunityContent.innerHTML = dailyCommunityStatsBodyHtml();
 }
 
 function renderGameMeta() {
@@ -3560,52 +3601,33 @@ function renderRoster() {
       els.rosterTitle.textContent = "Reveal the first squad";
       els.rosterSummary.textContent = `One Test against ${oppositionLabel}.`;
       els.rosterGrid.innerHTML = `
-        <div class="daily-recap-grid">
-          <article class="daily-recap-card">
-            <strong>Four rolls. One Test.</strong>
-            <p>Seven players are already locked into your XI.</p>
-          </article>
-          <article class="daily-recap-card">
-            ${dailyDisplayNameFieldHtml()}
-          </article>
-        </div>
+        <article class="daily-recap-card daily-intro-card">
+          <strong>Four rolls. One Test.</strong>
+          <p>Seven players are already locked into your XI. Reveal the first squad to begin.</p>
+        </article>
       `;
-      bindDailyDisplayNameInput();
       return;
     }
 
     if (stage === "recap") {
-      els.rosterTitle.textContent = "Your four selections";
+      els.rosterTitle.textContent = "Ready to play";
       els.rosterSummary.textContent = currentDailyAttemptMode() === "ranked"
-        ? "This is the first point where all four squads can be reviewed together."
+        ? "Your XI is complete. Play the Test when you are ready."
         : "Practice result. This draft will not affect the ranked leaderboard.";
       els.rosterGrid.innerHTML = `
-        <div class="daily-recap-grid">
-          ${STATE.daily.recap.map((roll) => `
-            <article class="daily-recap-card">
-              <strong>Roll ${roll.rollNumber} - ${escapeHtml(roll.squadLabel)}</strong>
-              <p>Locked: ${escapeHtml(roll.selectedPlayer?.name ?? "No selection")}${Number.isInteger(roll.slotIndex) ? ` into ${escapeHtml(XI_SLOTS[roll.slotIndex]?.label ?? "XI")}` : ""}</p>
-              <div class="daily-community-list">
-                ${roll.players.map((player) => `<span>${escapeHtml(player.name)}</span>`).join("")}
-              </div>
-            </article>
-          `).join("")}
-          ${
-            currentDailyAttemptMode() === "ranked"
-              ? `<article class="daily-recap-card">${dailyDisplayNameFieldHtml()}</article>`
-              : ""
-          }
-        </div>
+        <article class="daily-recap-card">
+          <strong>${escapeHtml(currentDailyAttemptMode() === "ranked" ? "Ranked attempt ready" : "Practice attempt ready")}</strong>
+          <p>${escapeHtml(currentDailyAttemptMode() === "ranked"
+            ? "Your leaderboard name is set above. Start the Test when you are ready."
+            : "Your practice XI is locked in. Start the Test when you are ready.")}</p>
+        </article>
       `;
-      if (currentDailyAttemptMode() === "ranked") {
-        bindDailyDisplayNameInput();
-      }
       return;
     }
 
     els.rosterTitle.textContent = STATE.daily.currentRoll?.squadLabel ?? "Current squad";
     els.rosterSummary.textContent = selected
-      ? `${selected.name} is selected. Pick a valid slot to lock them in.`
+      ? `${selected.name} is selected. Pick a valid slot in your XI.`
       : `${players.length} players available. Click one, then choose a slot.`;
 
     if (!players.length) {
@@ -4020,6 +4042,7 @@ function renderSeriesFeed() {
 
 function renderSeriesTable() {
   if (!STATE.series) return;
+  els.seriesTableWrap.classList.remove("daily-results-wrap");
   if (STATE.series.revealed < STATE.series.matches.length) {
     els.seriesTableWrap.innerHTML = `<div class="placeholder">The table will appear when the tournament ends.</div>`;
     return;
@@ -4074,8 +4097,8 @@ function renderSeriesTable() {
   const userLabel = currentSeriesUserLabel();
   const winner =
     userWins > starWins ? userLabel : starWins > userWins ? opponentLabel : "Series drawn";
-
-  els.seriesTableWrap.innerHTML = `
+  const showDailyLeaderboard = dailyChallengeActive() && seriesComplete();
+  const tableHtml = `
     <table class="series-table">
       <thead>
         <tr>
@@ -4101,6 +4124,19 @@ function renderSeriesTable() {
       </tbody>
     </table>
   `;
+
+  if (showDailyLeaderboard) {
+    els.seriesTableWrap.classList.add("daily-results-wrap");
+    els.seriesTableWrap.innerHTML = `
+      <div class="series-table-stack">
+        ${tableHtml}
+        ${dailyResultsLeaderboardCardHtml()}
+      </div>
+    `;
+    return;
+  }
+
+  els.seriesTableWrap.innerHTML = tableHtml;
 }
 
 function renderStarLineup() {
@@ -4166,6 +4202,7 @@ function renderSeries() {
   renderSeriesSummary();
   renderSeriesFeed();
   renderSeriesTable();
+  renderDailyCommunityPanel();
   renderStarLineup();
   renderSeriesInsights();
   renderSeriesReveal();
@@ -4271,6 +4308,7 @@ function renderAll() {
   renderStats();
   renderView();
   renderGameMeta();
+  renderDailyNameInline();
   renderDraftMeter();
   renderChallengePanel();
   renderRoster();
