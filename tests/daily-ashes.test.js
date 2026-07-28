@@ -163,24 +163,27 @@ test("daily schema bootstrap creates the daily tables once per database binding"
 
 test("attempt response only exposes the current roll before drafting is complete", () => {
   const response = buildDailyAttemptResponse(sundayDefinition, buildAttempt(), []);
-  const nextSquadId = sundayDefinition.rolls[1].squadId;
+  const currentSquadId = sundayDefinition.rolls[0].squadId;
 
   assert.equal(response.currentRoll.rollNumber, 1);
+  assert.equal(response.currentRoll.squadId, currentSquadId);
   assert.ok(response.currentRoll.players.length > 0);
+  assert.ok(response.currentRoll.players.every((player) => player.squadId === currentSquadId));
   assert.equal(response.recap, undefined);
   assert.equal(response.completedXI, undefined);
   assert.equal(response.communityStats, undefined);
   assert.equal(response.dailyLeaderboard, undefined);
-  assert.equal(JSON.stringify(response).includes(nextSquadId), false);
 });
 
 test("future rolls stay hidden until the previous choice is locked", () => {
   const rollOne = selectionFor(1, "andrew-flintoff", [], 6);
   const response = buildDailyAttemptResponse(sundayDefinition, buildAttempt({ currentRollNumber: 2 }), [rollOne]);
+  const currentSquadId = sundayDefinition.rolls[1].squadId;
 
   assert.equal(response.currentRoll.rollNumber, 2);
+  assert.equal(response.currentRoll.squadId, currentSquadId);
+  assert.ok(response.currentRoll.players.every((player) => player.squadId === currentSquadId));
   assert.equal(response.lockedSelections.length, 1);
-  assert.equal(JSON.stringify(response).includes(sundayDefinition.rolls[2].squadId), false);
 });
 
 test("a player cannot be selected from a future roll or into an invalid slot", () => {

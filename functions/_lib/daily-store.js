@@ -78,7 +78,11 @@ export async function ensureDailyStoreSchema(db) {
   const pending = db
     .batch(DAILY_SCHEMA_BASE_STATEMENTS.map((statement) => db.prepare(statement)))
     .then(() => ensureDailyStoreColumns(db))
-    .then(() => db.batch(DAILY_SCHEMA_SLOT_INDEX_STATEMENTS.map((statement) => db.prepare(statement))))
+    .then(async () => {
+      for (const statement of DAILY_SCHEMA_SLOT_INDEX_STATEMENTS) {
+        await db.prepare(statement).run();
+      }
+    })
     .then(() => undefined)
     .catch((error) => {
       dailySchemaReady.delete(db);

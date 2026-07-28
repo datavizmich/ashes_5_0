@@ -1,9 +1,38 @@
 import { errorResponse, json, methodNotAllowed } from "../../_lib/http.js";
+import { CANONICAL_SITE_ORIGIN } from "../../../site/shared/ashes-core.js";
 
 const METRICS = new Set(["selected"]);
 const PERIODS = new Set(["all", "30d"]);
 const MODES = new Set(["all", "classic", "memory"]);
 const MAX_LEADERBOARD_ROWS = 20;
+
+function isMissingSchemaError(error) {
+  return error instanceof Error && /\bno such table\b/i.test(error.message);
+}
+
+function isLocalPagesRequest(requestUrl) {
+  const { hostname } = new URL(requestUrl);
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "0.0.0.0";
+}
+
+async function proxyCanonicalLeaderboard(request) {
+  const currentUrl = new URL(request.url);
+  const upstreamUrl = new URL(`${currentUrl.pathname}${currentUrl.search}`, CANONICAL_SITE_ORIGIN);
+  const upstream = await fetch(upstreamUrl, {
+    method: "GET",
+    headers: {
+      Accept: request.headers.get("accept") ?? "application/json",
+    },
+  });
+
+  return new Response(upstream.body, {
+    status: upstream.status,
+    headers: {
+      "Content-Type": upstream.headers.get("content-type") ?? "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+    },
+  });
+}
 
 function buildFilters(period, mode) {
   const whereClauses = [];
@@ -44,6 +73,17 @@ export async function onRequestGet(context) {
     return errorResponse(500, "DB binding 'DB' is missing for the leaderboard function.");
   }
 
+  if (isLocalPagesRequest(context.request.url)) {
+    try {
+      return await proxyCanonicalLeaderboard(context.request);
+    } catch (error) {
+      return errorResponse(
+        502,
+        error instanceof Error ? `Leaderboard proxy failed: ${error.message}` : "Leaderboard proxy failed.",
+      );
+    }
+  }
+
   try {
     const filters = buildFilters(period, mode);
     const totalTeamsQuery = context.env.DB.prepare(
@@ -81,6 +121,13 @@ export async function onRequestGet(context) {
       limit: MAX_LEADERBOARD_ROWS,
     });
   } catch (error) {
+    if (isMissingSchemaError(error)) {
+      return errorResponse(
+        503,
+        "Leaderboard data is unavailable until the local D1 migrations have been applied.",
+      );
+    }
+
     return errorResponse(
       500,
       error instanceof Error ? `Leaderboard query failed: ${error.message}` : "Leaderboard query failed.",

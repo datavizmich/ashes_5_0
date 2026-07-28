@@ -8,14 +8,28 @@ Roll previous Ashes squads, lock one player at a time into your XI, then simulat
 
 Last updated for the Ashes XI test-match simulation.
 
-Serve the `site/` directory with any static server:
+Use Cloudflare Pages local development so the `functions/` routes are active:
 
 ```bash
-cd site
-python3 -m http.server 4173
+npm install
+npm run db:migrate:local
+npm run dev
 ```
 
-Open `http://localhost:4173`.
+Then open the local URL printed by Wrangler.
+
+The local D1 database used by `wrangler pages dev` starts out separate from production and needs the repo migrations applied before DB-backed features work.
+
+That migration step creates the `teams`, `team_players`, `players`, `challenges`, `results`, `daily_attempts`, and `daily_attempt_selections` tables and seeds the player data used by the leaderboard and saved-team flows.
+
+Important:
+
+- `python3 -m http.server` only serves static files from `site/`.
+- It does not execute the Cloudflare Pages Functions in `functions/`.
+- Public routes such as `/ashes`, `/daily`, `/challenge`, `/leaderboard`, `/how-to-play`, `/about`, and `/world-cup` therefore return 404 under a plain static server.
+- The static server approach is no longer sufficient now that those routes are real server-rendered Pages routes.
+- If you skip `npm run db:migrate:local`, DB-backed routes can fail locally with errors such as `no such table: teams`.
+- On `localhost`, the read-only player leaderboard proxies `https://ashes-5-0.co.uk` so it shows the same live leaderboard data as the deployed site. Write flows still use the local D1 database.
 
 ## Data
 

@@ -6593,6 +6593,8 @@ function init() {
   bindElements();
   resetSubmissionState();
   STATE.daily.participantId = loadOrCreateDailyParticipantId();
+  const routeType = String(BOOTSTRAP?.route?.type ?? "").trim();
+  const currentPageKey = currentPublicPageKey();
 
   const result = loadResultFromUrl();
   if (result) {
@@ -6685,7 +6687,7 @@ function init() {
         "Result not found",
         "That saved result link is unavailable. Start a fresh XI, open the leaderboard, or ask for a fresh result link.",
       );
-    } else if (BOOTSTRAP?.route?.type === "leaderboard" || isLeaderboardPath()) {
+    } else if (routeType === "leaderboard" || currentPageKey === "leaderboard" || isLeaderboardPath()) {
       STATE.challenge = null;
       STATE.result = null;
       STATE.challengeDraftName = "";
@@ -6696,7 +6698,7 @@ function init() {
       STATE.mode = "classic";
       STATE.view = "leaderboard";
       STATE.leaderboard.loading = true;
-    } else if (BOOTSTRAP?.route?.type === "challenge-landing") {
+    } else if (routeType === "challenge-landing" || currentPageKey === "challenge") {
       STATE.challenge = null;
       STATE.result = null;
       STATE.challengeDraftMode = "classic";
@@ -6704,19 +6706,19 @@ function init() {
       STATE.squads = ASHES_SQUADS;
       STATE.mode = "challenge";
       STATE.view = "game";
-    } else if (BOOTSTRAP?.route?.type === "world-cup") {
+    } else if (routeType === "world-cup" || currentPageKey === "worldCup") {
       STATE.challenge = null;
       STATE.result = null;
       STATE.competition = "worldcup";
       STATE.squads = WORLD_CUP_SQUADS;
       STATE.mode = "classic";
       STATE.view = "home";
-    } else if (BOOTSTRAP?.route?.type === "daily") {
+    } else if (routeType === "daily" || currentPageKey === "daily") {
       prepareDailyView();
       STATE.view = "game";
       STATE.mode = "memory";
       STATE.daily.summary = {
-        date: BOOTSTRAP.route.currentDate ?? currentDailyReferenceDateText(),
+        date: BOOTSTRAP?.route?.currentDate ?? currentDailyReferenceDateText(),
         totalRolls: 4,
       };
       STATE.daily.challenge = STATE.daily.summary;
@@ -6728,13 +6730,13 @@ function init() {
   if (STATE.view === "leaderboard") {
     void loadLeaderboard();
   }
-  if (BOOTSTRAP?.route?.type === "daily") {
+  if (routeType === "daily" || currentPageKey === "daily") {
     void openDailyChallenge().catch((error) => {
       console.error("Daily summary preload failed:", error);
       renderAll();
     });
   }
-  if (STATE.competition === "ashes" && BOOTSTRAP?.route?.type !== "daily") {
+  if (STATE.competition === "ashes" && routeType !== "daily" && currentPageKey !== "daily") {
     void loadDailySummary().catch((error) => {
       console.error("Daily summary preload failed:", error);
     });
