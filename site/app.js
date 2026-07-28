@@ -1,10 +1,15 @@
 import { ASHES_SQUADS } from "./data/ashes-squads.js";
 import { WORLD_CUP_SQUADS } from "./data/wc-squads.js";
+import {
+  PUBLIC_PAGE_DEFS,
+  canonicalUrlForPageKey,
+  publicPageKeyForPath,
+} from "./shared/public-pages.js";
 
 const CANONICAL_SITE_ORIGIN = "https://ashes-5-0.co.uk";
-const SEO_HOME_TITLE = "Historic Cricket XI Draft Game | Ashes 5-0";
-const SEO_HOME_DESCRIPTION =
-  "Roll historic cricket squads, draft one player at a time, build your all-time XI and simulate a five-Test series. Free to play with no sign-up.";
+const SEO_HOME_TITLE = PUBLIC_PAGE_DEFS.home.title;
+const SEO_HOME_DESCRIPTION = PUBLIC_PAGE_DEFS.home.description;
+const STATIC_HOME_PAGE_KEYS = new Set(["about", "howToPlay"]);
 
 const XI_SLOTS = [
   { label: "Opener", accepts: ["Opener"], focus: "batting", row: 5, col: 2 },
@@ -81,7 +86,7 @@ const STATE = {
     period: "all",
     mode: "all",
     limit: 20,
-    totalTeams: 0,
+    totalTeams: null,
     entries: [],
     loading: false,
     error: "",
@@ -124,6 +129,7 @@ function bindElements() {
     seriesView: "[data-series-view]",
     homeEyebrow: "[data-home-eyebrow]",
     homeTitle: "[data-home-title]",
+    homeTagline: "[data-home-tagline]",
     homeLede: "[data-home-lede]",
     homePanelKicker: "[data-home-panel-kicker]",
     homePanelTitle: "[data-home-panel-title]",
@@ -137,8 +143,6 @@ function bindElements() {
     homePlayersLabel: "[data-home-players-label]",
     homeFormatLabel: "[data-home-format-label]",
     homeFormatValue: "[data-home-format-value]",
-    homeRuleOne: "[data-home-rule-one]",
-    homeRuleThree: "[data-home-rule-three]",
     totalSquads: "[data-total-squads]",
     totalPlayers: "[data-total-players]",
     homeChallenge: "[data-home-challenge]",
@@ -192,7 +196,11 @@ function bindElements() {
     seriesStarStrength: "[data-series-star-strength]",
     seriesEyebrow: "[data-series-eyebrow]",
     seriesTitle: "[data-series-title]",
+    seriesFeedKicker: "[data-series-feed-kicker]",
+    seriesFeedTitle: "[data-series-feed-title]",
     seriesFeed: "[data-series-feed]",
+    seriesTableKicker: "[data-series-table-kicker]",
+    seriesTableTitle: "[data-series-table-title]",
     seriesTableWrap: "[data-series-table-wrap]",
     dailyCommunityPanel: "[data-daily-community-panel]",
     dailyCommunityContent: "[data-daily-community-content]",
@@ -226,7 +234,16 @@ function bindElements() {
     feedbackSubmit: "[data-feedback-submit]",
   };
 
+  const optionalSelectors = {
+    homeRuleOne: "[data-home-rule-one]",
+    homeRuleThree: "[data-home-rule-three]",
+  };
+
   for (const [key, selector] of Object.entries(selectors)) {
+    els[key] = document.querySelector(selector);
+  }
+
+  for (const [key, selector] of Object.entries(optionalSelectors)) {
     els[key] = document.querySelector(selector);
   }
 
@@ -515,6 +532,23 @@ function modeLabel() {
 function currentPathname() {
   const pathname = window.location.pathname.replace(/\/index\.html$/i, "/");
   return pathname === "" ? "/" : pathname.replace(/\/+$/u, "") || "/";
+}
+
+function currentPublicPageKey() {
+  const bootstrappedPageKey = String(BOOTSTRAP?.route?.pageKey ?? "").trim();
+  if (bootstrappedPageKey && PUBLIC_PAGE_DEFS[bootstrappedPageKey]) {
+    return bootstrappedPageKey;
+  }
+  return publicPageKeyForPath(currentPathname());
+}
+
+function currentPublicPageDef() {
+  const pageKey = currentPublicPageKey();
+  return pageKey ? PUBLIC_PAGE_DEFS[pageKey] ?? null : null;
+}
+
+function staticHomePageActive() {
+  return STATIC_HOME_PAGE_KEYS.has(currentPublicPageKey());
 }
 
 function mobileBuilderViewport() {
@@ -812,7 +846,12 @@ function isLeaderboardPath(pathname = currentPathname()) {
 }
 
 function routeUsesDedicatedPath(pathname = currentPathname()) {
-  return isShortChallengePath(pathname) || isShortResultPath(pathname) || isLeaderboardPath(pathname);
+  const publicPageKey = publicPageKeyForPath(pathname);
+  const publicPage = publicPageKey ? PUBLIC_PAGE_DEFS[publicPageKey] ?? null : null;
+  return isShortChallengePath(pathname)
+    || isShortResultPath(pathname)
+    || isLeaderboardPath(pathname)
+    || Boolean(publicPage?.path && publicPage.path !== "/");
 }
 
 function replaceBrowserPath(pathname) {
@@ -1587,8 +1626,9 @@ async function startDailyAttempt(attemptMode = "ranked") {
 
 async function openDailyChallenge() {
   prepareDailyView();
-  const summary = await loadDailySummary({ force: true });
   STATE.view = "game";
+  renderAll();
+  const summary = await loadDailySummary({ force: true });
   STATE.daily.active = true;
   STATE.daily.challenge = summary;
   STATE.daily.fixedPlayers = Array.isArray(summary?.fixedPlayers) ? summary.fixedPlayers : [];
@@ -1816,7 +1856,7 @@ function clearRollAnimation() {
 function competitionConfig() {
   if (dailyChallengeActive()) {
     const stage = currentDailyStage();
-    const challengeDate = STATE.daily.challenge?.date ?? STATE.daily.summary?.date ?? "2026-07-26";
+    const challengeDate = STATE.daily.challenge?.date ?? STATE.daily.summary?.date ?? currentDailyReferenceDateText();
     const oppositionLabel = STATE.daily.challenge?.opposition?.label ?? "Today's opposition";
     const rollNumber = STATE.daily.currentRoll?.rollNumber ?? STATE.daily.attempt?.currentRollNumber ?? 1;
     const totalRolls = STATE.daily.challenge?.totalRolls ?? 4;
@@ -1830,6 +1870,7 @@ function competitionConfig() {
       format: "tests",
       homeEyebrow: "Daily Ashes Challenge",
       homeTitle: "Daily Ashes Challenge",
+      homeTagline: "",
       homeLede:
         "Same four hidden rolls for everyone. Start with 7 locked players and play one Test.",
       squadsLabel: "Daily rolls",
@@ -1868,7 +1909,8 @@ function competitionConfig() {
       theme: "worldcup",
       format: "limited-overs",
       homeEyebrow: "World Cup XI",
-      homeTitle: "Roll a World Cup squad. Lock one player. Build your XI.",
+      homeTitle: "Build your World Cup XI",
+      homeTagline: "Roll a World Cup squad. Lock one player. Build your XI.",
       homeLede:
         "Each roll produces a historic World Cup squad. Pick one player from the squad to lock into your XI. Build your team, then survive the group stage and knockout rounds.",
       squadsLabel: "World Cup squads",
@@ -1894,21 +1936,26 @@ function competitionConfig() {
     accentLabel: "green",
     theme: "ashes",
     format: "tests",
-    homeEyebrow: "Ashes XI",
+    homeEyebrow: "Ashes 5-0",
     homeTitle: loadedChallenge
       ? creatorName
         ? `${creatorName} has challenged you.`
         : "A Challenge XI is waiting. Draft your Ashes side and take it on."
       : isChallengeMode()
-        ? "Build an Ashes XI and turn it into an invite link."
-        : "Roll an Ashes squad. Lock one player. Build your Test XI.",
+        ? "Build a cricket XI and face a friend."
+        : "Can your Ashes XI go 5-0?",
+    homeTagline: loadedChallenge
+      ? ""
+      : isChallengeMode()
+        ? "Build your XI. Generate a private link. See who wins."
+        : "Roll a squad. Lock one player. Build your XI.",
     homeLede: loadedChallenge
       ? creatorName
         ? `This link contains ${creatorName}'s saved Ashes XI. Accept the ${challengeModeLabel} challenge, draft your own side, and then play a five-Test series against it.`
         : `This link contains a saved Ashes XI. Draft your own side in the required ${challengeModeLabel} mode, then simulate a five-Test challenge series against it.`
       : isChallengeMode()
-        ? "Each roll produces a historic Ashes squad. Pick one player from the squad to lock into your XI. Once the side is complete, copy the Ashes 5-0 invite and send it to someone else so they can play against your team."
-        : "Each roll produces a historic Ashes squad. Pick one player from the squad to lock into your XI. Finish your side for a solo five-Test series, or use the new Challenge feature to send it to a friend.",
+        ? "Complete a historic Ashes XI, share a private challenge link, and see whether someone else can draft a side strong enough to beat it."
+        : "Roll historic Ashes squads, lock one player at a time and build an all-time XI capable of completing an Ashes whitewash.",
     squadsLabel: "Ashes squads",
     gameEyebrow: "XI builder",
     gameTitle: loadedChallenge
@@ -3047,6 +3094,14 @@ function closeFeedbackPanel() {
 }
 
 function renderDraftMeter() {
+  const hideDailyMeter = dailyChallengeActive()
+    && currentDailyStage() === "intro"
+    && currentDailyPlayerPool().length === 0;
+  els.draftMeter.hidden = hideDailyMeter;
+  if (hideDailyMeter) {
+    return;
+  }
+
   const metrics = draftMetricsFromLineup(userLineup());
   els.draftBatting.textContent = String(metrics.batting);
   els.draftBowling.textContent = String(metrics.bowling);
@@ -3263,13 +3318,14 @@ function renderStats() {
   const competition = competitionConfig();
   const loadedChallenge = challengeLineupLoaded();
   const routeError = STATE.view === "home" ? STATE.routeError : null;
+  const publicPage = currentPublicPageDef();
   const dailySummary = STATE.daily.summary;
   const dailyRankedAttempt = dailySummary?.rankedAttempt ?? null;
   const dailyLabelNode = els.homeDaily?.querySelector(".feature-action-label") ?? null;
   els.totalSquads.textContent = String(STATE.squads.length);
   els.totalPlayers.textContent = String(STATE.catalog.length);
   els.gameSquadCount.textContent = dailyChallengeActive()
-    ? (STATE.daily.challenge?.date ?? "Daily challenge")
+    ? (STATE.daily.challenge?.date ?? STATE.daily.summary?.date ?? currentDailyReferenceDateText())
     : `${STATE.squads.length} squads`;
   els.gamePlayerCount.textContent = dailyChallengeActive()
     ? `${STATE.daily.challenge?.totalRolls ?? 4} hidden rolls`
@@ -3281,17 +3337,42 @@ function renderStats() {
       : "classic";
   els.homeMode.disabled = loadedChallenge;
   document.title = pageTitleForCompetition(competition);
+
+  if (staticHomePageActive()) {
+    els.gameSquadCount.textContent = `${STATE.squads.length} squads`;
+    els.gamePlayerCount.textContent = `${STATE.catalog.length} players`;
+    els.leaderboardTotal.textContent = STATE.leaderboard.totalTeams === null ? "Loading" : String(STATE.leaderboard.totalTeams);
+    document.body.dataset.competition = competition.theme;
+    return;
+  }
+
   els.homeEyebrow.textContent = routeError ? "Link problem" : competition.homeEyebrow;
   els.homeTitle.textContent = routeError ? routeError.title : competition.homeTitle;
+  els.homeTagline.hidden = !competition.homeTagline || Boolean(routeError);
+  els.homeTagline.textContent = routeError ? "" : competition.homeTagline;
   els.homeLede.textContent = routeError ? routeError.message : competition.homeLede;
   els.homePanelKicker.textContent = routeError ? "Helpful 404" : loadedChallenge ? "Challenge received" : "How it works";
-  els.homePanelTitle.textContent = routeError ? "Start a fresh game" : loadedChallenge ? "Accept challenge" : "Squad Roller";
+  els.homePanelTitle.textContent = routeError
+    ? "Start a fresh game"
+    : loadedChallenge
+      ? "Accept challenge"
+      : currentPublicPageKey() === "challenge"
+        ? "Friend challenge"
+        : currentPublicPageKey() === "worldCup"
+          ? "World Cup mode"
+          : currentPublicPageKey() === "ashes"
+            ? "Ashes mode"
+            : "Squad Roller";
   els.homePanelCopy.hidden = loadedChallenge || STATE.competition !== "ashes";
-  els.homePanelCopy.textContent = routeError
+  els.homePanelCopy.innerHTML = routeError
     ? "That saved link is unavailable. You can still draft a new XI, open the leaderboard, or ask for a fresh short link."
     : loadedChallenge || STATE.competition !== "ashes"
       ? ""
-      : "New feature: turn your completed Ashes XI into a private challenge link.";
+      : currentPublicPageKey() === "challenge"
+        ? 'Read the <a href="/how-to-play">rules</a>, compare selections on the <a href="/leaderboard">leaderboard</a>, or return to the main <a href="/ashes">Ashes mode</a>.'
+        : currentPublicPageKey() === "ashes"
+          ? 'Try the <a href="/daily">Daily Challenge</a>, create a private <a href="/challenge">friend challenge</a>, or read the <a href="/how-to-play">full rules</a>.'
+          : "New feature: turn your completed Ashes XI into a private challenge link.";
   els.homeConfigGrid.hidden = loadedChallenge || Boolean(routeError);
   els.homeResponseNameRow.hidden = !loadedChallenge;
   els.homeResponseName.value = currentChallengeResponseName();
@@ -3300,15 +3381,20 @@ function renderStats() {
   els.homePlayersLabel.textContent = "Total players";
   els.homeFormatLabel.textContent = "Series format";
   els.homeFormatValue.textContent = competition.format === "limited-overs" ? "ODI" : "5 Tests";
-  els.homeRuleOne.textContent = `Roll a previous ${competition.name} squad.`;
-  els.homeRuleThree.textContent = challengeLineupLoaded()
-    ? "Repeat until your XI is full, then simulate the challenge series."
-    : challengeCreationMode()
-      ? "Repeat until your XI is full, then copy the invite."
-      : "Repeat until your XI is full, then simulate the series.";
+  if (els.homeRuleOne) {
+    els.homeRuleOne.textContent = `Roll a previous ${competition.name} squad.`;
+  }
+  if (els.homeRuleThree) {
+    els.homeRuleThree.textContent = challengeLineupLoaded()
+      ? "Repeat until your XI is full, then simulate the challenge series."
+      : challengeCreationMode()
+        ? "Repeat until your XI is full, then copy the invite."
+        : "Repeat until your XI is full, then simulate the series.";
+  }
   els.homeCompetition.textContent = competition.modeButton;
-  els.homeChallenge.hidden = loadedChallenge || STATE.competition !== "ashes";
-  els.homeDaily.hidden = loadedChallenge || STATE.competition !== "ashes";
+  const showAshesHomeActions = !loadedChallenge && STATE.competition === "ashes";
+  els.homeChallenge.hidden = !showAshesHomeActions;
+  els.homeDaily.hidden = !showAshesHomeActions;
   if (dailyLabelNode) {
     dailyLabelNode.textContent = STATE.daily.loadingSummary
       ? "Loading daily..."
@@ -3318,16 +3404,23 @@ function renderStats() {
           ? "Resume daily challenge"
           : "Daily challenge";
   }
-  els.homeLeaderboard.hidden = loadedChallenge || STATE.competition !== "ashes";
+  els.homeLeaderboard.hidden = !showAshesHomeActions;
+  if (currentPublicPageKey() === "challenge") {
+    els.homeChallenge.hidden = true;
+  }
   els.homeCompetition.hidden = loadedChallenge;
   els.playGame.textContent = routeError
     ? "Start a new game"
     : loadedChallenge
     ? "Accept challenge"
+    : currentPublicPageKey() === "challenge"
+      ? "Build a challenge XI"
     : STATE.competition === "worldcup"
-      ? "Start World Cup game"
-      : "Start a solo game";
-  els.leaderboardTotal.textContent = String(STATE.leaderboard.totalTeams);
+      ? "Start World Cup"
+      : currentPublicPageKey() === "ashes"
+        ? "Start Ashes mode"
+        : "Start a solo game";
+  els.leaderboardTotal.textContent = STATE.leaderboard.totalTeams === null ? "Loading" : String(STATE.leaderboard.totalTeams);
   els.leaderboardMetricLabel.textContent = leaderboardMetricLabel(STATE.leaderboard.metric);
   els.leaderboardPeriodLabel.textContent = leaderboardPeriodLabel(STATE.leaderboard.period);
   els.gameEyebrow.textContent = competition.gameEyebrow;
@@ -3358,7 +3451,7 @@ function renderView() {
 }
 
 function dailyDraftHelpHtml() {
-  const challengeDate = STATE.daily.challenge?.date ?? STATE.daily.summary?.date ?? "2026-07-26";
+  const challengeDate = STATE.daily.challenge?.date ?? STATE.daily.summary?.date ?? currentDailyReferenceDateText();
   return `
     <details class="daily-help">
       <summary aria-label="Daily challenge help" title="Daily challenge help">?</summary>
@@ -3495,7 +3588,11 @@ function dailyCommunityStatsBodyHtml() {
           <strong>Roll ${roll.rollNumber} - ${escapeHtml(roll.squadLabel)}</strong>
           <div class="daily-community-list">
             ${roll.selections.map((player) => `
-              <span>${escapeHtml(player.name)}: ${player.percentage}%</span>
+              <div class="daily-community-player">
+                <strong>${escapeHtml(player.name)}</strong>
+                <span>${player.percentage}% picked</span>
+                <span>${escapeHtml(`${ratingPairLabel(player)} · Ovr ${playerOverall(player)}`)}</span>
+              </div>
             `).join("")}
           </div>
         </article>
@@ -3508,32 +3605,22 @@ function dailyResultsLeaderboardCardHtml() {
   const leaderboard = STATE.daily.resultsLeaderboard;
   if (!leaderboard?.entries?.length) {
     return `
-      <section class="daily-results-card">
-        <div class="daily-results-card-header">
-          <h3>Daily leaderboard</h3>
-        </div>
-        <p class="panel-subtitle">No ranked wins have been recorded yet for this daily challenge.</p>
-      </section>
+      <p class="panel-subtitle">No ranked wins have been recorded yet for this daily challenge.</p>
     `;
   }
 
   return `
-    <section class="daily-results-card">
-      <div class="daily-results-card-header">
-        <h3>Daily leaderboard</h3>
-      </div>
-      <p class="panel-subtitle">Top 5 ranked winning margins for ${escapeHtml(STATE.daily.challenge?.date ?? STATE.daily.summary?.date ?? currentDailyReferenceDateText())}.</p>
-      <div class="daily-community-grid">
-        ${leaderboard.entries.map((entry, index) => `
-          <article class="daily-community-card">
-            <strong>${index + 1}. ${escapeHtml(entry.isCurrentUser ? `${entry.displayName} (You)` : entry.displayName)}</strong>
-            <div class="daily-community-list">
-              <span>${escapeHtml(entry.margin)}</span>
-            </div>
-          </article>
-        `).join("")}
-      </div>
-    </section>
+    <p class="panel-subtitle">Top 5 ranked winning margins for ${escapeHtml(STATE.daily.challenge?.date ?? STATE.daily.summary?.date ?? currentDailyReferenceDateText())}.</p>
+    <div class="daily-community-grid">
+      ${leaderboard.entries.map((entry, index) => `
+        <article class="daily-community-card">
+          <strong>${index + 1}. ${escapeHtml(entry.isCurrentUser ? `${entry.displayName} (You)` : entry.displayName)}</strong>
+          <div class="daily-community-list">
+            <span>${escapeHtml(entry.margin)}</span>
+          </div>
+        </article>
+      `).join("")}
+    </div>
   `;
 }
 
@@ -3598,12 +3685,21 @@ function renderRoster() {
 
     if (stage === "intro") {
       const oppositionLabel = STATE.daily.challenge?.opposition?.label ?? "today's opposition";
+      const challengeDate = STATE.daily.challenge?.date ?? STATE.daily.summary?.date ?? currentDailyReferenceDateText();
       els.rosterTitle.textContent = "Reveal the first squad";
       els.rosterSummary.textContent = `One Test against ${oppositionLabel}.`;
       els.rosterGrid.innerHTML = `
-        <article class="daily-recap-card daily-intro-card">
-          <strong>Four rolls. One Test.</strong>
-          <p>Seven players are already locked into your XI. Reveal the first squad to begin.</p>
+        <article class="copy-card daily-intro-card">
+          <h3>Four rolls. One Test.</h3>
+          <p>Build the shared daily XI through a hidden sequence before you play the match.</p>
+          <ul>
+            <li>7 players are already locked into your XI.</li>
+            <li>4 historic squads appear one at a time.</li>
+            <li>You select 1 player from each squad.</li>
+            <li>Future squads stay hidden until the current pick is locked.</li>
+            <li>Everyone receives the same deterministic sequence for ${escapeHtml(challengeDate)}.</li>
+            <li>Your first ranked attempt is the entry that counts for the daily leaderboard.</li>
+          </ul>
         </article>
       `;
       return;
@@ -3967,6 +4063,23 @@ function renderSeriesSummary() {
   }
 }
 
+function renderSeriesPanels() {
+  if (!els.seriesFeedKicker || !els.seriesFeedTitle || !els.seriesTableKicker || !els.seriesTableTitle) return;
+
+  if (dailyChallengeActive()) {
+    els.seriesFeedKicker.textContent = "Daily result";
+    els.seriesFeedTitle.textContent = "Match result";
+    els.seriesTableKicker.textContent = "Community";
+    els.seriesTableTitle.textContent = "Daily leaderboard";
+    return;
+  }
+
+  els.seriesFeedKicker.textContent = "Live feed";
+  els.seriesFeedTitle.textContent = "Match-by-match results";
+  els.seriesTableKicker.textContent = "Series table";
+  els.seriesTableTitle.textContent = "Final tally";
+}
+
 function renderSeriesFeed() {
   if (!STATE.series) return;
   const competition = competitionConfig();
@@ -4043,6 +4156,17 @@ function renderSeriesFeed() {
 function renderSeriesTable() {
   if (!STATE.series) return;
   els.seriesTableWrap.classList.remove("daily-results-wrap");
+  if (dailyChallengeActive()) {
+    els.seriesTableWrap.classList.add("daily-results-wrap");
+    if (STATE.series.revealed < STATE.series.matches.length) {
+      els.seriesTableWrap.innerHTML = `<div class="placeholder">The daily leaderboard will appear after the Test result is revealed.</div>`;
+      return;
+    }
+
+    els.seriesTableWrap.innerHTML = dailyResultsLeaderboardCardHtml();
+    return;
+  }
+
   if (STATE.series.revealed < STATE.series.matches.length) {
     els.seriesTableWrap.innerHTML = `<div class="placeholder">The table will appear when the tournament ends.</div>`;
     return;
@@ -4091,13 +4215,11 @@ function renderSeriesTable() {
     `;
     return;
   }
-
   const { userWins, starWins, draws } = STATE.series;
   const opponentLabel = competitionConfig().oppositionShortTitle;
   const userLabel = currentSeriesUserLabel();
   const winner =
     userWins > starWins ? userLabel : starWins > userWins ? opponentLabel : "Series drawn";
-  const showDailyLeaderboard = dailyChallengeActive() && seriesComplete();
   const tableHtml = `
     <table class="series-table">
       <thead>
@@ -4124,17 +4246,6 @@ function renderSeriesTable() {
       </tbody>
     </table>
   `;
-
-  if (showDailyLeaderboard) {
-    els.seriesTableWrap.classList.add("daily-results-wrap");
-    els.seriesTableWrap.innerHTML = `
-      <div class="series-table-stack">
-        ${tableHtml}
-        ${dailyResultsLeaderboardCardHtml()}
-      </div>
-    `;
-    return;
-  }
 
   els.seriesTableWrap.innerHTML = tableHtml;
 }
@@ -4200,6 +4311,7 @@ function renderSeriesReveal() {
 
 function renderSeries() {
   renderSeriesSummary();
+  renderSeriesPanels();
   renderSeriesFeed();
   renderSeriesTable();
   renderDailyCommunityPanel();
@@ -4252,14 +4364,21 @@ function renderLeaderboard() {
   els.leaderboardMode.value = leaderboard.mode;
 
   if (leaderboard.loading) {
-    els.leaderboardStatus.textContent = "Loading leaderboard...";
-    els.leaderboardTable.innerHTML = `<div class="placeholder">Loading leaderboard...</div>`;
+    els.leaderboardStatus.textContent = "Loading community statistics.";
+    els.leaderboardTable.innerHTML = `<div class="placeholder">Loading community statistics.</div>`;
     return;
   }
 
   if (leaderboard.error) {
     els.leaderboardStatus.textContent = leaderboard.error;
     els.leaderboardTable.innerHTML = `<div class="placeholder">${escapeHtml(leaderboard.error)}</div>`;
+    return;
+  }
+
+  if (leaderboard.totalTeams === null) {
+    els.leaderboardStatus.textContent =
+      "Rankings update as more completed teams are recorded. Daily Challenge picks are counted once a daily XI is finished.";
+    els.leaderboardTable.innerHTML = `<div class="placeholder">Loading community statistics.</div>`;
     return;
   }
 
@@ -5245,7 +5364,7 @@ function revealAllSeriesMatches() {
 
 function goHome() {
   if (routeUsesDedicatedPath()) {
-    window.location.assign("/");
+    window.location.assign(currentPublicPageDef()?.path ?? "/");
     return;
   }
 
@@ -5420,35 +5539,13 @@ function wireControls() {
     window.location.assign("/leaderboard");
   });
   els.homeChallenge.addEventListener("click", () => {
-    if (STATE.routeError && routeUsesDedicatedPath()) {
-      replaceBrowserPath("/");
-    }
-    trackChallengeEvent("challenge_create_clicked", { role: "creator", source: "homepage" });
-    trackChallengeEvent("challenge_started", { role: "creator", source: "homepage" });
-    resetSubmissionState();
-    clearRouteError();
-    STATE.challengeDraftMode = normalizePlayableMode(STATE.mode);
-    STATE.mode = "challenge";
-    STATE.view = "game";
-    renderAll();
+    window.location.assign("/challenge");
   });
   els.homeDaily.addEventListener("click", () => {
-    if (STATE.routeError && routeUsesDedicatedPath()) {
-      replaceBrowserPath("/");
-    }
-    clearRouteError();
-    void openDailyChallenge().catch((error) => {
-      console.error("Open daily challenge failed:", error);
-      window.alert(error instanceof Error ? error.message : "Could not load the daily challenge.");
-    });
+    window.location.assign("/daily");
   });
   els.homeCompetition.addEventListener("click", () => {
-    if (STATE.routeError && routeUsesDedicatedPath()) {
-      replaceBrowserPath("/");
-    }
-    clearRouteError();
-    STATE.view = "home";
-    setCompetition(STATE.competition === "worldcup" ? "ashes" : "worldcup");
+    window.location.assign(STATE.competition === "worldcup" ? "/ashes" : "/world-cup");
   });
   els.challengeName.addEventListener("input", () => {
     STATE.challengeDraftName = els.challengeName.value;
@@ -5740,6 +5837,7 @@ function syncSeoMetadata() {
   const shortChallengePage = isShortChallengePath();
   const shortResultPage = isShortResultPath();
   const routeError = STATE.routeError;
+  const publicPage = currentPublicPageDef();
   const creatorName = currentChallengeCreatorName();
   const challengeMode = currentChallengePlayableMode() === "memory" ? "Memory" : "Classic";
   const resultLoaded = resultSnapshotLoaded();
@@ -5759,19 +5857,17 @@ function syncSeoMetadata() {
       ? `Open ${creatorName}'s Ashes 5-0 ${challengeMode.toLowerCase()} challenge, draft your XI, and play the five-Test series.`
       : `Open an Ashes 5-0 ${challengeMode.toLowerCase()} challenge, draft your XI, and play the five-Test series.`
     : SEO_HOME_DESCRIPTION;
-  const leaderboardTitle = "Player Leaderboard | Ashes 5-0";
-  const leaderboardDescription = "See which Ashes 5-0 players are selected most often across completed XIs.";
-  const worldCupDescription =
-    "Roll historic World Cup squads, draft one player at a time, build your all-time XI and survive the tournament route.";
   const pageTitle = leaderboardPage
-    ? leaderboardTitle
+    ? PUBLIC_PAGE_DEFS.leaderboard.title
     : resultTitle
       ?? challengeTitle
-      ?? (routeError && (shortChallengePage || shortResultPage) ? "Link Not Found | Ashes 5-0" : pageTitleForCompetition(competitionConfig()));
+      ?? (routeError && (shortChallengePage || shortResultPage)
+        ? "Link Not Found | Ashes 5-0"
+        : publicPage?.title ?? pageTitleForCompetition(competitionConfig()));
   const pageDescription = leaderboardPage
-    ? leaderboardDescription
+    ? PUBLIC_PAGE_DEFS.leaderboard.description
     : resultDescription
-      ?? (challengeLineupLoaded() ? challengeDescription : routeError?.message || (STATE.competition === "worldcup" ? worldCupDescription : SEO_HOME_DESCRIPTION));
+      ?? (challengeLineupLoaded() ? challengeDescription : routeError?.message || publicPage?.description || SEO_HOME_DESCRIPTION);
   const robots = leaderboardPage
     ? "index, follow"
     : resultLoaded || challengeLineupLoaded() || shortChallengePage || shortResultPage
@@ -5798,6 +5894,18 @@ function syncSeoMetadata() {
     property: "og:description",
     content: pageDescription,
   });
+  ensureHeadNode('meta[name="twitter:title"]', "meta", {
+    name: "twitter:title",
+    content: pageTitle,
+  });
+  ensureHeadNode('meta[name="twitter:description"]', "meta", {
+    name: "twitter:description",
+    content: pageDescription,
+  });
+  ensureHeadNode('meta[name="twitter:url"]', "meta", {
+    name: "twitter:url",
+    content: canonicalUrl,
+  });
   ensureHeadNode('meta[name="robots"]', "meta", {
     name: "robots",
     content: robots,
@@ -5805,8 +5913,10 @@ function syncSeoMetadata() {
 }
 
 function pageTitleForCompetition(competition) {
+  const publicPage = currentPublicPageDef();
+
   if (STATE.view === "leaderboard" || isLeaderboardPath()) {
-    return "Player Leaderboard | Ashes 5-0";
+    return PUBLIC_PAGE_DEFS.leaderboard.title;
   }
 
   if (STATE.routeError && (isShortChallengePath() || isShortResultPath())) {
@@ -5826,12 +5936,15 @@ function pageTitleForCompetition(competition) {
   }
 
   if (dailyChallengeActive()) {
-    const challengeDate = STATE.daily.challenge?.date ?? "2026-07-26";
-    return `Daily Ashes Challenge | ${challengeDate} | Ashes 5-0`;
+    return PUBLIC_PAGE_DEFS.daily.title;
+  }
+
+  if (publicPage?.title) {
+    return publicPage.title;
   }
 
   return competition.theme === "worldcup"
-    ? "Historic Cricket XI Draft Game | World Cup Mode | Ashes 5-0"
+    ? PUBLIC_PAGE_DEFS.worldCup.title
     : SEO_HOME_TITLE;
 }
 
@@ -6582,6 +6695,31 @@ function init() {
       STATE.squads = ASHES_SQUADS;
       STATE.mode = "classic";
       STATE.view = "leaderboard";
+      STATE.leaderboard.loading = true;
+    } else if (BOOTSTRAP?.route?.type === "challenge-landing") {
+      STATE.challenge = null;
+      STATE.result = null;
+      STATE.challengeDraftMode = "classic";
+      STATE.competition = "ashes";
+      STATE.squads = ASHES_SQUADS;
+      STATE.mode = "challenge";
+      STATE.view = "game";
+    } else if (BOOTSTRAP?.route?.type === "world-cup") {
+      STATE.challenge = null;
+      STATE.result = null;
+      STATE.competition = "worldcup";
+      STATE.squads = WORLD_CUP_SQUADS;
+      STATE.mode = "classic";
+      STATE.view = "home";
+    } else if (BOOTSTRAP?.route?.type === "daily") {
+      prepareDailyView();
+      STATE.view = "game";
+      STATE.mode = "memory";
+      STATE.daily.summary = {
+        date: BOOTSTRAP.route.currentDate ?? currentDailyReferenceDateText(),
+        totalRolls: 4,
+      };
+      STATE.daily.challenge = STATE.daily.summary;
     }
   }
   addCatalogMetadata();
@@ -6590,7 +6728,13 @@ function init() {
   if (STATE.view === "leaderboard") {
     void loadLeaderboard();
   }
-  if (STATE.competition === "ashes") {
+  if (BOOTSTRAP?.route?.type === "daily") {
+    void openDailyChallenge().catch((error) => {
+      console.error("Daily summary preload failed:", error);
+      renderAll();
+    });
+  }
+  if (STATE.competition === "ashes" && BOOTSTRAP?.route?.type !== "daily") {
     void loadDailySummary().catch((error) => {
       console.error("Daily summary preload failed:", error);
     });

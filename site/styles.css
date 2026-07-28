@@ -105,6 +105,15 @@ body::before {
   padding: 1rem 0 2rem;
 }
 
+.site-nav {
+  width: min(1280px, calc(100vw - 1rem));
+  margin: 0.75rem auto 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: center;
+}
+
 .site-footer {
   width: min(1280px, calc(100vw - 1rem));
   margin: 0 auto 1.5rem;
@@ -121,6 +130,20 @@ body::before {
   letter-spacing: 0.18em;
   opacity: 0.72;
   user-select: none;
+}
+
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.85rem 1.1rem;
+}
+
+.footer-links a {
+  color: inherit;
+  text-decoration-color: rgba(248, 248, 248, 0.4);
+  text-underline-offset: 0.18em;
+  font-size: 0.94rem;
 }
 
 .feedback-toggle {
@@ -271,12 +294,39 @@ h2 {
   font-size: clamp(1.45rem, 2.5vw, 2rem);
 }
 
+.hero-title {
+  max-width: 12ch;
+  font-size: clamp(3rem, 6vw, 5.8rem);
+}
+
+.hero-tagline {
+  margin: 0.65rem 0 0;
+  color: rgba(248, 248, 248, 0.92);
+  font-size: 0.98rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
 .lede {
   max-width: 58ch;
   margin: 1rem 0 0;
   color: rgba(248, 248, 248, 0.82);
   font-size: 1.02rem;
   line-height: 1.7;
+}
+
+.hero-links {
+  max-width: 58ch;
+  margin: 0.85rem 0 0;
+  color: rgba(248, 248, 248, 0.82);
+  font-size: 0.94rem;
+  line-height: 1.65;
+}
+
+.hero-links a {
+  color: var(--off-white);
+  text-decoration-color: rgba(248, 248, 248, 0.4);
+  text-underline-offset: 0.18em;
 }
 
 .hero-card,
@@ -477,6 +527,41 @@ select {
   place-items: center;
   background: rgba(212, 175, 55, 0.18);
   color: var(--accent-2);
+}
+
+.copy-card {
+  border-radius: 1rem;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.58);
+  border: 1px solid rgba(31, 31, 31, 0.08);
+  display: grid;
+  gap: 0.7rem;
+  align-content: start;
+}
+
+.copy-card h3 {
+  font-size: 1.05rem;
+  line-height: 1.05;
+}
+
+.copy-card p,
+.copy-card li {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.copy-card ul {
+  margin: 0;
+  padding-left: 1rem;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.copy-card a {
+  color: var(--text);
+  text-decoration-color: rgba(31, 31, 31, 0.2);
+  text-underline-offset: 0.18em;
 }
 
 .play-button {
@@ -710,8 +795,31 @@ button {
   touch-action: manipulation;
 }
 
+.button-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  border: 1px solid var(--border);
+  border-radius: 0.95rem;
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font: inherit;
+  font-weight: 800;
+  padding: 0.95rem 1.15rem;
+  text-decoration: none;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease,
+    opacity 160ms ease,
+    box-shadow 160ms ease;
+}
+
 button:hover,
-button:focus-visible {
+button:focus-visible,
+.button-link:hover,
+.button-link:focus-visible {
   transform: translateY(-1px);
   border-color: rgba(212, 175, 55, 0.45);
   box-shadow: 0 16px 36px rgba(0, 0, 0, 0.2);
@@ -744,6 +852,11 @@ button:disabled {
 
 .ghost {
   min-width: 92px;
+}
+
+.site-nav-link {
+  min-height: 44px;
+  padding-inline: 1rem;
 }
 
 .roster-grid {
@@ -806,6 +919,14 @@ button:disabled {
 .daily-community-list {
   display: grid;
   gap: 0.7rem;
+}
+
+.daily-community-player {
+  display: grid;
+  gap: 0.18rem;
+  padding: 0.7rem 0.8rem;
+  border-radius: 0.85rem;
+  background: rgba(255, 255, 255, 0.62);
 }
 
 .daily-recap-card,
@@ -888,9 +1009,17 @@ button:disabled {
   grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
 }
 
+.daily-community-player strong {
+  font-size: 0.92rem;
+}
+
 .daily-community-list span {
   font-size: 0.84rem;
   color: var(--muted);
+}
+
+.daily-results-panel {
+  margin-top: 1rem;
 }
 
 .daily-recap-card p {
@@ -1206,6 +1335,8 @@ button:disabled {
 }
 
 .daily-results-wrap {
+  display: grid;
+  gap: 0.85rem;
   overflow: visible;
 }
 
@@ -1563,6 +1694,10 @@ button.achievement-badge:focus-visible {
   .panel-subtitle {
     text-align: left;
   }
+
+  .hero-title {
+    max-width: none;
+  }
 }
 
 @media (max-width: 760px) {
@@ -1571,7 +1706,16 @@ button.achievement-badge:focus-visible {
     padding-top: 0.75rem;
   }
 
+  .site-nav,
+  .site-footer {
+    width: min(100vw - 0.85rem, 1280px);
+  }
+
   h1 {
+    font-size: clamp(2.8rem, 12vw, 4.2rem);
+  }
+
+  .hero-title {
     font-size: clamp(2.8rem, 12vw, 4.2rem);
   }
 
@@ -1590,6 +1734,10 @@ button.achievement-badge:focus-visible {
     width: 100%;
     position: sticky;
     top: 0.75rem;
+  }
+
+  .site-nav {
+    margin-top: 0.5rem;
   }
 
   .board {

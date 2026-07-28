@@ -7,19 +7,29 @@
     <link rel="manifest" href="/site.webmanifest">
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Historic Cricket XI Draft Game | Ashes 5-0</title>
+    <title>Ashes 5-0 Game - Build an All-Time Cricket XI</title>
     <meta
       name="description"
-      content="Roll historic cricket squads, draft one player at a time, build your all-time XI and simulate a five-Test series. Free to play with no sign-up."
+      content="Can your all-time Ashes XI win 5-0? Roll historic squads, make hidden picks, simulate a five-Test series and challenge friends to beat your team."
     />
     <link rel="canonical" href="https://ashes-5-0.co.uk/">
+    <meta name="robots" content="index, follow" />
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="Historic Cricket XI Draft Game | Ashes 5-0" />
+    <meta property="og:title" content="Ashes 5-0 Game - Build an All-Time Cricket XI" />
     <meta
       property="og:description"
-      content="Roll historic cricket squads, draft one player at a time, build your all-time XI and simulate a five-Test series. Free to play with no sign-up."
+      content="Can your all-time Ashes XI win 5-0? Roll historic squads, make hidden picks, simulate a five-Test series and challenge friends to beat your team."
     />
     <meta property="og:url" content="https://ashes-5-0.co.uk/" />
+    <meta property="og:image" content="https://ashes-5-0.co.uk/android-chrome-512x512.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Ashes 5-0 Game - Build an All-Time Cricket XI" />
+    <meta
+      name="twitter:description"
+      content="Can your all-time Ashes XI win 5-0? Roll historic squads, make hidden picks, simulate a five-Test series and challenge friends to beat your team."
+    />
+    <meta name="twitter:url" content="https://ashes-5-0.co.uk/" />
+    <meta name="twitter:image" content="https://ashes-5-0.co.uk/android-chrome-512x512.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -33,15 +43,30 @@
     <div class="background glow-a"></div>
     <div class="background glow-b"></div>
 
+    <nav class="site-nav" aria-label="Primary">
+      <a class="ghost button-link site-nav-link" href="/ashes">Ashes mode</a>
+      <a class="ghost button-link site-nav-link" href="/daily">Daily Challenge</a>
+      <a class="ghost button-link site-nav-link" href="/challenge">Challenge a Friend</a>
+      <a class="ghost button-link site-nav-link" href="/leaderboard">Leaderboard</a>
+      <a class="ghost button-link site-nav-link" href="/how-to-play">How to Play</a>
+      <a class="ghost button-link site-nav-link" href="/about">About</a>
+      <a class="ghost button-link site-nav-link" href="/world-cup">World Cup mode</a>
+    </nav>
+
     <main class="shell">
       <section class="view home-view" data-home-view>
         <header class="hero">
           <div>
-            <p class="eyebrow" data-home-eyebrow>Cricket XI</p>
-            <h1 data-home-title>Roll a squad. Lock one player. Build your XI.</h1>
+            <p class="eyebrow" data-home-eyebrow>Ashes 5-0</p>
+            <h2 class="hero-title" data-home-title>Can your Ashes XI go 5-0?</h2>
+            <p class="hero-tagline" data-home-tagline>Roll a squad. Lock one player. Build your XI.</p>
             <p class="lede" data-home-lede>
-              Draft a historic XI for a solo series, or use the new Challenge feature
-              to send your finished team to a friend for a five-Test showdown.
+              Roll historic squads, lock one player at a time and build an all-time XI capable of completing an Ashes whitewash.
+            </p>
+            <p class="hero-links">
+              Explore <a href="/ashes">Ashes mode</a>, the <a href="/daily">Daily Challenge</a>,
+              <a href="/challenge">Challenge a Friend</a>, the <a href="/leaderboard">player leaderboard</a>,
+              <a href="/how-to-play">how it works</a>, and <a href="/world-cup">World Cup mode</a>.
             </p>
           </div>
           <div class="hero-card">
@@ -106,7 +131,7 @@
             </article>
           </div>
 
-          <div class="controls home-controls">
+          <div class="controls home-controls" data-home-controls>
             <button class="primary play-button" data-play-game type="button">Start a solo game</button>
             <button
               class="secondary feature-action"
@@ -141,15 +166,15 @@
         <header class="hero">
           <div>
             <p class="eyebrow">Player leaderboard</p>
-            <h1>See which Ashes players appear most often in completed XIs.</h1>
-            <p class="lede">
-              Counts are based on saved solo teams, challenge creators, and completed challenge responses.
+            <h2 class="hero-title" data-leaderboard-title>See which Ashes players appear most often in completed XIs.</h2>
+            <p class="lede" data-leaderboard-lede>
+              See which players are chosen most often across completed solo XIs, Daily Challenges, challenge teams and community drafts.
             </p>
           </div>
           <div class="hero-card">
             <div class="stat">
               <span>Completed teams</span>
-              <strong data-leaderboard-total>0</strong>
+              <strong data-leaderboard-total>Loading</strong>
             </div>
             <div class="stat">
               <span>Metric</span>
@@ -168,7 +193,9 @@
               <p class="panel-kicker">Filters</p>
               <h2>Completed XI selections</h2>
             </div>
-            <p class="panel-subtitle" data-leaderboard-status>Loading leaderboard...</p>
+            <p class="panel-subtitle" data-leaderboard-status>
+              Rankings update as more completed teams are recorded. Daily Challenge picks are counted once a daily XI is finished.
+            </p>
           </div>
 
           <div class="config-grid leaderboard-filters">
@@ -196,7 +223,7 @@
           </div>
 
           <div class="table-wrap leaderboard-table-wrap" data-leaderboard-table>
-            <div class="placeholder">Loading leaderboard...</div>
+            <div class="placeholder">Loading community statistics.</div>
           </div>
         </section>
       </section>
@@ -208,8 +235,8 @@
 
         <section class="panel game-meta">
           <div class="meta-badges">
-            <span data-game-squad-count>0 squads</span>
-            <span data-game-player-count>0 players</span>
+            <span data-game-squad-count>Historic squads</span>
+            <span data-game-player-count>Player pool ready</span>
             <span data-game-mode>Classic</span>
           </div>
         </section>
@@ -217,7 +244,7 @@
         <header class="hero hero-game">
           <div>
             <p class="eyebrow" data-game-eyebrow>XI builder</p>
-            <h1 data-game-title>Roll a squad. Choose one player. Place them in the XI.</h1>
+            <h2 class="hero-title" data-game-title>Roll a squad. Choose one player. Place them in the XI.</h2>
           </div>
           <div class="hero-card">
             <div class="stat">
@@ -226,7 +253,7 @@
             </div>
             <div class="stat">
               <span>XI status</span>
-              <strong data-lineup-status>0 / 11 locked</strong>
+              <strong data-lineup-status>Awaiting first pick</strong>
             </div>
           </div>
         </header>
@@ -308,19 +335,19 @@
           <div class="metric-grid">
             <div class="metric">
               <span>Batting</span>
-              <strong data-draft-batting>0</strong>
+              <strong data-draft-batting>Pending</strong>
             </div>
             <div class="metric">
               <span>Bowling</span>
-              <strong data-draft-bowling>0</strong>
+              <strong data-draft-bowling>Pending</strong>
             </div>
             <div class="metric">
               <span>Fielding</span>
-              <strong data-draft-fielding>0</strong>
+              <strong data-draft-fielding>Pending</strong>
             </div>
             <div class="metric metric-accent">
               <span>Overall</span>
-              <strong data-draft-overall>0</strong>
+              <strong data-draft-overall>Pending</strong>
             </div>
           </div>
         </section>
@@ -330,7 +357,7 @@
         <header class="topbar">
           <button class="ghost" data-back-builder type="button">Back to XI</button>
           <div class="meta-badges">
-            <span data-series-progress>0 / 5 Tests</span>
+            <span data-series-progress>Five-Test series</span>
             <span data-series-status>Simulation ready</span>
           </div>
         </header>
@@ -338,16 +365,16 @@
         <header class="hero hero-series">
           <div>
             <p class="eyebrow" data-series-eyebrow>Series</p>
-            <h1 data-series-title>Your XI takes on an all-star XI.</h1>
+            <h2 class="hero-title" data-series-title>Your XI takes on an all-star XI.</h2>
           </div>
           <div class="hero-card">
             <div class="stat">
               <span data-series-user-label>Your XI</span>
-              <strong data-series-user-strength>0</strong>
+              <strong data-series-user-strength>TBD</strong>
             </div>
             <div class="stat">
               <span data-series-opposition-label>All-star XI</span>
-              <strong data-series-star-strength>0</strong>
+              <strong data-series-star-strength>TBD</strong>
             </div>
           </div>
         </header>
@@ -370,8 +397,8 @@
           <article class="panel">
             <div class="panel-header">
               <div>
-                <p class="panel-kicker">Live feed</p>
-                <h2>Match-by-match results</h2>
+                <p class="panel-kicker" data-series-feed-kicker>Live feed</p>
+                <h2 data-series-feed-title>Match-by-match results</h2>
               </div>
             </div>
             <div class="feed" data-series-feed></div>
@@ -380,8 +407,8 @@
           <article class="panel">
             <div class="panel-header">
               <div>
-                <p class="panel-kicker">Series table</p>
-                <h2>Final tally</h2>
+                <p class="panel-kicker" data-series-table-kicker>Series table</p>
+                <h2 data-series-table-title>Final tally</h2>
               </div>
             </div>
             <div class="table-wrap" data-series-table-wrap>
@@ -450,6 +477,16 @@
 
     <footer class="site-footer">
       <div class="footer-rule">---------ashes-5-0.co.uk---------</div>
+      <nav class="footer-links" aria-label="Footer">
+        <a href="/">Home</a>
+        <a href="/ashes">Play Ashes mode</a>
+        <a href="/daily">Daily Challenge</a>
+        <a href="/challenge">Challenge a Friend</a>
+        <a href="/leaderboard">Leaderboard</a>
+        <a href="/how-to-play">How to Play</a>
+        <a href="/about">About</a>
+        <a href="/world-cup">World Cup mode</a>
+      </nav>
       <button class="secondary feedback-toggle" data-feedback-toggle type="button" aria-expanded="false">
         Feedback
       </button>

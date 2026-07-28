@@ -2,8 +2,34 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://ashes-5-0.co.uk/</loc>
-    <lastmod>2026-06-13</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>1.0</priority>
+    <lastmod>2026-07-28</lastmod>
+  </url>
+  <url>
+    <loc>https://ashes-5-0.co.uk/ashes</loc>
+    <lastmod>2026-07-28</lastmod>
+  </url>
+  <url>
+    <loc>https://ashes-5-0.co.uk/daily</loc>
+    <lastmod>2026-07-28</lastmod>
+  </url>
+  <url>
+    <loc>https://ashes-5-0.co.uk/challenge</loc>
+    <lastmod>2026-07-28</lastmod>
+  </url>
+  <url>
+    <loc>https://ashes-5-0.co.uk/leaderboard</loc>
+    <lastmod>2026-07-28</lastmod>
+  </url>
+  <url>
+    <loc>https://ashes-5-0.co.uk/how-to-play</loc>
+    <lastmod>2026-07-28</lastmod>
+  </url>
+  <url>
+    <loc>https://ashes-5-0.co.uk/about</loc>
+    <lastmod>2026-07-28</lastmod>
+  </url>
+  <url>
+    <loc>https://ashes-5-0.co.uk/world-cup</loc>
+    <lastmod>2026-07-28</lastmod>
   </url>
 </urlset>
