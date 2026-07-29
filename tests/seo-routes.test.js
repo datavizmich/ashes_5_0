@@ -116,6 +116,10 @@ function extractPrimaryNavHtml(html) {
   return html.match(/<nav class="site-nav"[\s\S]*?<\/nav>/iu)?.[0] ?? "";
 }
 
+function extractTopbarHomeHeaders(html) {
+  return html.match(/<header class="topbar topbar-home"[\s\S]*?<\/header>/giu) ?? [];
+}
+
 test("every intended public route returns successfully with unique metadata and one H1", async () => {
   const seenTitles = new Set();
   const seenDescriptions = new Set();
@@ -150,6 +154,7 @@ test("homepage leads with Ashes 5-0 and exposes crawlable navigation and footer 
   const primaryNav = extractPrimaryNavHtml(html);
 
   assert.equal(extractH1Text(html), "Can your Ashes XI go 5-0?");
+  assert.match(primaryNav, /\shidden(?:=|>|\s)/u);
   assert.match(primaryNav, /href="\/"/u);
   assert.doesNotMatch(primaryNav, /href="\/ashes"/u);
   assert.doesNotMatch(primaryNav, /href="\/daily"/u);
@@ -169,6 +174,18 @@ test("homepage leads with Ashes 5-0 and exposes crawlable navigation and footer 
     "/world-cup",
   ]) {
     assert.match(html, new RegExp(`href="${href}"`, "u"));
+  }
+});
+
+test("secondary routes expose only one visible home control at the top", async () => {
+  const { html } = await renderRoute(dailyRoute, "/daily");
+  const primaryNav = extractPrimaryNavHtml(html);
+  const topbars = extractTopbarHomeHeaders(html);
+
+  assert.doesNotMatch(primaryNav, /\shidden(?:=|>|\s)/u);
+  assert.equal(topbars.length, 2);
+  for (const topbar of topbars) {
+    assert.match(topbar, /\shidden(?:=|>|\s)/u);
   }
 });
 

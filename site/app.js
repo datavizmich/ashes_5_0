@@ -123,6 +123,7 @@ const els = {};
 
 function bindElements() {
   const selectors = {
+    siteNav: "[data-site-nav]",
     homeView: "[data-home-view]",
     leaderboardView: "[data-leaderboard-view]",
     gameView: "[data-game-view]",
@@ -3447,6 +3448,7 @@ function renderView() {
   els.leaderboardView.hidden = STATE.view !== "leaderboard";
   els.gameView.hidden = STATE.view !== "game";
   els.seriesView.hidden = STATE.view !== "series";
+  els.siteNav.hidden = currentPublicPageKey() === "home" && STATE.view === "home";
   document.body.dataset.view = STATE.view;
 }
 

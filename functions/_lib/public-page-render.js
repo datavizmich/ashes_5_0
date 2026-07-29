@@ -85,6 +85,7 @@ function websiteStructuredData() {
 
 function applyBaseView(html, { activeView = "home", activeTitleAttr = "data-home-title", competition = "ashes" } = {}) {
   let nextHtml = setBodyAttribute(html, "data-competition", competition);
+  nextHtml = setElementHidden(nextHtml, "data-site-nav", false);
 
   for (const titleAttr of TITLE_ATTRS) {
     nextHtml = retagElement(nextHtml, titleAttr, "h2");
@@ -104,6 +105,7 @@ function applyHomeLanding(html, options = {}) {
     activeTitleAttr: "data-home-title",
     competition: options.competition ?? "ashes",
   });
+  nextHtml = setElementHidden(nextHtml, "data-site-nav", Boolean(options.hideSiteNav));
 
   nextHtml = replaceElementText(nextHtml, "data-home-eyebrow", options.eyebrow ?? "Ashes 5-0");
   nextHtml = replaceElementText(nextHtml, "data-home-title", options.title);
@@ -379,6 +381,7 @@ function applyHomepage(html) {
     panelCopy:
       'Play the full <a href="/ashes">Ashes mode</a>, try the <a href="/daily">Daily Challenge</a>, create a private <a href="/challenge">friend challenge</a>, or explore the <a href="/leaderboard">community picks</a>.',
     playLabel: "Start a solo game",
+    hideSiteNav: true,
   });
 
   return nextHtml;
