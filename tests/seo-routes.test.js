@@ -112,6 +112,10 @@ function extractH1Text(html) {
   return stripTags(html.match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/iu)?.[1] ?? "");
 }
 
+function extractPrimaryNavHtml(html) {
+  return html.match(/<nav class="site-nav"[\s\S]*?<\/nav>/iu)?.[0] ?? "";
+}
+
 test("every intended public route returns successfully with unique metadata and one H1", async () => {
   const seenTitles = new Set();
   const seenDescriptions = new Set();
@@ -143,8 +147,17 @@ test("every intended public route returns successfully with unique metadata and 
 
 test("homepage leads with Ashes 5-0 and exposes crawlable navigation and footer links", async () => {
   const { html } = await renderRoute(homeRoute, "/");
+  const primaryNav = extractPrimaryNavHtml(html);
 
   assert.equal(extractH1Text(html), "Can your Ashes XI go 5-0?");
+  assert.match(primaryNav, /href="\/"/u);
+  assert.doesNotMatch(primaryNav, /href="\/ashes"/u);
+  assert.doesNotMatch(primaryNav, /href="\/daily"/u);
+  assert.doesNotMatch(primaryNav, /href="\/challenge"/u);
+  assert.doesNotMatch(primaryNav, /href="\/leaderboard"/u);
+  assert.doesNotMatch(primaryNav, /href="\/how-to-play"/u);
+  assert.doesNotMatch(primaryNav, /href="\/about"/u);
+  assert.doesNotMatch(primaryNav, /href="\/world-cup"/u);
 
   for (const href of [
     "/ashes",
