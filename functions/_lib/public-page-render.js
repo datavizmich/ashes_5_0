@@ -232,39 +232,27 @@ function applyHowToPlayLanding(html) {
     rulesHtml: copyGrid([
       {
         title: "Full XI drafting",
-        body: "Roll a historic squad, choose one player, and lock that player into a valid XI slot. Keep going until your team is full.",
-      },
-      {
-        title: "Hidden future squad rolls",
-        body: "Each choice matters because the next squad stays hidden until you confirm the current pick.",
-      },
-      {
-        title: "Team-composition rules",
-        body: "Every slot has a role requirement, so you still need a balanced batting order, wicketkeeper, spin option and pace attack.",
+        body: "Roll a previous ashes squad, select one player for your side before rolling another squad. Keep going until your squad is complete",
       },
       {
         title: "Five-Test simulation",
-        body: "A completed Ashes XI plays a full five-Test series against an all-star side drawn from the same historical pool.",
+        body: "A completed Ashes XI plays a full five-Test series against an all-star side drawn from the same historical pool. Can you go 5-0?",
       },
       {
         title: "Daily Ashes Challenge",
-        body: "The daily mode starts with seven fixed players. Four hidden squad rolls follow, one pick per roll, then one Test decides the result.",
+        body: "Seven players are pre-selected for your squad. You must pick four more and win the one-off test by as many runs as possible to reach the daily leaderboard.",
       },
       {
         title: "Challenge a Friend",
-        body: "Complete a team, generate a private link, and let someone else draft their XI before playing a five-Test head-to-head series.",
+        body: "After completing a team, you can generate a private link to send to a friend. They will draft a team to play yours. After the game they can share the results link with you.",
       },
       {
         title: "World Cup mode",
-        body: "World Cup mode uses historic tournament squads and a tournament route. It keeps its own format and is not presented as an Ashes whitewash.",
+        body: "Players are selected from previous ODI World Cup squads and you will play 3 group games before a semi-final and final to win the World Cup.",
       },
       {
-        title: "Leaderboards",
-        body: "Completed solo teams, friend challenges and finished daily drafts feed the player-selection leaderboard over time.",
-      },
-      {
-        title: "Frequently asked questions",
-        body: "Can I see future squads? No. Do daily practice runs count? No. Do short challenge links stay private? Yes, and generated challenge and result URLs are excluded from indexing.",
+        title: "Player Leaderboards",
+        body: "The most selected players from solo and friend challenge games will appear on the leaderboard. (Some players appear in more available squads than others)",
       },
     ]),
   });
@@ -290,36 +278,24 @@ function applyAboutLanding(html) {
     homeCompetitionHidden: true,
     rulesHtml: copyGrid([
       {
-        title: "What Ashes 5-0 is",
-        body: "It is a historic cricket drafting game where you build an XI from classic squads and then simulate how that team performs.",
+        title: "What is Ashes 5-0?",
+        body: "A cricket version of the popular 82-0 game. Draft a team from previous Ashes or World Cup teams to take on a historic Ashes XI in a 5 test series.",
       },
       {
-        title: "Why it was created",
-        body: "The project focuses on the fun of comparing great cricketers across eras while adding tension through constrained drafting and hidden future rolls.",
+        title: "Game Modes",
+        body: "You can play a full Ashes test in both classic and memory mode. Each day there is a new challenge nad you can take on a friend in Challenge mode (Currently only Classic mode, but memory will be added soon). World Cup mode is also in development with daily challenges being added soon.",
       },
       {
-        title: "What makes it distinctive",
-        body: "You cannot see the next squad before committing to the current pick, so every selection is both a team-building choice and a risk-management decision.",
+        title: "Simulations and Ratings",
+        body: "The player ratings are used in the match simulations. If there are any ratings you think should be corrected, please get in touch through the feedback form.",
       },
       {
-        title: "Available modes",
-        body: "The site includes a full Ashes draft, a Daily Ashes Challenge, Challenge a Friend links, a World Cup mode and a community selection leaderboard.",
-      },
-      {
-        title: "Simulations and ratings",
-        body: "At a high level, player ratings feed batting, bowling, fielding and experience balances, which then shape the simulated Test or tournament outcomes.",
-      },
-      {
-        title: "Independent cricket project",
-        body: "Ashes 5-0 is an independent project. It does not claim endorsement from the ECB, Cricket Australia, the ICC or any player.",
-      },
-      {
-        title: "Entertainment only",
-        body: "Results and rankings are intended for entertainment and comparison rather than official historical judgement.",
+        title: "Other Projects",
+        body: "I run the sports data visualisation page @datavizmich on instagram. If you enjoy this game, you may find that page interesting too.",
       },
       {
         title: "Feedback",
-        body: "Use the feedback form in the footer to report bugs, suggest ideas or share thoughts on the drafting and simulation experience.",
+        body: "I would love to have any feedback you have on the site. Improvements, bugs or new features. Let me know through the feedback button at the bottom of the page.",
       },
     ]),
   });
