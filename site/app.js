@@ -181,6 +181,7 @@ function bindElements() {
     challengeCopy: "[data-challenge-copy]",
     challengeNameRow: "[data-challenge-name-row]",
     challengeName: "[data-challenge-name]",
+    challengeMode: "[data-challenge-mode]",
     challengeMeta: "[data-challenge-meta]",
     challengeLink: "[data-challenge-link]",
     copyChallengeLink: "[data-copy-challenge-link]",
@@ -636,6 +637,16 @@ function currentChallengePlayableMode() {
   return challengeLineupLoaded()
     ? normalizePlayableMode(STATE.challenge?.mode)
     : normalizePlayableMode(STATE.challengeDraftMode);
+}
+
+function challengeModeSelectionLocked() {
+  return challengeLineupLoaded()
+    || resultSnapshotLoaded()
+    || Boolean(STATE.generatedChallenge?.url)
+    || Boolean(STATE.currentSquad)
+    || Boolean(STATE.rollAnimation?.active)
+    || Boolean(STATE.series)
+    || STATE.lineup.size > 0;
 }
 
 function hashChallengeCode(value) {
@@ -3605,14 +3616,16 @@ function dailyCommunityStatsBodyHtml() {
 
 function dailyResultsLeaderboardCardHtml() {
   const leaderboard = STATE.daily.resultsLeaderboard;
+  const totalCompletedPlayers = Math.max(0, Number(leaderboard?.totalCompletedPlayers ?? 0));
+  const completedSummary = `${totalCompletedPlayers} ranked ${pluralize(totalCompletedPlayers, "player")} ${totalCompletedPlayers === 1 ? "has" : "have"} completed this daily challenge.`;
   if (!leaderboard?.entries?.length) {
     return `
-      <p class="panel-subtitle">No ranked wins have been recorded yet for this daily challenge.</p>
+      <p class="panel-subtitle">${escapeHtml(totalCompletedPlayers ? `${completedSummary} No ranked wins have been recorded yet for this daily challenge.` : "No ranked results have been recorded yet for this daily challenge.")}</p>
     `;
   }
 
   return `
-    <p class="panel-subtitle">Top 5 ranked winning margins for ${escapeHtml(STATE.daily.challenge?.date ?? STATE.daily.summary?.date ?? currentDailyReferenceDateText())}.</p>
+    <p class="panel-subtitle">${escapeHtml(completedSummary)} Top 5 ranked winning margins for ${escapeHtml(STATE.daily.challenge?.date ?? STATE.daily.summary?.date ?? currentDailyReferenceDateText())}.</p>
     <div class="daily-community-grid">
       ${leaderboard.entries.map((entry, index) => `
         <article class="daily-community-card">
@@ -3978,6 +3991,7 @@ function renderChallengePanel() {
   const url = ready ? currentChallengeUrl() : "";
   const challengeCreatorName = currentChallengeCreatorName();
   const generatedLink = !loadedChallenge && Boolean(STATE.generatedChallenge?.url);
+  const modeLocked = challengeModeSelectionLocked();
 
   els.challengeTitle.textContent = loadedChallenge
     ? creatorName
@@ -3996,6 +4010,8 @@ function renderChallengePanel() {
   els.challengeNameRow.hidden = loadedChallenge;
   els.challengeName.value = loadedChallenge ? "" : STATE.challengeDraftName;
   els.challengeName.disabled = generatedLink;
+  els.challengeMode.value = playableMode;
+  els.challengeMode.disabled = loadedChallenge || modeLocked;
   els.challengeMeta.hidden = !loadedChallenge;
   els.challengeMeta.textContent = loadedChallenge
     ? creatorName
@@ -4032,7 +4048,7 @@ function renderSeriesSummary() {
     : STATE.series.revealed === 0
       ? "Ready to simulate"
       : "Simulation in progress";
-  els.backBuilder.textContent = resultLoaded || dailyChallengeActive() ? "Home" : "Back to XI";
+  els.backBuilder.hidden = true;
   els.seriesUserStrength.textContent = `${STATE.series.userTeam.overall} · ${STATE.series.userTeam.grade}`;
   els.seriesStarStrength.textContent = `${STATE.series.starTeam.overall} · ${STATE.series.starTeam.grade}`;
   els.seriesUserLabel.textContent = currentSeriesUserLabel();
@@ -5407,10 +5423,6 @@ function goHome() {
 }
 
 function goBuilder() {
-  if (dailyChallengeActive()) {
-    goHome();
-    return;
-  }
   if (resultSnapshotLoaded()) {
     goHome();
     return;
@@ -5559,6 +5571,17 @@ function wireControls() {
   els.challengeName.addEventListener("blur", () => {
     STATE.challengeDraftName = normalizeChallengeCreatorName(els.challengeName.value);
     renderChallengePanel();
+  });
+  els.challengeMode.addEventListener("change", () => {
+    if (!challengeCreationMode() || challengeModeSelectionLocked()) {
+      els.challengeMode.value = currentChallengePlayableMode();
+      renderChallengePanel();
+      return;
+    }
+
+    STATE.challengeDraftMode = normalizePlayableMode(els.challengeMode.value);
+    setChallengeStatus("");
+    renderAll();
   });
   els.homeResponseName.addEventListener("input", () => {
     STATE.challengeResponseName = els.homeResponseName.value;

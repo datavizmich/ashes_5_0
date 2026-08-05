@@ -283,7 +283,7 @@ function applyAboutLanding(html) {
       },
       {
         title: "Game Modes",
-        body: "You can play a full Ashes test in both classic and memory mode. Each day there is a new challenge nad you can take on a friend in Challenge mode (Currently only Classic mode, but memory will be added soon). World Cup mode is also in development with daily challenges being added soon.",
+        body: "You can play a full Ashes test in both classic and memory mode. Each day there is a new challenge and you can take on a friend in Challenge mode using either classic or memory rules. World Cup mode is also available with its own historic squad pool.",
       },
       {
         title: "Simulations and Ratings",

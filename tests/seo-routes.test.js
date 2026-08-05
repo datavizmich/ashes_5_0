@@ -204,6 +204,9 @@ test("challenge landing explains the friend flow in initial HTML", async () => {
 
   assert.equal(extractTitle(html), PUBLIC_PAGE_DEFS.challenge.title);
   assert.equal(extractH1Text(html), "Build a cricket XI and face a friend");
+  assert.match(html, /data-challenge-mode/u);
+  assert.match(html, /<option value="classic">Classic<\/option>/u);
+  assert.match(html, /<option value="memory">Memory<\/option>/u);
   assert.match(html, /1\. Build your XI/u);
   assert.match(html, /2\. Generate and share a private link/u);
   assert.match(html, /3\. Your friend drafts and plays/u);
@@ -222,16 +225,17 @@ test("world cup route keeps world-cup-specific metadata and heading language", a
 test("how-to-play and about routes expose stable crawler-facing sections", async () => {
   const howToPlay = await renderRoute(howToPlayRoute, "/how-to-play");
   assert.match(howToPlay.html, /Full XI drafting/u);
-  assert.match(howToPlay.html, /Hidden future squad rolls/u);
+  assert.match(howToPlay.html, /Five-Test simulation/u);
+  assert.match(howToPlay.html, /Daily Ashes Challenge/u);
   assert.match(howToPlay.html, /Challenge a Friend/u);
   assert.match(howToPlay.html, /World Cup mode/u);
-  assert.match(howToPlay.html, /Frequently asked questions/u);
+  assert.match(howToPlay.html, /Player Leaderboards/u);
 
   const about = await renderRoute(aboutRoute, "/about");
-  assert.match(about.html, /What Ashes 5-0 is/u);
-  assert.match(about.html, /Why it was created/u);
-  assert.match(about.html, /Independent cricket project/u);
-  assert.match(about.html, /Entertainment only/u);
+  assert.match(about.html, /What is Ashes 5-0\?/u);
+  assert.match(about.html, /Game Modes/u);
+  assert.match(about.html, /Simulations and Ratings/u);
+  assert.match(about.html, /Other Projects/u);
   assert.match(about.html, /Feedback/u);
 });
 

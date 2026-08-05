@@ -824,8 +824,15 @@ function parseWinMargin(summary) {
 }
 
 export function buildDailyResultsLeaderboard(completedRankedAttempts, currentAttemptId = "") {
-  const winners = Array.isArray(completedRankedAttempts)
+  const attempts = Array.isArray(completedRankedAttempts)
     ? completedRankedAttempts
+    : [];
+  const totalCompletedPlayers = attempts.filter((attempt) => {
+    if (!attempt) return false;
+    if (attempt.simulationComplete) return true;
+    return Boolean(attempt.result?.matches?.length);
+  }).length;
+  const winners = attempts
       .map((attempt) => {
         const match = attempt.result?.matches?.[0] ?? null;
         const margin = parseWinMargin(match?.summary);
@@ -847,10 +854,10 @@ export function buildDailyResultsLeaderboard(completedRankedAttempts, currentAtt
         || right.marginAmount - left.marginAmount
         || left.completedAt.localeCompare(right.completedAt)
         || left.displayName.localeCompare(right.displayName),
-      )
-    : [];
+      );
 
   return {
+    totalCompletedPlayers,
     totalWinners: winners.length,
     entries: winners.slice(0, 5),
   };

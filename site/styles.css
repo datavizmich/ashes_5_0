@@ -475,11 +475,21 @@ select {
 }
 
 .challenge-name-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: stretch;
   margin-bottom: 0.75rem;
 }
 
 .challenge-name-control {
+  flex: 1 1 320px;
   max-width: 420px;
+}
+
+.challenge-mode-control {
+  flex: 0 1 220px;
+  min-width: 180px;
 }
 
 .challenge-name-input {
@@ -770,6 +780,10 @@ body[data-competition="worldcup"] [data-home-challenge] {
   display: flex;
   flex-wrap: wrap;
   gap: 0.6rem;
+}
+
+.topbar .meta-badges {
+  margin-left: auto;
 }
 
 .meta-badges span {

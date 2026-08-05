@@ -232,6 +232,7 @@ test("simulation-complete responses expose community stats and the daily leaderb
 
   assert.ok(response.communityStats);
   assert.ok(response.dailyLeaderboard);
+  assert.equal(response.dailyLeaderboard.totalCompletedPlayers, 1);
   assert.ok(response.result);
 });
 
@@ -257,29 +258,41 @@ test("daily leaderboard ranks winning margins and prefers entered display names"
     {
       id: "attempt-c",
       displayName: "",
+      simulationComplete: true,
       result: { matches: [{ summary: "Won by an innings and 12 runs" }] },
       completedAt: "2026-07-27T09:00:00Z",
     },
     {
       id: "attempt-b",
       displayName: "Bob",
+      simulationComplete: true,
       result: { matches: [{ summary: "Won by 7 wickets" }] },
       completedAt: "2026-07-27T09:05:00Z",
     },
     {
       id: "attempt-a",
       displayName: "Alice",
+      simulationComplete: true,
       result: { matches: [{ summary: "Won by 85 runs" }] },
       completedAt: "2026-07-27T09:10:00Z",
     },
     {
       id: "attempt-d",
       displayName: "Dana",
+      simulationComplete: true,
       result: { matches: [{ summary: "Match drawn" }] },
       completedAt: "2026-07-27T09:15:00Z",
     },
+    {
+      id: "attempt-e",
+      displayName: "Elliot",
+      simulationComplete: false,
+      result: null,
+      completedAt: "2026-07-27T09:20:00Z",
+    },
   ], "attempt-b");
 
+  assert.equal(leaderboard.totalCompletedPlayers, 4);
   assert.equal(leaderboard.entries.length, 3);
   assert.equal(leaderboard.entries[0].displayName, "Anonymous");
   assert.equal(leaderboard.entries[0].margin, "Won by an innings and 12 runs");
