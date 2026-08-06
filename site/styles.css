@@ -1869,11 +1869,13 @@ button.achievement-badge:focus-visible {
 
   .home-controls > button,
   .home-controls > .button-link {
+    flex: 1 1 auto;
     width: 100%;
   }
 
   .home-controls {
-    flex-wrap: wrap;
+    flex-direction: column;
+    flex-wrap: nowrap;
   }
 
   .feature-action {
