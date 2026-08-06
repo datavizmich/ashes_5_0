@@ -10,7 +10,7 @@
   </url>
   <url>
     <loc>https://ashes-5-0.co.uk/daily</loc>
-    <lastmod>2026-07-28</lastmod>
+    <lastmod>2026-08-06</lastmod>
   </url>
   <url>
     <loc>https://ashes-5-0.co.uk/challenge</loc>
@@ -18,7 +18,15 @@
   </url>
   <url>
     <loc>https://ashes-5-0.co.uk/leaderboard</loc>
-    <lastmod>2026-07-28</lastmod>
+    <lastmod>2026-08-06</lastmod>
+  </url>
+  <url>
+    <loc>https://ashes-5-0.co.uk/world-cup/daily</loc>
+    <lastmod>2026-08-06</lastmod>
+  </url>
+  <url>
+    <loc>https://ashes-5-0.co.uk/world-cup/leaderboard</loc>
+    <lastmod>2026-08-06</lastmod>
   </url>
   <url>
     <loc>https://ashes-5-0.co.uk/how-to-play</loc>
@@ -30,6 +38,6 @@
   </url>
   <url>
     <loc>https://ashes-5-0.co.uk/world-cup</loc>
-    <lastmod>2026-07-28</lastmod>
+    <lastmod>2026-08-06</lastmod>
   </url>
 </urlset>

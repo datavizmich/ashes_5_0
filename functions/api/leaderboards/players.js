@@ -4,6 +4,7 @@ import { CANONICAL_SITE_ORIGIN } from "../../../site/shared/ashes-core.js";
 const METRICS = new Set(["selected"]);
 const PERIODS = new Set(["all", "30d"]);
 const MODES = new Set(["all", "classic", "memory"]);
+const COMPETITIONS = new Set(["ashes", "worldcup"]);
 const MAX_LEADERBOARD_ROWS = 20;
 
 function isMissingSchemaError(error) {
@@ -34,9 +35,12 @@ async function proxyCanonicalLeaderboard(request) {
   });
 }
 
-function buildFilters(period, mode) {
+function buildFilters(period, mode, competition) {
   const whereClauses = [];
   const bindings = [];
+
+  whereClauses.push("COALESCE(t.competition, 'ashes') = ?");
+  bindings.push(competition);
 
   if (mode !== "all") {
     whereClauses.push("t.mode = ?");
@@ -58,6 +62,7 @@ export async function onRequestGet(context) {
   const metric = String(url.searchParams.get("metric") ?? "selected");
   const period = String(url.searchParams.get("period") ?? "all");
   const mode = String(url.searchParams.get("mode") ?? "all");
+  const competition = String(url.searchParams.get("competition") ?? "ashes");
 
   if (!METRICS.has(metric)) {
     return errorResponse(400, "Unsupported leaderboard metric.");
@@ -67,6 +72,9 @@ export async function onRequestGet(context) {
   }
   if (!MODES.has(mode)) {
     return errorResponse(400, "Unsupported leaderboard mode.");
+  }
+  if (!COMPETITIONS.has(competition)) {
+    return errorResponse(400, "Unsupported leaderboard competition.");
   }
 
   if (!context.env.DB || typeof context.env.DB.prepare !== "function") {
@@ -85,7 +93,7 @@ export async function onRequestGet(context) {
   }
 
   try {
-    const filters = buildFilters(period, mode);
+    const filters = buildFilters(period, mode, competition);
     const totalTeamsQuery = context.env.DB.prepare(
       `SELECT COUNT(*) AS total_teams
        FROM teams t
@@ -113,6 +121,7 @@ export async function onRequestGet(context) {
 
     return json({
       ok: true,
+      competition,
       metric,
       period,
       mode,

@@ -1,4 +1,5 @@
 import { ASHES_SQUADS } from "../data/ashes-squads.js";
+import { WORLD_CUP_SQUADS } from "../data/wc-squads.js";
 
 export const CANONICAL_SITE_ORIGIN = "https://ashes-5-0.co.uk";
 export const TEAM_DATA_VERSION = "ashes-5-0-data-v1";
@@ -6,6 +7,7 @@ export const CHALLENGE_RESULT_VERSION = "challenge-result-v1";
 export const RESULT_SIMULATION_VERSION = "ashes-5-0-sim-v1";
 export const DISPLAY_NAME_MAX = 40;
 export const SUPPORTED_MODES = ["classic", "memory"];
+export const SUPPORTED_COMPETITIONS = ["ashes", "worldcup"];
 
 export const XI_SLOTS = [
   { label: "Opener", accepts: ["Opener"], focus: "batting", row: 5, col: 2 },
@@ -23,6 +25,12 @@ export const XI_SLOTS = [
 
 export function normalizePlayableMode(value) {
   if (value === "classic" || value === "memory") return value;
+  return null;
+}
+
+export function normalizeCompetition(value) {
+  if (value === "worldcup") return "worldcup";
+  if (value === "ashes") return "ashes";
   return null;
 }
 
@@ -84,47 +92,93 @@ export const ASHES_CATALOG = buildCatalogFromSquads(ASHES_SQUADS);
 export const ASHES_CATALOG_INDEX_BY_ID = new Map(ASHES_CATALOG.map((player, index) => [player.id, index]));
 export const ASHES_PLAYER_BY_ID = new Map(ASHES_CATALOG.map((player) => [player.id, player]));
 export const ASHES_SQUAD_BY_ID = new Map(ASHES_SQUADS.map((squad) => [squad.id, squad]));
+export const WORLD_CUP_CATALOG = buildCatalogFromSquads(WORLD_CUP_SQUADS);
+export const WORLD_CUP_PLAYER_BY_ID = new Map(WORLD_CUP_CATALOG.map((player) => [player.id, player]));
+export const WORLD_CUP_SQUAD_BY_ID = new Map(WORLD_CUP_SQUADS.map((squad) => [squad.id, squad]));
 
-const stablePlayers = new Map();
-const bestCatalogPlayers = new Map();
-for (const player of ASHES_CATALOG) {
-  const existing = stablePlayers.get(player.stableId);
-  if (!existing) {
-    stablePlayers.set(player.stableId, {
-      id: player.stableId,
-      name: player.name,
-      roles: [...player.roles],
-    });
-  } else {
-    for (const role of player.roles) {
-      if (!existing.roles.includes(role)) {
-        existing.roles.push(role);
+function buildStablePlayerCollections(catalog) {
+  const stablePlayers = new Map();
+  const bestCatalogPlayers = new Map();
+  for (const player of catalog) {
+    const existing = stablePlayers.get(player.stableId);
+    if (!existing) {
+      stablePlayers.set(player.stableId, {
+        id: player.stableId,
+        name: player.name,
+        roles: [...player.roles],
+      });
+    } else {
+      for (const role of player.roles) {
+        if (!existing.roles.includes(role)) {
+          existing.roles.push(role);
+        }
       }
+    }
+
+    const bestExisting = bestCatalogPlayers.get(player.stableId);
+    if (!bestExisting || playerOverall(player) > playerOverall(bestExisting)) {
+      bestCatalogPlayers.set(player.stableId, player);
     }
   }
 
-  const bestExisting = bestCatalogPlayers.get(player.stableId);
-  if (!bestExisting || playerOverall(player) > playerOverall(bestExisting)) {
-    bestCatalogPlayers.set(player.stableId, player);
-  }
+  const players = [...stablePlayers.values()].sort((left, right) => left.name.localeCompare(right.name));
+  return {
+    players,
+    playerByStableId: new Map(players.map((player) => [player.id, player])),
+    bestPlayerByStableId: new Map(bestCatalogPlayers),
+  };
 }
 
-export const ASHES_PLAYERS = [...stablePlayers.values()].sort((left, right) => left.name.localeCompare(right.name));
-export const ASHES_PLAYER_BY_STABLE_ID = new Map(ASHES_PLAYERS.map((player) => [player.id, player]));
-export const BEST_ASHES_PLAYER_BY_STABLE_ID = new Map(bestCatalogPlayers);
+const ashesStableCollections = buildStablePlayerCollections(ASHES_CATALOG);
+const worldCupStableCollections = buildStablePlayerCollections(WORLD_CUP_CATALOG);
+const allStableCollections = buildStablePlayerCollections([...ASHES_CATALOG, ...WORLD_CUP_CATALOG]);
+
+export const ASHES_PLAYERS = ashesStableCollections.players;
+export const ASHES_PLAYER_BY_STABLE_ID = ashesStableCollections.playerByStableId;
+export const BEST_ASHES_PLAYER_BY_STABLE_ID = ashesStableCollections.bestPlayerByStableId;
+export const WORLD_CUP_PLAYERS = worldCupStableCollections.players;
+export const WORLD_CUP_PLAYER_BY_STABLE_ID = worldCupStableCollections.playerByStableId;
+export const BEST_WORLD_CUP_PLAYER_BY_STABLE_ID = worldCupStableCollections.bestPlayerByStableId;
+export const ALL_PLAYERS = allStableCollections.players;
+export const ALL_PLAYER_BY_STABLE_ID = allStableCollections.playerByStableId;
+
+export function catalogForCompetition(competition = "ashes") {
+  return competition === "worldcup" ? WORLD_CUP_CATALOG : ASHES_CATALOG;
+}
+
+export function playerByIdForCompetition(competition = "ashes") {
+  return competition === "worldcup" ? WORLD_CUP_PLAYER_BY_ID : ASHES_PLAYER_BY_ID;
+}
+
+export function squadByIdForCompetition(competition = "ashes") {
+  return competition === "worldcup" ? WORLD_CUP_SQUAD_BY_ID : ASHES_SQUAD_BY_ID;
+}
+
+export function bestPlayerByStableIdForCompetition(competition = "ashes") {
+  return competition === "worldcup" ? BEST_WORLD_CUP_PLAYER_BY_STABLE_ID : BEST_ASHES_PLAYER_BY_STABLE_ID;
+}
 
 export function lineupIdsToPlayers(lineupPlayerIds) {
+  return lineupIdsToPlayersForCompetition(lineupPlayerIds, "ashes");
+}
+
+export function lineupIdsToPlayersForCompetition(lineupPlayerIds, competition = "ashes") {
   if (!Array.isArray(lineupPlayerIds)) return null;
-  const lineup = lineupPlayerIds.map((playerId) => ASHES_PLAYER_BY_ID.get(playerId) ?? null);
+  const playerById = playerByIdForCompetition(competition);
+  const lineup = lineupPlayerIds.map((playerId) => playerById.get(playerId) ?? null);
   return lineup.every(Boolean) ? lineup : null;
 }
 
 export function validateLineupPlayerIds(lineupPlayerIds) {
+  return validateLineupPlayerIdsForCompetition(lineupPlayerIds, "ashes");
+}
+
+export function validateLineupPlayerIdsForCompetition(lineupPlayerIds, competition = "ashes") {
   if (!Array.isArray(lineupPlayerIds) || lineupPlayerIds.length !== XI_SLOTS.length) {
     return null;
   }
 
-  const lineup = lineupIdsToPlayers(lineupPlayerIds);
+  const lineup = lineupIdsToPlayersForCompetition(lineupPlayerIds, competition);
   if (!lineup) return null;
 
   const ids = lineup.map((player) => player.id);

@@ -3,6 +3,7 @@ import { PUBLIC_PAGE_DEFS, canonicalUrlForPageKey } from "../../site/shared/publ
 import {
   insertBefore,
   renderSpaPage,
+  setElementAttribute,
   replaceElementInnerHtml,
   replaceElementText,
   retagElement,
@@ -197,6 +198,82 @@ function applyDailyLanding(html) {
     '<div class="placeholder">Load today\'s challenge to reveal the first squad.</div>',
   );
   nextHtml = replaceElementText(nextHtml, "data-roll-squad", "Load today\'s challenge");
+  nextHtml = setElementHidden(nextHtml, "data-daily-route-switch", false);
+  nextHtml = setElementAttribute(nextHtml, "data-daily-route-switch", "href", "/world-cup/daily");
+  nextHtml = replaceElementInnerHtml(
+    nextHtml,
+    "data-daily-route-switch",
+    'Try the World Cup daily <span class="feature-badge feature-badge-inline" aria-hidden="true">NEW</span>',
+  );
+  nextHtml = setElementHidden(nextHtml, "data-start-series", true);
+  nextHtml = setElementHidden(nextHtml, "data-draft-meter", true);
+
+  return nextHtml;
+}
+
+function applyWorldCupDailyLanding(html) {
+  const dateText = todayLongDate();
+  let nextHtml = applyBaseView(html, {
+    activeView: "game",
+    activeTitleAttr: "data-game-title",
+    competition: "worldcup",
+  });
+
+  nextHtml = replaceElementText(nextHtml, "data-game-squad-count", dateText);
+  nextHtml = replaceElementText(nextHtml, "data-game-player-count", "4 hidden rolls");
+  nextHtml = replaceElementText(nextHtml, "data-game-mode", "World Cup Daily");
+  nextHtml = replaceElementText(nextHtml, "data-game-eyebrow", "World Cup Daily");
+  nextHtml = replaceElementText(nextHtml, "data-game-title", "Play today's shared World Cup XI challenge");
+  nextHtml = replaceElementText(nextHtml, "data-current-squad", "Reveal the first squad");
+  nextHtml = replaceElementText(nextHtml, "data-lineup-status", "7 / 11 selected");
+  nextHtml = replaceElementText(nextHtml, "data-roster-kicker", "How it works");
+  nextHtml = replaceElementText(nextHtml, "data-roster-title", "Seven players are already locked in");
+  nextHtml = replaceElementText(
+    nextHtml,
+    "data-roster-summary",
+    "Everyone gets the same hidden sequence. Your first ranked attempt is the entry that counts toward the daily leaderboard.",
+  );
+  nextHtml = replaceElementInnerHtml(
+    nextHtml,
+    "data-roster-grid",
+    copyGrid([
+      {
+        title: "7 players pre-selected",
+        body: "7 players are already locked into your XI. No new squad is revealed until the draft begins.",
+      },
+      {
+        title: "4 hidden squad rolls",
+        body: "4 historic World Cup squads appear one at a time. You select 1 player from each squad and cannot preview future rolls.",
+      },
+      {
+        title: "Shared deterministic draft",
+        body: `Every player receives the same sequence for ${dateText}, so results are directly comparable.`,
+      },
+      {
+        title: "One ODI decides it",
+        body: "Once your XI is complete, you play a single ODI. Only the first ranked attempt is eligible for the daily leaderboard.",
+      },
+    ]),
+  );
+  nextHtml = replaceElementText(nextHtml, "data-board-title", "Your daily World Cup XI");
+  nextHtml = replaceElementInnerHtml(
+    nextHtml,
+    "data-board-copy",
+    'Future squads stay hidden until you lock each pick. Compare completed teams on the <a href="/world-cup/leaderboard">World Cup leaderboard</a> or read the <a href="/how-to-play">full rules</a>.',
+  );
+  nextHtml = replaceElementInnerHtml(
+    nextHtml,
+    "data-board",
+    '<div class="placeholder">Load today\'s World Cup challenge to reveal the first squad.</div>',
+  );
+  nextHtml = replaceElementText(nextHtml, "data-roll-squad", "Load today\'s challenge");
+  nextHtml = setElementHidden(nextHtml, "data-daily-route-switch", false);
+  nextHtml = setElementAttribute(nextHtml, "data-daily-route-switch", "href", "/daily");
+  nextHtml = replaceElementInnerHtml(
+    nextHtml,
+    "data-daily-route-switch",
+    "Try the Ashes daily",
+  );
   nextHtml = setElementHidden(nextHtml, "data-start-series", true);
   nextHtml = setElementHidden(nextHtml, "data-draft-meter", true);
 
@@ -209,6 +286,28 @@ function applyLeaderboardLanding(html) {
     activeTitleAttr: "data-leaderboard-title",
     competition: "ashes",
   });
+}
+
+function applyWorldCupLeaderboardLanding(html) {
+  let nextHtml = applyBaseView(html, {
+    activeView: "leaderboard",
+    activeTitleAttr: "data-leaderboard-title",
+    competition: "worldcup",
+  });
+
+  nextHtml = replaceElementText(nextHtml, "data-leaderboard-title", "See which World Cup players appear most often in completed XIs.");
+  nextHtml = replaceElementText(
+    nextHtml,
+    "data-leaderboard-lede",
+    "See which World Cup players are chosen most often across completed solo XIs, World Cup Daily Challenges and community drafts.",
+  );
+  nextHtml = replaceElementText(
+    nextHtml,
+    "data-leaderboard-status",
+    "Rankings update as more completed teams are recorded. World Cup Daily picks are counted once a daily XI is finished.",
+  );
+
+  return nextHtml;
 }
 
 function applyHowToPlayLanding(html) {
@@ -312,11 +411,9 @@ function applyWorldCupLanding(html) {
     panelKicker: "How it works",
     panelTitle: "World Cup mode",
     panelCopy:
-      'Looking for the Test-match format? Return to <a href="/ashes">Ashes mode</a>, browse the <a href="/how-to-play">rules guide</a>, or compare players on the <a href="/leaderboard">leaderboard</a>.',
+      'Try the <a href="/world-cup/daily">World Cup Daily Challenge</a>, compare completed XIs on the <a href="/world-cup/leaderboard">World Cup leaderboard</a>, or return to <a href="/ashes">Ashes mode</a>.',
     playLabel: "Start World Cup",
     homeChallengeHidden: true,
-    homeDailyHidden: true,
-    homeLeaderboardHidden: true,
   });
 
   nextHtml = replaceElementText(nextHtml, "data-home-format-value", "ODI");
@@ -324,7 +421,13 @@ function applyWorldCupLanding(html) {
   nextHtml = replaceElementText(nextHtml, "data-home-squads-label", "World Cup squads");
   nextHtml = replaceElementText(nextHtml, "data-home-rule-one", "Roll a historic World Cup squad.");
   nextHtml = replaceElementText(nextHtml, "data-home-rule-three", "Repeat until your XI is full, then simulate the tournament.");
-  nextHtml = replaceElementText(nextHtml, "data-home-competition", "Ashes mode");
+  nextHtml = replaceElementInnerHtml(nextHtml, "data-home-competition", "Ashes mode");
+  nextHtml = replaceElementInnerHtml(
+    nextHtml,
+    "data-home-daily",
+    '<span class="feature-action-label">World Cup daily</span><span class="feature-badge" aria-hidden="true">NEW</span>',
+  );
+  nextHtml = replaceElementText(nextHtml, "data-home-leaderboard", "World Cup leaderboard");
   return nextHtml;
 }
 
@@ -426,10 +529,14 @@ function pageHtmlTransform(pageKey) {
       return applyAshesLanding;
     case "daily":
       return applyDailyLanding;
+    case "worldCupDaily":
+      return applyWorldCupDailyLanding;
     case "challenge":
       return applyChallengeLanding;
     case "leaderboard":
       return applyLeaderboardLanding;
+    case "worldCupLeaderboard":
+      return applyWorldCupLeaderboardLanding;
     case "howToPlay":
       return applyHowToPlayLanding;
     case "about":
@@ -451,6 +558,14 @@ function pageBootstrap(pageKey) {
           currentDate: new Date().toISOString().slice(0, 10),
         },
       };
+    case "worldCupDaily":
+      return {
+        route: {
+          type: "world-cup-daily",
+          pageKey,
+          currentDate: new Date().toISOString().slice(0, 10),
+        },
+      };
     case "challenge":
       return {
         route: {
@@ -462,6 +577,13 @@ function pageBootstrap(pageKey) {
       return {
         route: {
           type: "leaderboard",
+          pageKey,
+        },
+      };
+    case "worldCupLeaderboard":
+      return {
+        route: {
+          type: "world-cup-leaderboard",
           pageKey,
         },
       };
@@ -492,7 +614,15 @@ export async function renderPublicPage(context, pageKey) {
   const structuredData = pageKey === "home"
     ? websiteStructuredData()
     : breadcrumbStructuredData(
-      pageKey === "howToPlay" ? "How to Play" : pageKey === "worldCup" ? "World Cup mode" : page.title,
+      pageKey === "howToPlay"
+        ? "How to Play"
+        : pageKey === "worldCup"
+          ? "World Cup mode"
+          : pageKey === "worldCupDaily"
+            ? "World Cup Daily Challenge"
+            : pageKey === "worldCupLeaderboard"
+              ? "World Cup Player Leaderboard"
+              : page.title,
       canonical,
     );
 

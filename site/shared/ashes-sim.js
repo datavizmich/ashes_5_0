@@ -445,7 +445,257 @@ function buildMatchBoxScore(sideInnings) {
   };
 }
 
+function buildDidNotBatInnings(lineup, rng) {
+  return {
+    batters: battingOrder(lineup, 0, rng).map((player) => ({
+      name: player.name,
+      runs: 0,
+      balls: 0,
+      fours: 0,
+      sixes: 0,
+      out: false,
+      notOut: false,
+      dismissal: "DNB",
+      dnb: true,
+    })),
+    extras: 0,
+    runs: 0,
+    wickets: 0,
+    declared: false,
+    chaseComplete: false,
+    didNotBat: true,
+    total: 0,
+    balls: 0,
+    overs: "0.0",
+    topBatter: null,
+    bowling: [],
+  };
+}
+
+function buildLimitedOversBattingScorecard(lineup, opposition, inningsIndex, conditions = {}, rng, chaseTarget = null, oversLimit = 50) {
+  const order = battingOrder(lineup, 0, rng);
+  const bowlingStrength = lineupScore(opposition).bowling;
+  const pitch = conditions.pitch ?? "balanced";
+  const maxBalls = oversLimit * 6;
+  const wicketsLimit = 10;
+  const totalExtras = clamp(Math.round(2 + rng() * 9 + bowlingStrength / 16 + inningsIndex * 0.5), 0, 24);
+
+  let runs = 0;
+  let wickets = 0;
+  let ballsRemaining = maxBalls;
+  let chaseComplete = false;
+  const batters = [];
+
+  for (let index = 0; index < order.length; index += 1) {
+    const player = order[index];
+
+    if (ballsRemaining <= 0 || wickets >= wicketsLimit || chaseComplete) {
+      break;
+    }
+
+    const rawRuns = sampleBatterScore(player, bowlingStrength, pitch, inningsIndex, rng);
+    const batting = player?.batting ?? 45;
+    const aggression = player.roles.includes("Opener")
+      ? 1.15
+      : player.roles.includes("Top Order")
+        ? 1.08
+        : player.roles.includes("Middle Order")
+          ? 1.0
+          : player.roles.includes("All-rounder")
+            ? 0.95
+            : 0.88;
+    const pressure = clamp(0.82 + ballsRemaining / maxBalls * 0.28, 0.82, 1.1);
+    const adjustedRuns = clamp(
+      Math.round(rawRuns * aggression * pressure * 0.9 + batting * 0.08 + normalRandom(rng) * 5),
+      0,
+      180,
+    );
+    const balls = clamp(
+      Math.round(4 + adjustedRuns * (0.58 + rng() * 0.34) + (100 - batting) * 0.03),
+      1,
+      ballsRemaining,
+    );
+
+    ballsRemaining -= balls;
+    runs += adjustedRuns;
+
+    const card = {
+      name: player.name,
+      runs: adjustedRuns,
+      balls,
+      fours: adjustedRuns === 0
+        ? 0
+        : clamp(Math.round(adjustedRuns / 8 + rng() * 2), 0, Math.max(0, Math.floor(adjustedRuns / 2))),
+      sixes: adjustedRuns === 0
+        ? 0
+        : clamp(Math.round(adjustedRuns / 28 + rng() * 2), 0, Math.max(0, Math.floor(adjustedRuns / 6))),
+      out: true,
+      notOut: false,
+      dismissal: randomChoice(["c", "lbw", "b", "st", "run out"], rng) ?? "c",
+    };
+
+    if (chaseTarget !== null && runs + totalExtras >= chaseTarget) {
+      card.out = false;
+      card.notOut = true;
+      card.dismissal = "not out";
+      chaseComplete = true;
+      batters.push(card);
+      break;
+    }
+
+    if (ballsRemaining <= 0) {
+      card.out = false;
+      card.notOut = true;
+      card.dismissal = "not out";
+      batters.push(card);
+      break;
+    }
+
+    wickets += 1;
+    batters.push(card);
+  }
+
+  while (batters.length < order.length) {
+    const player = order[batters.length];
+    batters.push({
+      name: player.name,
+      runs: 0,
+      balls: 0,
+      fours: 0,
+      sixes: 0,
+      out: false,
+      notOut: false,
+      dismissal: "DNB",
+      dnb: true,
+    });
+  }
+
+  const ballsFaced = maxBalls - ballsRemaining;
+  const topBatter = [...batters]
+    .filter((card) => !card.dnb)
+    .sort((left, right) => right.runs - left.runs)[0] ?? batters[0] ?? null;
+
+  return {
+    batters,
+    extras: totalExtras,
+    runs,
+    wickets,
+    declared: false,
+    chaseComplete,
+    total: runs + totalExtras,
+    balls: ballsFaced,
+    overs: ballsToOvers(ballsFaced),
+    topBatter,
+    notOutCount: batters.filter((card) => card.notOut).length,
+  };
+}
+
+function buildLimitedOversBowlingScorecard(lineup, inningsBalls, wickets, teamEdge = 0, rng) {
+  const ranked = teamBowlingRanking(lineup, teamEdge, rng);
+  const bowlers = ranked.map(({ player, value }) => ({
+    name: player.name,
+    player,
+    value,
+    weight: Math.max(1, player.bowling + value / 4),
+    overs: 0,
+    balls: 0,
+    runs: 0,
+    wickets: 0,
+    maidens: 0,
+  }));
+
+  const used = bowlers.filter((entry) => entry.player.roles.some((role) => ["Fast Bowler", "Spinner", "All-rounder"].includes(role)));
+  const working = (used.length ? used : bowlers.slice(0, Math.min(6, bowlers.length))).slice(0, Math.min(6, bowlers.length));
+  const totalOvers = clamp(Math.max(1, Math.round(inningsBalls / 6)), 1, 50);
+  const maxOversPerBowler = 10;
+
+  for (let over = 0; over < totalOvers; over += 1) {
+    const available = working.filter((bowler) => bowler.overs < maxOversPerBowler);
+    const pool = available.length ? available : working;
+    const bowler = weightedPick(
+      pool,
+      (item) => Math.max(1, item.weight) * Math.max(1, maxOversPerBowler - item.overs),
+      rng,
+    );
+    bowler.overs += 1;
+  }
+
+  working.forEach((entry) => {
+    entry.balls = entry.overs * 6;
+  });
+
+  const wicketPool = [];
+  for (let index = 0; index < wickets; index += 1) {
+    const wicketWorking = working.filter((bowler) => bowler.balls > 0);
+    wicketPool.push(
+      weightedPick(
+        wicketWorking,
+        (bowler) => Math.max(1, bowler.player.bowling + bowler.value / 3 - bowler.wickets * 12),
+        rng,
+      ),
+    );
+  }
+  wicketPool.forEach((bowler) => {
+    bowler.wickets += 1;
+  });
+
+  working.forEach((bowler) => {
+    const ballShare = bowler.balls / (totalOvers * 6);
+    bowler.runs = clamp(
+      Math.round(inningsBalls * ballShare + (100 - bowler.player.bowling) * 0.18 + rng() * 6),
+      0,
+      Math.max(0, inningsBalls + 18),
+    );
+    bowler.maidens = clamp(
+      Math.round(bowler.balls / 30 + (bowler.player.bowling - 50) / 30 + rng() * 1.2),
+      0,
+      10,
+    );
+  });
+
+  return working
+    .map((bowler) => ({
+      name: bowler.name,
+      overs: ballsToOvers(bowler.balls),
+      maidens: bowler.maidens,
+      runs: bowler.runs,
+      wickets: bowler.wickets,
+    }))
+    .sort((left, right) => right.wickets - left.wickets || left.runs - right.runs);
+}
+
+function simulateDeterministicLimitedOversMatch(userLineup, oppositionLineup, conditions = {}, rng) {
+  const user1 = buildLimitedOversBattingScorecard(userLineup, oppositionLineup, 1, conditions, rng, null, 50);
+  const star1 = buildLimitedOversBattingScorecard(oppositionLineup, userLineup, 2, conditions, rng, user1.total + 1, 50);
+  const user1Bowling = buildLimitedOversBowlingScorecard(oppositionLineup, user1.balls, user1.wickets, 0, rng);
+  const star1Bowling = buildLimitedOversBowlingScorecard(userLineup, star1.balls, star1.wickets, user1.total - star1.total, rng);
+
+  user1.bowling = user1Bowling;
+  star1.bowling = star1Bowling;
+
+  const result =
+    user1.total > star1.total
+      ? "win"
+      : user1.total < star1.total
+        ? "loss"
+        : "draw";
+
+  return {
+    result,
+    format: "limited-overs",
+    innings: {
+      user1,
+      star1,
+      user2: buildDidNotBatInnings(userLineup, rng),
+      star2: buildDidNotBatInnings(oppositionLineup, rng),
+    },
+    userTotal: user1.total,
+    starTotal: star1.total,
+  };
+}
+
 function generateHeadline(match) {
+  const limitedOvers = match.format === "limited-overs";
   const batters = [
     ...(match.innings.user1?.batters ?? []),
     ...(match.innings.user2?.batters ?? []),
@@ -463,11 +713,15 @@ function generateHeadline(match) {
   const topBowl = [...bowlers].sort((left, right) => right.wickets - left.wickets || left.runs - right.runs)[0] ?? null;
 
   if (topBowl && topBowl.wickets >= 5) {
-    return `${topBowl.name} destroys the chase with ${topBowl.wickets} wickets`;
+    return limitedOvers
+      ? `${topBowl.name} turns the game with ${topBowl.wickets} wickets`
+      : `${topBowl.name} destroys the chase with ${topBowl.wickets} wickets`;
   }
 
   if (topBat && topBat.runs >= 140) {
-    return `${topBat.name}'s ${topBat.runs} seals the Test`;
+    return limitedOvers
+      ? `${topBat.name}'s ${topBat.runs} seals the match`
+      : `${topBat.name}'s ${topBat.runs} seals the Test`;
   }
 
   if (match.result === "draw") {
@@ -483,6 +737,23 @@ function matchMarginText(match) {
   const { user1, star1, user2, star2 } = match.innings;
   const userTotal = user1.total + user2.total;
   const starTotal = star1.total + star2.total;
+
+  if (match.format === "limited-overs") {
+    if (match.result === "draw") return "Match tied";
+
+    if (match.result === "win") {
+      if (star1.chaseComplete) {
+        return `Won by ${10 - star1.wickets} ${pluralize(10 - star1.wickets, "wicket")}`;
+      }
+      return `Won by ${user1.total - star1.total} ${pluralize(user1.total - star1.total, "run")}`;
+    }
+
+    if (star1.chaseComplete) {
+      return `Lost by ${10 - star1.wickets} ${pluralize(10 - star1.wickets, "wicket")}`;
+    }
+
+    return `Lost by ${star1.total - user1.total} ${pluralize(star1.total - user1.total, "run")}`;
+  }
 
   if (match.result === "draw") return "Match drawn";
 
@@ -700,6 +971,70 @@ export function buildSingleTestSeries(userLineup, oppositionLineup, conditions =
   const leaders = collectSeriesStats({ matches });
 
   return {
+    userLineup,
+    starLineup: oppositionLineup,
+    userTeam: teamMetricsFromLineup(userLineup),
+    starTeam: teamMetricsFromLineup(oppositionLineup),
+    matches,
+    revealed: 1,
+    userWins,
+    starWins,
+    draws,
+    leaders,
+    achievements: [],
+    playerOfSeries: leaders.overallLeader,
+  };
+}
+
+export function buildSingleLimitedOversMatch(userLineup, oppositionLineup, conditions = {}, seed = "") {
+  const rng = createSeededRandom(seed);
+  const match = simulateDeterministicLimitedOversMatch(userLineup, oppositionLineup, conditions, rng);
+  const venueLabel = conditions.venueLabel || conditions.venue || "Daily ODI conditions";
+  const userInnings1 = match.innings.user1;
+  const starInnings1 = match.innings.star1;
+
+  const matchRecord = {
+    format: "limited-overs",
+    matchNumber: 1,
+    testNumber: 1,
+    stage: "daily",
+    stageLabel: "Daily ODI",
+    venue: venueLabel,
+    result: match.result,
+    summary: matchMarginText(match),
+    headline: generateHeadline(match),
+    innings: [
+      { label: "Your XI innings", score: `${userInnings1.total}/${userInnings1.wickets}` },
+      { label: "Opposition innings", score: `${starInnings1.total}/${starInnings1.wickets}` },
+    ],
+    scoreline: `${userInnings1.total}/${userInnings1.wickets} | ${starInnings1.total}/${starInnings1.wickets}`,
+    inningsData: {
+      user1: buildInningsSummary("Your XI innings", userInnings1, match.innings.user1.bowling),
+      star1: buildInningsSummary("Opposition innings", starInnings1, match.innings.star1.bowling),
+      user2: buildInningsSummary("Your XI 2nd innings", match.innings.user2, []),
+      star2: buildInningsSummary("Opposition 2nd innings", match.innings.star2, []),
+    },
+  };
+
+  matchRecord.userBox = buildMatchBoxScore({
+    batting: [matchRecord.inningsData.user1],
+    bowling: [matchRecord.inningsData.star1],
+  });
+  matchRecord.starBox = buildMatchBoxScore({
+    batting: [matchRecord.inningsData.star1],
+    bowling: [matchRecord.inningsData.user1],
+  });
+
+  const userWins = match.result === "win" ? 1 : 0;
+  const starWins = match.result === "loss" ? 1 : 0;
+  const draws = match.result === "draw" ? 1 : 0;
+  const matches = [matchRecord];
+  const leaders = collectSeriesStats({ matches });
+
+  return {
+    format: "limited-overs",
+    tournamentType: "daily-worldcup",
+    statusText: match.result === "win" ? "World Cup daily won" : match.result === "loss" ? "World Cup daily lost" : "World Cup daily tied",
     userLineup,
     starLineup: oppositionLineup,
     userTeam: teamMetricsFromLineup(userLineup),

@@ -38,6 +38,20 @@ export const PUBLIC_PAGE_DEFS = {
     description:
       "See the cricket legends most frequently selected in completed Ashes 5-0 teams, Daily Challenges and community drafts.",
   },
+  worldCupDaily: {
+    key: "worldCupDaily",
+    path: "/world-cup/daily",
+    title: "World Cup Daily Challenge | Ashes 5-0",
+    description:
+      "Play today's shared World Cup challenge. Complete your XI through four hidden squad rolls, play one ODI and compare your result with the daily leaderboard.",
+  },
+  worldCupLeaderboard: {
+    key: "worldCupLeaderboard",
+    path: "/world-cup/leaderboard",
+    title: "World Cup Player Leaderboard | Ashes 5-0",
+    description:
+      "See the World Cup cricket legends most frequently selected in completed World Cup XIs, daily challenges and community drafts.",
+  },
   howToPlay: {
     key: "howToPlay",
     path: "/how-to-play",

@@ -13,6 +13,8 @@ import { onRequestGet as homeRoute } from "../functions/index.js";
 import { onRequestGet as leaderboardRoute } from "../functions/leaderboard.js";
 import { onRequestGet as shortResultRoute } from "../functions/r/[id].js";
 import { onRequestGet as worldCupRoute } from "../functions/world-cup.js";
+import { onRequestGet as worldCupDailyRoute } from "../functions/world-cup/daily.js";
+import { onRequestGet as worldCupLeaderboardRoute } from "../functions/world-cup/leaderboard.js";
 import { onRequestGet as howToPlayRoute } from "../functions/how-to-play.js";
 import {
   PUBLIC_PAGE_DEFS,
@@ -31,6 +33,8 @@ const ROUTE_HANDLERS = {
   daily: dailyRoute,
   challenge: challengeLandingRoute,
   leaderboard: leaderboardRoute,
+  worldCupDaily: worldCupDailyRoute,
+  worldCupLeaderboard: worldCupLeaderboardRoute,
   howToPlay: howToPlayRoute,
   about: aboutRoute,
   worldCup: worldCupRoute,
@@ -169,6 +173,8 @@ test("homepage leads with Ashes 5-0 and exposes crawlable navigation and footer 
     "/daily",
     "/challenge",
     "/leaderboard",
+    "/world-cup/daily",
+    "/world-cup/leaderboard",
     "/how-to-play",
     "/about",
     "/world-cup",
@@ -219,7 +225,20 @@ test("world cup route keeps world-cup-specific metadata and heading language", a
   assert.equal(extractTitle(html), PUBLIC_PAGE_DEFS.worldCup.title);
   assert.equal(extractH1Text(html), "Build your World Cup XI");
   assert.equal(extractMeta(html, "name", "description"), PUBLIC_PAGE_DEFS.worldCup.description);
+  assert.match(html, /World Cup daily/u);
+  assert.match(html, /World Cup leaderboard/u);
   assert.doesNotMatch(extractMeta(html, "name", "description"), /whitewash|Ashes squad|England and Australia/u);
+});
+
+test("world cup daily route includes stable explanatory content and ODI language", async () => {
+  const { html } = await renderRoute(worldCupDailyRoute, "/world-cup/daily");
+
+  assert.equal(extractTitle(html), PUBLIC_PAGE_DEFS.worldCupDaily.title);
+  assert.equal(extractH1Text(html), "Play today's shared World Cup XI challenge");
+  assert.match(html, /4 historic World Cup squads appear one at a time\./u);
+  assert.match(html, /One ODI decides it/u);
+  assert.match(html, /href="\/daily"/u);
+  assert.doesNotMatch(extractMeta(html, "name", "description"), /one Test|five-Test/u);
 });
 
 test("how-to-play and about routes expose stable crawler-facing sections", async () => {
@@ -244,6 +263,16 @@ test("leaderboard route uses neutral loading content instead of zero placeholder
 
   assert.match(html, /Loading community statistics\./u);
   assert.doesNotMatch(html, />0<\/strong>/u);
+});
+
+test("world cup leaderboard route uses world-cup-specific heading language", async () => {
+  const { html } = await renderRoute(worldCupLeaderboardRoute, "/world-cup/leaderboard");
+
+  assert.equal(extractTitle(html), PUBLIC_PAGE_DEFS.worldCupLeaderboard.title);
+  assert.equal(extractH1Text(html), "See which World Cup players appear most often in completed XIs.");
+  assert.match(html, /World Cup Daily picks are counted/u);
+  assert.match(html, /Loading community statistics\./u);
+  assert.doesNotMatch(html, /Ashes players appear most often/u);
 });
 
 test("robots.txt allows crawling and points at the canonical sitemap", () => {

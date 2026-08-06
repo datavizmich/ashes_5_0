@@ -1,5 +1,7 @@
 import {
-  ASHES_PLAYER_BY_ID,
+  ALL_PLAYER_BY_STABLE_ID,
+  lineupIdsToPlayersForCompetition,
+  normalizeCompetition,
   challengeUrlForId,
   resultUrlForId,
 } from "../../site/shared/ashes-core.js";
@@ -11,17 +13,67 @@ function randomUrlSafeToken(byteLength = 6) {
   return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "");
 }
 
+function seedablePlayerRecord(stableId) {
+  if (typeof stableId !== "string" || !stableId) {
+    return null;
+  }
+  return ALL_PLAYER_BY_STABLE_ID.get(stableId) ?? null;
+}
+
+export function buildPlayerSeedStatements(db, stableIds) {
+  const records = [];
+  const seen = new Set();
+  const missing = [];
+
+  for (const stableId of stableIds ?? []) {
+    if (seen.has(stableId)) continue;
+    seen.add(stableId);
+
+    const player = seedablePlayerRecord(stableId);
+    if (!player) {
+      missing.push(stableId);
+      continue;
+    }
+    records.push(player);
+  }
+
+  if (missing.length) {
+    throw new Error(`Could not seed unknown player ids: ${missing.join(", ")}`);
+  }
+
+  return records.map((player) =>
+    db.prepare(
+      `INSERT OR IGNORE INTO players (id, name, roles_json)
+       VALUES (?1, ?2, ?3)`,
+    ).bind(
+      player.id,
+      player.name,
+      JSON.stringify(player.roles),
+    )
+  );
+}
+
+export async function ensurePlayerSeedRecords(db, stableIds) {
+  const statements = buildPlayerSeedStatements(db, stableIds);
+  if (!statements.length) {
+    return;
+  }
+  await db.batch(statements);
+}
+
 export function buildTeamRecord(row) {
   if (!row) return null;
   const lineupPlayerIds = JSON.parse(row.lineup_json);
+  const competition = normalizeCompetition(row.competition ?? "ashes") ?? "ashes";
   return {
     id: row.id,
     submissionKey: row.submission_key,
     source: row.source,
+    competition,
     mode: row.mode,
     displayName: row.display_name ?? "",
     lineupPlayerIds,
-    lineup: lineupPlayerIds.map((playerId) => ASHES_PLAYER_BY_ID.get(playerId)).filter(Boolean),
+    lineup: lineupIdsToPlayersForCompetition(lineupPlayerIds, competition) ?? [],
     dataVersion: row.data_version,
     createdAt: row.created_at,
   };
@@ -53,7 +105,7 @@ export function buildResultRecord(row) {
 export async function fetchTeamBySubmissionKey(db, submissionKey) {
   const row = await db
     .prepare(
-      `SELECT id, submission_key, source, mode, display_name, lineup_json, data_version, created_at
+      `SELECT id, submission_key, source, competition, mode, display_name, lineup_json, data_version, created_at
        FROM teams
        WHERE submission_key = ?1`,
     )
@@ -116,7 +168,7 @@ export async function fetchChallengeDetails(db, challengeId) {
   const row = await db
     .prepare(
       `SELECT c.id, c.created_at, c.expires_at,
-              t.id AS team_id, t.submission_key, t.source, t.mode, t.display_name, t.lineup_json,
+              t.id AS team_id, t.submission_key, t.source, t.competition, t.mode, t.display_name, t.lineup_json,
               t.data_version, t.created_at AS team_created_at
        FROM challenges c
        JOIN teams t ON t.id = c.creator_team_id
@@ -133,6 +185,7 @@ export async function fetchChallengeDetails(db, challengeId) {
       id: row.team_id,
       submission_key: row.submission_key,
       source: row.source,
+      competition: row.competition,
       mode: row.mode,
       display_name: row.display_name,
       lineup_json: row.lineup_json,
@@ -149,11 +202,11 @@ export async function fetchResultDetails(db, resultId) {
               r.winner, r.simulation_version, r.created_at,
               c.created_at AS challenge_created_at, c.expires_at,
               creator.id AS creator_team_id, creator.submission_key AS creator_submission_key, creator.source AS creator_source,
-              creator.mode AS creator_mode, creator.display_name AS creator_display_name, creator.lineup_json AS creator_lineup_json,
+              creator.competition AS creator_competition, creator.mode AS creator_mode, creator.display_name AS creator_display_name, creator.lineup_json AS creator_lineup_json,
               creator.data_version AS creator_data_version,
               creator.created_at AS creator_created_at,
               responder.id AS responder_team_id_row, responder.submission_key AS responder_submission_key, responder.source AS responder_source,
-              responder.mode AS responder_mode, responder.display_name AS responder_display_name, responder.lineup_json AS responder_lineup_json,
+              responder.competition AS responder_competition, responder.mode AS responder_mode, responder.display_name AS responder_display_name, responder.lineup_json AS responder_lineup_json,
               responder.data_version AS responder_data_version,
               responder.created_at AS responder_created_at
        FROM results r
@@ -178,6 +231,7 @@ export async function fetchResultDetails(db, resultId) {
       id: row.creator_team_id,
       submission_key: row.creator_submission_key,
       source: row.creator_source,
+      competition: row.creator_competition,
       mode: row.creator_mode,
       display_name: row.creator_display_name,
       lineup_json: row.creator_lineup_json,
@@ -188,6 +242,7 @@ export async function fetchResultDetails(db, resultId) {
       id: row.responder_team_id_row,
       submission_key: row.responder_submission_key,
       source: row.responder_source,
+      competition: row.responder_competition,
       mode: row.responder_mode,
       display_name: row.responder_display_name,
       lineup_json: row.responder_lineup_json,
@@ -214,13 +269,15 @@ export async function createUniquePublicId(db, tableName, byteLength = 6, maxAtt
 
 export async function createTeam(db, team, source, createdAt) {
   const statements = [
+    ...buildPlayerSeedStatements(db, team.lineup.map((player) => player.stableId)),
     db.prepare(
-      `INSERT INTO teams (id, submission_key, source, mode, display_name, lineup_json, data_version, created_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`,
+      `INSERT INTO teams (id, submission_key, source, competition, mode, display_name, lineup_json, data_version, created_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`,
     ).bind(
       team.submissionKey,
       team.submissionKey,
       source,
+      team.competition ?? "ashes",
       team.mode,
       team.displayName || null,
       JSON.stringify(team.lineupPlayerIds),

@@ -583,19 +583,30 @@ select {
 }
 
 .home-controls {
+  display: flex;
+  flex-wrap: nowrap;
   align-items: stretch;
+  gap: 0.75rem;
 }
 
 .home-controls > button {
   min-height: 60px;
+  min-width: 0;
+  width: auto;
+  flex: 1 1 0;
+  white-space: nowrap;
+  text-align: center;
+  justify-content: center;
 }
 
 .home-controls .play-button {
-  flex: 1 1 220px;
+  min-width: 0;
+  flex: 1.2 1 0;
 }
 
 .home-controls .feature-action {
-  flex: 1.15 1 280px;
+  min-width: 0;
+  justify-content: center;
 }
 
 .feature-action {
@@ -617,6 +628,7 @@ select {
 
 .feature-action-label {
   display: inline-block;
+  text-align: center;
 }
 
 .feature-badge {
@@ -641,6 +653,25 @@ select {
     0 10px 18px rgba(0, 0, 0, 0.16),
     inset 0 0 0 1px rgba(247, 228, 164, 0.08);
   pointer-events: none;
+}
+
+.feature-badge-inline {
+  position: static;
+  top: auto;
+  right: auto;
+  min-width: auto;
+  margin-left: 0.55rem;
+  padding: 0.28rem 0.52rem;
+  vertical-align: middle;
+  box-shadow:
+    0 8px 14px rgba(0, 0, 0, 0.14),
+    inset 0 0 0 1px rgba(247, 228, 164, 0.08);
+}
+
+.feature-action-badge-only {
+  position: relative;
+  overflow: visible;
+  padding-right: 4.85rem;
 }
 
 body[data-competition="worldcup"] [data-home-challenge] {
@@ -1828,6 +1859,7 @@ button.achievement-badge:focus-visible {
   }
 
   .controls > button,
+  .controls > .button-link,
   .challenge-link-row > button,
   .challenge-link-row > input,
   .challenge-name-control {
@@ -1835,12 +1867,22 @@ button.achievement-badge:focus-visible {
     max-width: none;
   }
 
-  .home-controls > button {
+  .home-controls > button,
+  .home-controls > .button-link {
     width: 100%;
+  }
+
+  .home-controls {
+    flex-wrap: wrap;
   }
 
   .feature-action {
     justify-content: center;
+    padding-right: 1.2rem;
+    padding-top: 1.2rem;
+  }
+
+  .feature-action-badge-only {
     padding-right: 1.2rem;
     padding-top: 1.2rem;
   }
@@ -1850,6 +1892,12 @@ button.achievement-badge:focus-visible {
     right: 0.75rem;
     min-width: 2.9rem;
     padding: 0.28rem 0.52rem;
+  }
+
+  .feature-badge-inline {
+    min-width: auto;
+    right: auto;
+    top: auto;
   }
 
   .match-row {
@@ -1919,6 +1967,11 @@ button.achievement-badge:focus-visible {
     min-width: 2.65rem;
     font-size: 0.64rem;
     letter-spacing: 0.12em;
+  }
+
+  .feature-badge-inline {
+    min-width: auto;
+    right: auto;
   }
 
   .match-card,

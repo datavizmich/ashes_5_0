@@ -2,11 +2,12 @@ import {
   RESULT_SIMULATION_VERSION,
   TEAM_DATA_VERSION,
   XI_SLOTS,
-  lineupIdsToPlayers,
+  lineupIdsToPlayersForCompetition,
+  normalizeCompetition,
   normalizeDisplayName,
   normalizePlayableMode,
   sanitizePlainText,
-  validateLineupPlayerIds,
+  validateLineupPlayerIdsForCompetition,
 } from "../../site/shared/ashes-core.js";
 
 function asBoundedInteger(value, label, min, max) {
@@ -108,6 +109,10 @@ export function validateTeamPayload(payload) {
   if (!mode) {
     throw new Error("Mode is invalid.");
   }
+  const competition = normalizeCompetition(team.competition ?? "ashes");
+  if (!competition) {
+    throw new Error("Competition is invalid.");
+  }
 
   if (team.dataVersion !== TEAM_DATA_VERSION) {
     throw new Error("Unsupported team data version.");
@@ -116,13 +121,14 @@ export function validateTeamPayload(payload) {
   const lineupPlayerIds = Array.isArray(team.lineupPlayerIds)
     ? team.lineupPlayerIds.map((playerId) => String(playerId))
     : null;
-  const lineup = validateLineupPlayerIds(lineupPlayerIds);
+  const lineup = validateLineupPlayerIdsForCompetition(lineupPlayerIds, competition);
   if (!lineup) {
     throw new Error(`Team must contain exactly ${XI_SLOTS.length} unique valid players.`);
   }
 
   return {
     submissionKey,
+    competition,
     mode,
     displayName: normalizeDisplayName(team.displayName),
     lineupPlayerIds,
@@ -150,6 +156,10 @@ export function validateResultCreationPayload(payload, challengeTeam) {
   const body = ensurePlainObject(payload, "Result payload");
   const team = validateTeamPayload(body.team);
   const challengeLineupIds = challengeTeam.lineupPlayerIds;
+  const challengeCompetition = normalizeCompetition(challengeTeam.competition ?? "ashes") ?? "ashes";
+  if (team.competition !== challengeCompetition) {
+    throw new Error("Result team competition does not match the challenge.");
+  }
   if (team.mode !== challengeTeam.mode) {
     throw new Error("Result team mode does not match the challenge.");
   }
@@ -169,11 +179,13 @@ export function validateResultCreationPayload(payload, challengeTeam) {
     throw new Error("Result mode is invalid.");
   }
 
-  const challengerLineup = lineupIdsToPlayers(
+  const challengerLineup = lineupIdsToPlayersForCompetition(
     Array.isArray(result.challengerLineup) ? result.challengerLineup.map((player) => player?.id) : [],
+    challengeCompetition,
   );
-  const responderLineup = lineupIdsToPlayers(
+  const responderLineup = lineupIdsToPlayersForCompetition(
     Array.isArray(result.responderLineup) ? result.responderLineup.map((player) => player?.id) : [],
+    challengeCompetition,
   );
 
   if (!challengerLineup || !responderLineup) {

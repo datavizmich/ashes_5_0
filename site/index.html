@@ -135,7 +135,6 @@
               title="Build your XI, generate a private link and challenge a friend over five Tests."
             >
               <span class="feature-action-label">Challenge a friend</span>
-              <span class="feature-badge" aria-hidden="true">NEW</span>
             </button>
             <button
               class="secondary feature-action"
@@ -147,7 +146,10 @@
               <span class="feature-badge" aria-hidden="true">NEW</span>
             </button>
             <button class="secondary" data-home-leaderboard type="button">Player leaderboard</button>
-            <button class="secondary" data-home-competition type="button">World Cup mode</button>
+            <button class="secondary feature-action-badge-only" data-home-competition type="button">
+              World Cup mode
+              <span class="feature-badge" aria-hidden="true">NEW</span>
+            </button>
           </div>
         </section>
       </section>
@@ -299,6 +301,10 @@
           <div class="daily-name-inline" data-daily-name-inline hidden></div>
           <button class="primary roll-action" data-roll-squad type="button">Roll squad</button>
           <button class="secondary" data-start-series type="button" hidden>Simulate the series</button>
+          <a class="secondary button-link" data-daily-route-switch href="/world-cup/daily" hidden>
+            Try the World Cup daily
+            <span class="feature-badge feature-badge-inline" aria-hidden="true">NEW</span>
+          </a>
         </section>
 
         <section class="content">
@@ -450,6 +456,10 @@
           <div class="controls">
             <button class="primary" data-play-again type="button">Play again</button>
             <button class="secondary" data-daily-practice type="button" hidden>Practice the sequence</button>
+            <a class="secondary button-link" data-daily-route-switch-series href="/world-cup/daily" hidden>
+              Try the World Cup daily
+              <span class="feature-badge feature-badge-inline" aria-hidden="true">NEW</span>
+            </a>
             <button class="primary" data-send-result-back type="button" hidden>Send result back</button>
             <button class="secondary" data-challenge-back type="button" hidden>Challenge them back</button>
             <button class="secondary" data-series-leaderboard type="button">Player leaderboard</button>
@@ -484,6 +494,8 @@
         <a href="/daily">Daily Challenge</a>
         <a href="/challenge">Challenge a Friend</a>
         <a href="/leaderboard">Leaderboard</a>
+        <a href="/world-cup/daily">World Cup Daily</a>
+        <a href="/world-cup/leaderboard">World Cup leaderboard</a>
         <a href="/how-to-play">How to Play</a>
         <a href="/about">About</a>
         <a href="/world-cup">World Cup mode</a>

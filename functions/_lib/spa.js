@@ -67,6 +67,17 @@ export function setElementHidden(html, dataAttribute, hidden) {
   });
 }
 
+export function setElementAttribute(html, dataAttribute, attributeName, value) {
+  const pattern = new RegExp(`(<[a-z0-9-]+[^>]*\\s${escapeRegex(dataAttribute)}(?:=(?:"[^"]*"|'[^']*'|[^\\s>]+))?[^>]*)(>)`, "iu");
+  return html.replace(pattern, (_, start, end) => {
+    const attributePattern = new RegExp(`\\s${escapeRegex(attributeName)}=(?:"[^"]*"|'[^']*'|[^\\s>]+)`, "iu");
+    const nextStart = attributePattern.test(start)
+      ? start.replace(attributePattern, ` ${attributeName}="${escapeHtml(value)}"`)
+      : `${start} ${attributeName}="${escapeHtml(value)}"`;
+    return `${nextStart}${end}`;
+  });
+}
+
 export function setBodyAttribute(html, attributeName, value) {
   const bodyPattern = /<body([^>]*)>/iu;
   return html.replace(bodyPattern, (_, attrs) => {

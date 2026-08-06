@@ -1,4 +1,4 @@
-import { createUniquePublicId } from "./store.js";
+import { buildPlayerSeedStatements, createUniquePublicId } from "./store.js";
 
 const DAILY_SCHEMA_BASE_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS daily_attempts (
@@ -209,13 +209,13 @@ export async function createOrFetchRankedDailyAttempt(db, payload, createdAt) {
 }
 
 export async function addDailySelection(db, attemptId, selection, createdAt) {
-  await db
-    .prepare(
+  const statements = [
+    ...buildPlayerSeedStatements(db, [selection.stableId]),
+    db.prepare(
       `INSERT INTO daily_attempt_selections (
          attempt_id, roll_number, squad_id, player_id, lineup_player_id, slot_index, created_at
        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`,
-    )
-    .bind(
+    ).bind(
       attemptId,
       selection.rollNumber,
       selection.squadId,
@@ -223,8 +223,10 @@ export async function addDailySelection(db, attemptId, selection, createdAt) {
       selection.playerId,
       Number.isInteger(selection.slotIndex) ? selection.slotIndex : null,
       createdAt,
-    )
-    .run();
+    ),
+  ];
+
+  await db.batch(statements);
 }
 
 export async function updateDailyAttemptDisplayName(db, attemptId, displayName, updatedAt) {
