@@ -42,6 +42,7 @@ const TEAM_DATA_VERSION = "ashes-5-0-data-v1";
 const BOOTSTRAP = window.__ASHES_BOOTSTRAP__ ?? null;
 const DAILY_PARTICIPANT_STORAGE_KEY = "ashes-daily-participant-id";
 const DAILY_ATTEMPT_STORAGE_KEY_PREFIX = "ashes-daily-attempt";
+const DAILY_DISPLAY_NAME_STORAGE_KEY_PREFIX = "ashes-daily-display-name";
 
 function buildInitialDailyState() {
   return {
@@ -350,6 +351,10 @@ function dailyAttemptStorageKey(challengeId, attemptMode = "ranked") {
   return `${DAILY_ATTEMPT_STORAGE_KEY_PREFIX}:${challengeId}:${attemptMode}`;
 }
 
+function dailyDisplayNameStorageKey(challengeId, attemptMode = "ranked") {
+  return `${DAILY_DISPLAY_NAME_STORAGE_KEY_PREFIX}:${challengeId}:${attemptMode}`;
+}
+
 function loadStoredDailyAttemptId(challengeId, attemptMode = "ranked") {
   if (!challengeId) return "";
   try {
@@ -371,6 +376,41 @@ function clearStoredDailyAttemptId(challengeId, attemptMode = "ranked") {
   try {
     window.localStorage.removeItem(dailyAttemptStorageKey(challengeId, attemptMode));
   } catch {}
+}
+
+function loadStoredDailyDisplayName(challengeId, attemptMode = "ranked") {
+  if (!challengeId) return "";
+  try {
+    return normalizeChallengeCreatorName(
+      window.localStorage.getItem(dailyDisplayNameStorageKey(challengeId, attemptMode)) ?? "",
+    );
+  } catch {
+    return "";
+  }
+}
+
+function persistStoredDailyDisplayName(challengeId, attemptMode = "ranked", displayName = "") {
+  if (!challengeId) return;
+
+  const normalized = normalizeChallengeCreatorName(displayName);
+  try {
+    if (normalized) {
+      window.localStorage.setItem(dailyDisplayNameStorageKey(challengeId, attemptMode), normalized);
+    } else {
+      window.localStorage.removeItem(dailyDisplayNameStorageKey(challengeId, attemptMode));
+    }
+  } catch {}
+}
+
+function resolveDailyDisplayName(...values) {
+  for (const value of values) {
+    const normalized = normalizeChallengeCreatorName(value);
+    if (normalized) {
+      return normalized;
+    }
+  }
+
+  return "";
 }
 
 function dailyChallengeActive() {
@@ -451,10 +491,11 @@ function currentDailyAttemptMode() {
 }
 
 function currentDailyDisplayName() {
-  return normalizeChallengeCreatorName(
-    STATE.daily.attempt?.displayName
-    ?? STATE.daily.summary?.rankedAttempt?.displayName
-    ?? STATE.daily.displayName,
+  return resolveDailyDisplayName(
+    STATE.daily.attempt?.displayName,
+    STATE.daily.displayName,
+    STATE.daily.summary?.rankedAttempt?.displayName,
+    loadStoredDailyDisplayName(currentDailyChallengeId(), currentDailyAttemptMode()),
   );
 }
 
@@ -1718,8 +1759,23 @@ async function getJsonRequest(url) {
 
 function applyDailySummaryPayload(challengeSummary) {
   if (!challengeSummary) return null;
+  const storedDisplayName = loadStoredDailyDisplayName(challengeSummary.id, "ranked");
+  const resolvedDisplayName = resolveDailyDisplayName(
+    challengeSummary.rankedAttempt?.displayName,
+    STATE.daily.displayName,
+    storedDisplayName,
+  );
+
   STATE.daily.competition = currentDailyCompetition();
-  STATE.daily.summary = challengeSummary;
+  STATE.daily.summary = {
+    ...challengeSummary,
+    rankedAttempt: challengeSummary.rankedAttempt
+      ? {
+          ...challengeSummary.rankedAttempt,
+          displayName: resolvedDisplayName,
+        }
+      : null,
+  };
   STATE.daily.challenge = challengeSummary;
   STATE.daily.fixedPlayers = Array.isArray(challengeSummary.fixedPlayers) ? challengeSummary.fixedPlayers : [];
   STATE.daily.currentTeamPool = [...STATE.daily.fixedPlayers];
@@ -1730,33 +1786,47 @@ function applyDailySummaryPayload(challengeSummary) {
   STATE.daily.communityStats = null;
   STATE.daily.resultsLeaderboard = null;
   STATE.daily.result = null;
-  STATE.daily.displayName = normalizeChallengeCreatorName(challengeSummary.rankedAttempt?.displayName ?? STATE.daily.displayName);
+  STATE.daily.displayName = resolvedDisplayName;
   STATE.daily.pendingPlayerId = null;
   STATE.daily.attempt = null;
+  persistStoredDailyDisplayName(challengeSummary.id, "ranked", resolvedDisplayName);
   return challengeSummary;
 }
 
 function applyDailyAttemptPayload(payload) {
   if (!payload?.challenge || !payload?.attempt) return null;
 
+  const storedDisplayName = payload.attempt.attemptMode === "ranked"
+    ? loadStoredDailyDisplayName(payload.challenge.id, payload.attempt.attemptMode)
+    : "";
+  const resolvedDisplayName = resolveDailyDisplayName(
+    payload.attempt.displayName,
+    STATE.daily.displayName,
+    storedDisplayName,
+  );
+  const nextAttempt = {
+    ...payload.attempt,
+    displayName: resolvedDisplayName,
+  };
+
   STATE.daily.competition = currentDailyCompetition();
 
   STATE.daily.summary = {
     ...STATE.daily.summary,
     ...payload.challenge,
-    rankedAttempt: payload.attempt.attemptMode === "ranked"
+    rankedAttempt: nextAttempt.attemptMode === "ranked"
       ? {
-          attemptId: payload.attempt.id,
-          draftComplete: Boolean(payload.attempt.draftComplete),
-          simulationComplete: Boolean(payload.attempt.simulationComplete),
-          attemptMode: payload.attempt.attemptMode,
-          currentRollNumber: payload.attempt.currentRollNumber,
-          displayName: normalizeChallengeCreatorName(payload.attempt.displayName),
+          attemptId: nextAttempt.id,
+          draftComplete: Boolean(nextAttempt.draftComplete),
+          simulationComplete: Boolean(nextAttempt.simulationComplete),
+          attemptMode: nextAttempt.attemptMode,
+          currentRollNumber: nextAttempt.currentRollNumber,
+          displayName: resolvedDisplayName,
         }
       : STATE.daily.summary?.rankedAttempt ?? null,
   };
   STATE.daily.challenge = payload.challenge;
-  STATE.daily.attempt = payload.attempt;
+  STATE.daily.attempt = nextAttempt;
   STATE.daily.fixedPlayers = Array.isArray(payload.fixedPlayers) ? payload.fixedPlayers : [];
   STATE.daily.lockedSelections = Array.isArray(payload.lockedSelections) ? payload.lockedSelections : [];
   STATE.daily.currentRoll = payload.currentRoll ?? null;
@@ -1766,10 +1836,13 @@ function applyDailyAttemptPayload(payload) {
   STATE.daily.communityStats = payload.communityStats ?? null;
   STATE.daily.resultsLeaderboard = payload.dailyLeaderboard ?? null;
   STATE.daily.result = payload.result ?? null;
-  STATE.daily.displayName = normalizeChallengeCreatorName(payload.attempt.displayName);
+  STATE.daily.displayName = resolvedDisplayName;
   STATE.daily.pendingPlayerId = null;
   STATE.daily.active = true;
-  persistStoredDailyAttemptId(payload.challenge.id, payload.attempt.attemptMode, payload.attempt.id);
+  persistStoredDailyAttemptId(payload.challenge.id, nextAttempt.attemptMode, nextAttempt.id);
+  if (nextAttempt.attemptMode === "ranked") {
+    persistStoredDailyDisplayName(payload.challenge.id, nextAttempt.attemptMode, resolvedDisplayName);
+  }
 
   if (payload.result) {
     STATE.series = payload.result;
@@ -4139,10 +4212,14 @@ function bindDailyDisplayNameInput(root = document) {
   if (!input) return;
 
   input.addEventListener("input", () => {
-    STATE.daily.displayName = input.value;
+    STATE.daily.displayName = normalizeChallengeCreatorName(input.value);
     if (STATE.daily.attempt) {
-      STATE.daily.attempt.displayName = input.value;
+      STATE.daily.attempt.displayName = STATE.daily.displayName;
     }
+    if (STATE.daily.summary?.rankedAttempt) {
+      STATE.daily.summary.rankedAttempt.displayName = STATE.daily.displayName;
+    }
+    persistStoredDailyDisplayName(currentDailyChallengeId(), "ranked", STATE.daily.displayName);
   });
 
   input.addEventListener("blur", () => {
@@ -4151,7 +4228,11 @@ function bindDailyDisplayNameInput(root = document) {
     if (STATE.daily.attempt) {
       STATE.daily.attempt.displayName = normalized;
     }
+    if (STATE.daily.summary?.rankedAttempt) {
+      STATE.daily.summary.rankedAttempt.displayName = normalized;
+    }
     input.value = normalized;
+    persistStoredDailyDisplayName(currentDailyChallengeId(), "ranked", normalized);
   });
 }
 
