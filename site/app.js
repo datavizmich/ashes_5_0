@@ -2776,7 +2776,7 @@ function estimateInningsBalls(batters, extras, wickets, maxBalls = null) {
   const estimated = strikerBalls + extraBalls;
   if (maxBalls !== null) return clamp(estimated, 0, maxBalls);
   if (estimated === 0) return 0;
-  return clamp(estimated, 60, 540);
+  return clamp(estimated, 36, 900);
 }
 
 function buildBattingScorecard(lineup, opposition, inningsIndex, conditions = {}, chaseTarget = null, firstInningsLead = 0, options = {}) {
@@ -2802,15 +2802,9 @@ function buildBattingScorecard(lineup, opposition, inningsIndex, conditions = {}
     if (ballsRemaining !== null && ballsRemaining <= 0) break;
 
     const player = order[index];
-    const rawRuns = sampleBatterScore(player, bowlingStrength, pitch, inningsIndex);
-    let adjustedRuns = clamp(
-      Math.round(rawRuns * (0.85 + battingStrength / 260) + normalRandom() * 5),
-      0,
-      260,
-    );
-    const plannedBalls = adjustedRuns === 0
-      ? clamp(Math.round(2 + Math.random() * 11), 1, 24)
-      : clamp(Math.round(adjustedRuns * (1.2 + Math.random() * 0.7) + 5), 1, 260);
+    const outcome = sampleTestBatterOutcome(player, battingStrength, bowlingStrength, pitch, inningsIndex);
+    let adjustedRuns = outcome.runs;
+    const plannedBalls = outcome.balls;
     const balls = ballsRemaining === null ? plannedBalls : clamp(plannedBalls, 1, ballsRemaining);
     if (balls < plannedBalls && adjustedRuns > 0) {
       adjustedRuns = clamp(Math.round(adjustedRuns * ((balls / plannedBalls) ** 0.92)), 0, adjustedRuns);
@@ -2856,7 +2850,7 @@ function buildBattingScorecard(lineup, opposition, inningsIndex, conditions = {}
       break;
     }
 
-    if (shouldDeclare(runs + extras, wickets, inningsIndex, firstInningsLead)) {
+    if (shouldDeclare(runs + extras, wickets, inningsIndex, firstInningsLead, ballsRemaining)) {
       card.out = false;
       card.notOut = true;
       card.dismissal = "not out";
@@ -2954,7 +2948,7 @@ function reconcileBowlingRuns(bowlers, targetRuns) {
   return bowlers;
 }
 
-function buildBowlingScorecard(lineup, inningsTotal, wickets, teamEdge = 0, options = {}) {
+function buildBowlingScorecard(lineup, inningsTotal, inningsBalls, wickets, teamEdge = 0, options = {}) {
   const ranked = options.rankedBowlers ?? teamBowlingRanking(lineup, teamEdge);
   const bowlers = ranked.map(({ player, value }) => ({
     name: player.name,
@@ -2966,7 +2960,7 @@ function buildBowlingScorecard(lineup, inningsTotal, wickets, teamEdge = 0, opti
     maidens: 0,
   }));
   const used = bowlers.filter((entry) => entry.player.roles.some((role) => ["Fast Bowler", "Spinner", "All-rounder"].includes(role)));
-  const totalOvers = clamp(Math.round(inningsTotal / 5), 15, 120);
+  const totalOvers = clamp(Math.max(1, Math.round(inningsBalls / 6)), 8, 180);
   const working = (used.length ? used : bowlers.slice(0, Math.min(5, bowlers.length))).slice(0, Math.min(totalOvers, bowlers.length));
 
   const weighted = working.map((bowler) => {
@@ -4389,6 +4383,8 @@ function renderGameMeta() {
     const selectedCount = STATE.daily.fixedPlayers.length + STATE.daily.lockedSelections.length;
     const otherDailyRoute = dailyPathForCompetition(otherDailyCompetition());
     const otherDailyLabel = currentDailyCompetition() === "worldcup" ? "Try the Ashes daily" : "Try the World Cup daily";
+    els.startSeries.classList.toggle("primary", stage === "recap");
+    els.startSeries.classList.toggle("secondary", stage !== "recap");
     els.gameMode.textContent = currentDailyAttemptMode() === "practice"
       ? `${competition.name} Daily Practice`
       : `${competition.name} Daily`;
@@ -4419,6 +4415,8 @@ function renderGameMeta() {
   if (els.dailyRouteSwitch) {
     els.dailyRouteSwitch.hidden = true;
   }
+  els.startSeries.classList.remove("primary");
+  els.startSeries.classList.add("secondary");
 
   els.gameMode.textContent = isChallengeMode()
     ? `${currentModeDef().shortLabel} Challenge`
@@ -5467,9 +5465,30 @@ function battingOrder(lineup, teamEdge = 0) {
   return teamBattingRanking(lineup, teamEdge).map((item) => item.player);
 }
 
-function sampleBatterScore(player, bowlingStrength, pitch, inningsIndex) {
+function testBattingRoleProfile(player) {
+  if (player.roles.includes("Opener")) return { resistance: 1.14, tempo: 4 };
+  if (player.roles.includes("Top Order")) return { resistance: 1.08, tempo: 2 };
+  if (player.roles.includes("Middle Order")) return { resistance: 1.01, tempo: 0 };
+  if (player.roles.includes("Wicketkeeper")) return { resistance: 0.98, tempo: 2 };
+  if (player.roles.includes("All-rounder")) return { resistance: 0.92, tempo: 4 };
+  if (player.roles.includes("Spinner")) return { resistance: 0.74, tempo: -8 };
+  return { resistance: 0.68, tempo: -10 };
+}
+
+function limitedOversBattingRoleProfile(player) {
+  if (player.roles.includes("Opener")) return { stability: 1.2, aggression: 10, ballBonus: 14 };
+  if (player.roles.includes("Top Order")) return { stability: 1.11, aggression: 5, ballBonus: 9 };
+  if (player.roles.includes("Middle Order")) return { stability: 1.03, aggression: 0, ballBonus: 3 };
+  if (player.roles.includes("Wicketkeeper")) return { stability: 1.01, aggression: 3, ballBonus: 4 };
+  if (player.roles.includes("All-rounder")) return { stability: 0.95, aggression: 8, ballBonus: 1 };
+  if (player.roles.includes("Spinner")) return { stability: 0.75, aggression: -6, ballBonus: -8 };
+  return { stability: 0.66, aggression: -10, ballBonus: -10 };
+}
+
+function sampleTestBatterOutcome(player, battingStrength, bowlingStrength, pitch, inningsIndex) {
   const batting = player?.batting ?? 45;
   const experience = player?.experience ?? 50;
+  const { resistance, tempo } = testBattingRoleProfile(player);
 
   const pitchDifficulty = {
     flat: -10,
@@ -5479,29 +5498,71 @@ function sampleBatterScore(player, bowlingStrength, pitch, inningsIndex) {
     deteriorating: 18,
   }[pitch] ?? 0;
 
-  const inningsDifficulty = [0, 3, 6, 14][inningsIndex - 1] ?? 0;
-
-  const mean = clamp(
-    22 + batting * 0.55 + experience * 0.12 - bowlingStrength * 0.35 - pitchDifficulty - inningsDifficulty,
-    4,
-    95
+  const inningsDifficulty = [0, 4, 8, 16][inningsIndex - 1] ?? 0;
+  const battingEdge = battingStrength - bowlingStrength;
+  const fourthInningsResistanceBoost = inningsIndex === 4 ? 20 : 0;
+  const fourthInningsTempoPenalty = inningsIndex === 4 ? 10 : 0;
+  const meanBalls = clamp(
+    (
+      40 +
+      batting * 0.46 +
+      experience * 0.18 -
+      bowlingStrength * 0.14 -
+      pitchDifficulty * 1.1 -
+      inningsDifficulty * 1.1 +
+      battingEdge * 0.14 +
+      fourthInningsResistanceBoost
+    ) * resistance,
+    6,
+    260
   );
 
-  const duckChance = clamp(0.16 - batting / 900 + pitchDifficulty / 220, 0.04, 0.25);
+  const duckChance = clamp(
+    0.085 - batting / 2500 - experience / 4500 + Math.max(0, bowlingStrength - batting) / 1200 + pitchDifficulty / 320,
+    0.015,
+    0.12
+  );
 
   if (Math.random() < duckChance) {
-    return Math.floor(Math.random() * 6);
+    return {
+      runs: clamp(Math.round(Math.random() * 5), 0, 6),
+      balls: clamp(Math.round(1 + Math.random() * 9), 1, 14),
+    };
   }
 
-  const volatility = 0.95;
-  const logMean = Math.log(mean) - (volatility * volatility) / 2;
-  const score = Math.exp(logMean + normalRandom() * 6 * volatility);
+  const volatility = 0.58;
+  const logMean = Math.log(meanBalls) - (volatility * volatility) / 2;
+  const balls = clamp(Math.round(Math.exp(logMean + normalRandom() * 6 * volatility)), 2, 260);
+  const strikeRate = clamp(
+    38 +
+      batting * 0.22 +
+      experience * 0.04 -
+      bowlingStrength * 0.045 -
+      pitchDifficulty * 0.65 -
+      inningsDifficulty * 0.28 +
+      tempo +
+      battingEdge * 0.05 +
+      (inningsIndex === 4 ? -fourthInningsTempoPenalty : 0) +
+      normalRandom() * 7,
+    24,
+    78
+  );
+  const runs = clamp(
+    Math.round(
+      balls * strikeRate / 100 +
+      batting * 0.03 +
+      normalRandom() * Math.max(6, balls * 0.08)
+    ),
+    0,
+    280
+  );
 
-  return clamp(Math.round(score), 0, 260);
+  return { runs, balls };
 }
 
 function sampleLimitedOversBatterOutcome(
   player,
+  battingStrength,
   bowlingStrength,
   pitch,
   inningsIndex,
@@ -5514,6 +5575,7 @@ function sampleLimitedOversBatterOutcome(
 ) {
   const batting = player?.batting ?? 45;
   const experience = player?.experience ?? 50;
+  const { stability, aggression, ballBonus } = limitedOversBattingRoleProfile(player);
   const phase = 1 - ballsRemaining / Math.max(1, maxBalls);
   const pitchModifier = {
     flat: 8,
@@ -5522,84 +5584,81 @@ function sampleLimitedOversBatterOutcome(
     turning: -5,
     deteriorating: -7,
   }[pitch] ?? 0;
-  const roleAggression = player.roles.includes("Opener")
-    ? 1.15
-    : player.roles.includes("Top Order")
-      ? 1.08
-      : player.roles.includes("Middle Order")
-        ? 1
-        : player.roles.includes("All-rounder")
-          ? 0.98
-          : 0.9;
-  const wicketPressure = wickets >= 6 ? -16 : wickets >= 4 ? -8 : 0;
+  const battingEdge = battingStrength - bowlingStrength;
+  const wicketPressure = wickets >= 7 ? -10 : wickets >= 5 ? -5 : 0;
   const requiredRate =
     chaseTarget === null
       ? 5.6
       : (Math.max(0, chaseTarget - (currentRuns + extras)) * 6) / Math.max(1, ballsRemaining);
-  const strikeRate = clamp(
-    70 +
-      batting * 0.42 +
-      experience * 0.05 -
-      bowlingStrength * 0.2 +
-      pitchModifier +
-      phase * 18 +
-      (roleAggression - 1) * 48 +
-      (requiredRate - 5.6) * 6 +
-      wicketPressure +
-      normalRandom() * 16,
-    45,
-    172,
-  );
-  const ballIntent = player.roles.includes("Opener")
-    ? 34
-    : player.roles.includes("Top Order")
-      ? 28
-      : player.roles.includes("Middle Order")
-        ? 20
-        : player.roles.includes("All-rounder")
-          ? 15
-          : 11;
-  const plannedBalls = clamp(
-    Math.round(
-      ballIntent * (0.56 + batting / 180) * (1 - phase * 0.45) +
-        experience * 0.05 +
-        normalRandom() * 7,
-    ),
-    1,
-    ballsRemaining,
+  const survivalMean = clamp(
+    (
+      14 +
+      batting * 0.28 +
+      experience * 0.11 -
+      bowlingStrength * 0.05 +
+      battingEdge * 0.07 +
+      ballBonus -
+      phase * 8 -
+      Math.max(0, requiredRate - 6.5) * 1.4
+    ) * stability,
+    4,
+    110,
   );
   const duckChance = clamp(
-    0.14 - batting / 1000 - experience / 2800 + Math.max(0, bowlingStrength - batting) / 850 + (requiredRate > 7 ? 0.015 : 0),
-    0.03,
-    0.24,
+    0.06 - batting / 2200 - experience / 6500 + Math.max(0, bowlingStrength - batting) / 1300 + phase * 0.015 + (requiredRate > 8.5 ? 0.01 : 0),
+    0.01,
+    0.1,
   );
 
   if (Math.random() < duckChance) {
     return {
-      runs: clamp(Math.floor(Math.random() * 4), 0, 6),
-      balls: clamp(Math.round(1 + Math.random() * 6), 1, ballsRemaining),
+      runs: clamp(Math.round(Math.random() * 4), 0, 5),
+      balls: clamp(Math.round(1 + Math.random() * 8), 1, 12),
     };
   }
 
+  const survivalVolatility = 0.46;
+  const logMeanBalls = Math.log(survivalMean) - (survivalVolatility * survivalVolatility) / 2;
+  const plannedBalls = clamp(
+    Math.round(Math.exp(logMeanBalls + normalRandom() * 6 * survivalVolatility)),
+    1,
+    120,
+  );
+  const strikeRate = clamp(
+    60 +
+      batting * 0.22 +
+      experience * 0.03 -
+      bowlingStrength * 0.08 +
+      pitchModifier +
+      phase * 12 +
+      aggression +
+      (requiredRate - 5.6) * 6 +
+      wicketPressure +
+      battingEdge * 0.05 +
+      normalRandom() * 10,
+    48,
+    150,
+  );
+
   return {
-    runs: clamp(Math.round(plannedBalls * strikeRate / 100 + normalRandom() * 5), 0, 180),
+    runs: clamp(
+      Math.round(plannedBalls * strikeRate / 100 + normalRandom() * Math.max(4, plannedBalls * 0.08)),
+      0,
+      220,
+    ),
     balls: plannedBalls,
   };
 }
 
-function shouldDeclare(runs, wickets, inningsIndex, lead = 0) {
-  if (!(inningsIndex === 1 || inningsIndex === 3)) return false;
-  if (wickets >= 9) return false;
+function shouldDeclare(runs, wickets, inningsIndex, lead = 0, ballsRemaining = null) {
+  if (inningsIndex !== 3) return false;
+  if (wickets >= 9 || wickets < 4) return false;
+  if (!Number.isFinite(ballsRemaining)) return false;
+  if (ballsRemaining > 780 || ballsRemaining < 300) return false;
 
-  if (inningsIndex === 1) {
-    return runs >= 500 && Math.random() < 0.25;
-  }
-
-  if (inningsIndex === 3) {
-    return runs + lead >= 380 && wickets <= 8 && Math.random() < 0.45;
-  }
-
-  return false;
+  const totalLead = runs + lead;
+  if (totalLead >= 560 && wickets <= 7) return Math.random() < 0.12;
+  return totalLead >= 450 && wickets <= 6 && ballsRemaining <= 660 && Math.random() < 0.04;
 }
 
 function buildDidNotBatInnings(lineup, battingOrderOverride = null) {
@@ -5639,6 +5698,7 @@ function buildLimitedOversBattingScorecard(
   options = {},
 ) {
   const order = options.battingOrder ?? battingOrder(lineup);
+  const battingStrength = lineupScore(lineup).batting;
   const bowlingStrength = lineupScore(opposition).bowling;
   const pitch = conditions.pitch ?? "balanced";
   const maxBalls = oversLimit * 6;
@@ -5660,6 +5720,7 @@ function buildLimitedOversBattingScorecard(
 
     const outcome = sampleLimitedOversBatterOutcome(
       player,
+      battingStrength,
       bowlingStrength,
       pitch,
       inningsIndex,
@@ -5670,8 +5731,12 @@ function buildLimitedOversBattingScorecard(
       ballsRemaining,
       maxBalls,
     );
-    const adjustedRuns = outcome.runs;
-    const balls = outcome.balls;
+    let adjustedRuns = outcome.runs;
+    const plannedBalls = outcome.balls;
+    const balls = clamp(plannedBalls, 1, ballsRemaining);
+    if (balls < plannedBalls && adjustedRuns > 0) {
+      adjustedRuns = clamp(Math.round(adjustedRuns * ((balls / plannedBalls) ** 0.94)), 0, adjustedRuns);
+    }
 
     ballsRemaining -= balls;
     runs += adjustedRuns;
@@ -5835,20 +5900,30 @@ function testMatchBallBudget(conditions = {}) {
 function simulateTestMatch(userLineup, starLineup, conditions = {}) {
   const userPlan = buildMatchPlan(userLineup);
   const starPlan = buildMatchPlan(starLineup);
+  let remainingMatchBalls = testMatchBallBudget(conditions);
   const user1 = buildBattingScorecard(userLineup, starLineup, 1, conditions, null, 0, {
     battingOrder: userPlan.battingOrder,
+    maxBalls: remainingMatchBalls,
   });
-  const star1 = buildBattingScorecard(starLineup, userLineup, 2, conditions, null, 0, {
-    battingOrder: starPlan.battingOrder,
-  });
+  remainingMatchBalls = Math.max(0, remainingMatchBalls - user1.balls);
+  const star1 = remainingMatchBalls <= 0
+    ? buildDidNotBatInnings(starLineup, starPlan.battingOrder)
+    : buildBattingScorecard(starLineup, userLineup, 2, conditions, null, 0, {
+        battingOrder: starPlan.battingOrder,
+        maxBalls: remainingMatchBalls,
+      });
+  remainingMatchBalls = Math.max(0, remainingMatchBalls - star1.balls);
 
   const userLead = user1.total - star1.total;
-  const user2 = buildBattingScorecard(userLineup, starLineup, 3, conditions, null, userLead, {
-    battingOrder: userPlan.battingOrder,
-  });
+  const user2 = remainingMatchBalls <= 0
+    ? buildDidNotBatInnings(userLineup, userPlan.battingOrder)
+    : buildBattingScorecard(userLineup, starLineup, 3, conditions, null, userLead, {
+        battingOrder: userPlan.battingOrder,
+        maxBalls: remainingMatchBalls,
+      });
+  remainingMatchBalls = Math.max(0, remainingMatchBalls - user2.balls);
 
   const target = user1.total + user2.total - star1.total + 1;
-  const remainingFourthInningsBalls = Math.max(0, testMatchBallBudget(conditions) - user1.balls - star1.balls - user2.balls);
   const star2 = target <= 0
     ? {
         batters: starPlan.battingOrder.map((player) => ({
@@ -5874,21 +5949,23 @@ function simulateTestMatch(userLineup, starLineup, conditions = {}) {
         topBatter: null,
         bowling: [],
       }
-    : buildBattingScorecard(starLineup, userLineup, 4, conditions, target, 0, {
-        battingOrder: starPlan.battingOrder,
-        maxBalls: remainingFourthInningsBalls,
-      });
+    : remainingMatchBalls <= 0
+      ? buildDidNotBatInnings(starLineup, starPlan.battingOrder)
+      : buildBattingScorecard(starLineup, userLineup, 4, conditions, target, 0, {
+          battingOrder: starPlan.battingOrder,
+          maxBalls: remainingMatchBalls,
+        });
 
-  const user1Bowling = buildBowlingScorecard(starLineup, user1.total, user1.wickets, 0, {
+  const user1Bowling = buildBowlingScorecard(starLineup, user1.total, user1.balls, user1.wickets, 0, {
     rankedBowlers: starPlan.bowlingRanks,
   });
-  const star1Bowling = buildBowlingScorecard(userLineup, star1.total, star1.wickets, 0, {
+  const star1Bowling = buildBowlingScorecard(userLineup, star1.total, star1.balls, star1.wickets, 0, {
     rankedBowlers: userPlan.bowlingRanks,
   });
-  const user2Bowling = buildBowlingScorecard(starLineup, user2.total, user2.wickets, userLead, {
+  const user2Bowling = buildBowlingScorecard(starLineup, user2.total, user2.balls, user2.wickets, userLead, {
     rankedBowlers: starPlan.bowlingRanks,
   });
-  const star2Bowling = target <= 0 ? [] : buildBowlingScorecard(userLineup, star2.total, star2.wickets, -userLead, {
+  const star2Bowling = target <= 0 ? [] : buildBowlingScorecard(userLineup, star2.total, star2.balls, star2.wickets, -userLead, {
     rankedBowlers: userPlan.bowlingRanks,
   });
 

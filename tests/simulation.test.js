@@ -39,6 +39,10 @@ function sumBowlingRuns(bowling = []) {
   return bowling.reduce((sum, bowler) => sum + (bowler.runs ?? 0), 0);
 }
 
+function average(values) {
+  return values.reduce((sum, value) => sum + value, 0) / Math.max(1, values.length);
+}
+
 test("team bowling metric improves when the all-rounder is a genuine bowling option", () => {
   const weakAllRounder = buildBalancedLineup({ allRounderBowling: 36 });
   const strongAllRounder = buildBalancedLineup({ allRounderBowling: 88 });
@@ -98,4 +102,72 @@ test("a much stronger ODI XI beats a much weaker ODI XI most of the time", () =>
 
   assert.ok(wins >= 20, `Expected the stronger XI to win often, received ${wins} wins.`);
   assert.ok(losses <= 5, `Expected the stronger XI to avoid frequent losses, received ${losses} losses.`);
+});
+
+test("balanced ODI simulations usually use most of the 50 overs without defaulting to all out", () => {
+  const strong = buildBalancedLineup({ allRounderBowling: 82 });
+  const steady = buildBalancedLineup({ allRounderBowling: 70, baseBatting: 72, baseBowling: 71 });
+  const totals = [];
+  const overs = [];
+  let allOuts = 0;
+  let full50s = 0;
+
+  for (let index = 0; index < 80; index += 1) {
+    const match = buildSingleLimitedOversMatch(strong, steady, { pitch: "balanced" }, `odi-shape-${index}`).matches[0];
+    for (const innings of [match.inningsData.user1.batting, match.inningsData.star1.batting]) {
+      totals.push(innings.total);
+      overs.push(innings.balls / 6);
+      if (innings.wickets >= 10) allOuts += 1;
+      if (innings.balls >= 300) full50s += 1;
+    }
+  }
+
+  const meanTotal = average(totals);
+  const meanOvers = average(overs);
+  const allOutRate = allOuts / totals.length;
+  const full50Rate = full50s / totals.length;
+
+  assert.ok(meanTotal >= 230 && meanTotal <= 275, `Expected ODI totals in a plausible band, received ${meanTotal.toFixed(1)}.`);
+  assert.ok(meanOvers >= 45, `Expected ODI innings to use most of the overs, received ${meanOvers.toFixed(1)}.`);
+  assert.ok(allOutRate <= 0.5, `Expected ODI all-out rate to stay below half of innings, received ${(allOutRate * 100).toFixed(1)}%.`);
+  assert.ok(full50Rate >= 0.45, `Expected many ODI innings to reach the 50-over limit, received ${(full50Rate * 100).toFixed(1)}%.`);
+});
+
+test("balanced Test simulations restore higher first-innings scores and occasional draws", () => {
+  const strong = buildBalancedLineup({ allRounderBowling: 82, baseBatting: 80, baseBowling: 78 });
+  const steady = buildBalancedLineup({ allRounderBowling: 70, baseBatting: 72, baseBowling: 71 });
+  const firstInningsTotals = [];
+  const allOvers = [];
+  let firstInningsDeclarations = 0;
+  let laterDeclarations = 0;
+  let draws = 0;
+  let timeClosedInnings = 0;
+
+  for (let index = 0; index < 80; index += 1) {
+    const match = buildSingleTestSeries(strong, steady, { pitch: "balanced", venueLabel: "Neutral Test venue" }, `test-shape-${index}`).matches[0];
+    firstInningsTotals.push(match.inningsData.user1.batting.total, match.inningsData.star1.batting.total);
+    if (match.inningsData.user1.batting.declared) firstInningsDeclarations += 1;
+    if (match.inningsData.star1.batting.declared) firstInningsDeclarations += 1;
+    if (match.inningsData.user2.batting.declared) laterDeclarations += 1;
+    if (match.inningsData.star2.batting.declared) laterDeclarations += 1;
+    for (const innings of [match.inningsData.user1.batting, match.inningsData.star1.batting, match.inningsData.user2.batting, match.inningsData.star2.batting]) {
+      if (!innings.didNotBat) {
+        allOvers.push(innings.balls / 6);
+        if (!innings.declared && innings.wickets < 10 && innings.balls > 0) {
+          timeClosedInnings += 1;
+        }
+      }
+    }
+    if (match.result === "draw") draws += 1;
+  }
+
+  const meanFirstInnings = average(firstInningsTotals);
+  const meanOvers = average(allOvers);
+
+  assert.ok(meanFirstInnings >= 320 && meanFirstInnings <= 410, `Expected Test first innings in a plausible band, received ${meanFirstInnings.toFixed(1)}.`);
+  assert.ok(meanOvers >= 80, `Expected Test innings to consume substantial time, received ${meanOvers.toFixed(1)} overs.`);
+  assert.equal(firstInningsDeclarations, 0, "Expected first-innings declarations to be absent in the sample.");
+  assert.ok(laterDeclarations <= 4, `Expected later Test declarations to stay rare, received ${laterDeclarations}.`);
+  assert.ok(timeClosedInnings >= 4, `Expected some Test innings to close because time ran out, received ${timeClosedInnings}.`);
+  assert.ok(draws >= 1, "Expected the Test sample to include at least one draw.");
 });
