@@ -947,12 +947,22 @@ export function buildDailyCommunityStats(definition, completedRankedAttempts, us
 
 export function buildDailyChallengeSummary(definition, rankedAttempt = null) {
   const fixedPlayers = getDailyFixedPlayers(definition);
+  const playerIds = new Set(fixedPlayers.map((player) => player.id));
+  for (const roll of definition.rolls ?? []) {
+    for (const stableId of roll.eligibleStableIds ?? []) {
+      const player = resolveSquadPlayer(roll.squadId, stableId);
+      if (player?.id) {
+        playerIds.add(player.id);
+      }
+    }
+  }
   return {
     id: definition.id,
     date: definition.date,
     label: definition.label,
     challengeNumber: definition.challengeNumber,
     totalRolls: definition.rolls.length,
+    todayPlayerCount: playerIds.size,
     fixedPlayers,
     opposition: {
       label: definition.oppositionLabel,

@@ -53,6 +53,67 @@ function copyGrid(cards) {
   return cards.map(copyCard).join("");
 }
 
+function modeCardGrid() {
+  return `
+    <a class="mode-card mode-card-recommended" href="/daily" data-home-card="daily">
+      <span class="mode-card-badge">Recommended</span>
+      <strong>Daily Challenge</strong>
+      <p>Complete the same four-player challenge as everyone else and compare your result.</p>
+    </a>
+    <a class="mode-card" href="/ashes?mode=classic" data-home-card="classic">
+      <strong>Classic Draft</strong>
+      <p>Build a complete XI with player ratings visible while you draft.</p>
+    </a>
+    <a class="mode-card" href="/ashes?mode=memory" data-home-card="memory">
+      <strong>Memory Draft</strong>
+      <p>Build your XI without seeing player ratings. Rely on your own cricket knowledge.</p>
+    </a>
+    <a class="mode-card" href="/challenge" data-home-card="challenge">
+      <strong>Challenge a Friend</strong>
+      <p>Build a side, send the challenge and see who produces the stronger result.</p>
+    </a>
+    <a class="mode-card mode-card-worldcup" href="/world-cup" data-home-card="worldCup">
+      <strong>World Cup Mode</strong>
+      <p>Build an ODI XI, then play through the group stage, semi-final, and final.</p>
+    </a>
+  `;
+}
+
+function previewPlayersHtml(players = []) {
+  return players.map((player) => `<span>${player}</span>`).join("");
+}
+
+function applyPreviewCard(html, {
+  competition = "ashes",
+  kicker = "Daily Challenge",
+  score = "",
+  label = "Seven players locked in",
+  summary = "4 choices decide the XI",
+  players = ["Compton", "Bradman", "Botham"],
+  statOneLabel = "Players today",
+  statOneValue = "27",
+  statTwoLabel = "Leading score",
+  statTwoValue = "No result yet",
+  statThreeLabel = "Locked in",
+  statThreeValue = "7 players",
+  hideScore = true,
+} = {}) {
+  let nextHtml = setElementAttribute(html, "data-home-preview-card", "data-competition", competition);
+  nextHtml = replaceElementText(nextHtml, "data-home-preview-kicker", kicker);
+  nextHtml = replaceElementText(nextHtml, "data-home-preview-score", score);
+  nextHtml = setElementHidden(nextHtml, "data-home-preview-score", hideScore);
+  nextHtml = replaceElementText(nextHtml, "data-home-preview-label", label);
+  nextHtml = replaceElementText(nextHtml, "data-home-preview-summary", summary);
+  nextHtml = replaceElementInnerHtml(nextHtml, "data-home-preview-players", previewPlayersHtml(players));
+  nextHtml = replaceElementText(nextHtml, "data-home-squads-label", statOneLabel);
+  nextHtml = replaceElementText(nextHtml, "data-total-squads", statOneValue);
+  nextHtml = replaceElementText(nextHtml, "data-home-players-label", statTwoLabel);
+  nextHtml = replaceElementText(nextHtml, "data-total-players", statTwoValue);
+  nextHtml = replaceElementText(nextHtml, "data-home-format-label", statThreeLabel);
+  nextHtml = replaceElementText(nextHtml, "data-home-format-value", statThreeValue);
+  return nextHtml;
+}
+
 function breadcrumbStructuredData(name, canonicalUrl) {
   return {
     "@context": "https://schema.org",
@@ -109,6 +170,7 @@ function applyHomeLanding(html, options = {}) {
   nextHtml = setElementHidden(nextHtml, "data-site-nav", Boolean(options.hideSiteNav));
 
   nextHtml = replaceElementText(nextHtml, "data-home-eyebrow", options.eyebrow ?? "Ashes 5-0");
+  nextHtml = setElementHidden(nextHtml, "data-home-eyebrow", Boolean(options.hideEyebrow));
   nextHtml = replaceElementText(nextHtml, "data-home-title", options.title);
   nextHtml = replaceElementText(nextHtml, "data-home-tagline", options.tagline ?? "Roll a squad. Lock one player. Build your XI.");
   nextHtml = replaceElementText(nextHtml, "data-home-lede", options.lede);
@@ -139,6 +201,8 @@ function applyHomeLanding(html, options = {}) {
     nextHtml = setElementHidden(nextHtml, "data-home-competition", options.homeCompetitionHidden);
   }
 
+  nextHtml = applyPreviewCard(nextHtml, options.previewCard);
+
   return nextHtml;
 }
 
@@ -156,7 +220,7 @@ function applyDailyLanding(html) {
   nextHtml = replaceElementText(nextHtml, "data-game-eyebrow", "Daily Challenge");
   nextHtml = replaceElementText(nextHtml, "data-game-title", "Play today's shared Ashes XI challenge");
   nextHtml = replaceElementText(nextHtml, "data-current-squad", "Reveal the first squad");
-  nextHtml = replaceElementText(nextHtml, "data-lineup-status", "7 / 11 selected");
+  nextHtml = replaceElementText(nextHtml, "data-lineup-status", "0 of 4 choices made");
   nextHtml = replaceElementText(nextHtml, "data-roster-kicker", "How it works");
   nextHtml = replaceElementText(nextHtml, "data-roster-title", "Seven players are already locked in");
   nextHtml = replaceElementText(
@@ -182,7 +246,7 @@ function applyDailyLanding(html) {
       },
       {
         title: "One Test decides it",
-        body: "Once your XI is complete, you play a single Test. Only the first ranked attempt is eligible for the daily leaderboard.",
+        body: "Once your XI is complete, you play a single one-off Test. Only the first ranked attempt is eligible for the daily leaderboard.",
       },
     ]),
   );
@@ -225,7 +289,7 @@ function applyWorldCupDailyLanding(html) {
   nextHtml = replaceElementText(nextHtml, "data-game-eyebrow", "World Cup Daily");
   nextHtml = replaceElementText(nextHtml, "data-game-title", "Play today's shared World Cup XI challenge");
   nextHtml = replaceElementText(nextHtml, "data-current-squad", "Reveal the first squad");
-  nextHtml = replaceElementText(nextHtml, "data-lineup-status", "7 / 11 selected");
+  nextHtml = replaceElementText(nextHtml, "data-lineup-status", "0 of 4 choices made");
   nextHtml = replaceElementText(nextHtml, "data-roster-kicker", "How it works");
   nextHtml = replaceElementText(nextHtml, "data-roster-title", "Seven players are already locked in");
   nextHtml = replaceElementText(
@@ -281,11 +345,25 @@ function applyWorldCupDailyLanding(html) {
 }
 
 function applyLeaderboardLanding(html) {
-  return applyBaseView(html, {
+  let nextHtml = applyBaseView(html, {
     activeView: "leaderboard",
     activeTitleAttr: "data-leaderboard-title",
     competition: "ashes",
   });
+
+  nextHtml = replaceElementText(nextHtml, "data-leaderboard-title", "Community favourites from completed Ashes XIs.");
+  nextHtml = replaceElementText(
+    nextHtml,
+    "data-leaderboard-lede",
+    "See which Ashes players are selected most often in completed teams, Daily Challenges, and community drafts.",
+  );
+  nextHtml = replaceElementText(
+    nextHtml,
+    "data-leaderboard-status",
+    "Selection counts reflect completed teams. They show community favourites, not an objective ranking of the best player.",
+  );
+
+  return nextHtml;
 }
 
 function applyWorldCupLeaderboardLanding(html) {
@@ -295,16 +373,16 @@ function applyWorldCupLeaderboardLanding(html) {
     competition: "worldcup",
   });
 
-  nextHtml = replaceElementText(nextHtml, "data-leaderboard-title", "See which World Cup players appear most often in completed XIs.");
+  nextHtml = replaceElementText(nextHtml, "data-leaderboard-title", "Community favourites from completed World Cup XIs.");
   nextHtml = replaceElementText(
     nextHtml,
     "data-leaderboard-lede",
-    "See which World Cup players are chosen most often across completed solo XIs, World Cup Daily Challenges and community drafts.",
+    "See which World Cup ODI players are selected most often across completed XIs, daily challenges, and community drafts.",
   );
   nextHtml = replaceElementText(
     nextHtml,
     "data-leaderboard-status",
-    "Rankings update as more completed teams are recorded. World Cup Daily picks are counted once a daily XI is finished.",
+    "Selection counts reflect completed teams. They show community favourites, not an objective ranking of the best player.",
   );
 
   return nextHtml;
@@ -314,13 +392,13 @@ function applyHowToPlayLanding(html) {
   return applyHomeLanding(html, {
     eyebrow: "How to Play",
     title: "How to play Ashes 5-0",
-    tagline: "Historic squads. Hidden future rolls. One player at a time.",
+    tagline: "Historic squads. Clear mode rules. One player at a time.",
     lede:
-      "Learn the drafting rules, daily format, challenge mode, World Cup mode and how completed teams reach the leaderboard.",
+      "Learn the drafting rules, the difference between Classic and Memory, how the Daily Challenge works, and how World Cup mode changes the format.",
     panelKicker: "Rules",
     panelTitle: "Cricket XI draft guide",
     panelCopy:
-      'Use the <a href="/ashes">full Ashes mode</a>, try the <a href="/daily">Daily Challenge</a>, build a private <a href="/challenge">Challenge a Friend</a> link, or switch to <a href="/world-cup">World Cup mode</a>.',
+      'Use the <a href="/ashes">full Ashes draft</a>, try the <a href="/daily">Daily Challenge</a>, create a private <a href="/challenge">Challenge a Friend</a> link, or switch to <a href="/world-cup">World Cup mode</a>.',
     playButtonHidden: true,
     controlsHidden: true,
     hideConfigGrid: true,
@@ -330,28 +408,28 @@ function applyHowToPlayLanding(html) {
     homeCompetitionHidden: true,
     rulesHtml: copyGrid([
       {
-        title: "Full XI drafting",
-        body: "Roll a previous ashes squad, select one player for your side before rolling another squad. Keep going until your squad is complete",
+        title: "Classic Draft",
+        body: "Build a full Ashes XI from historic squads. Player ratings stay visible while you draft.",
       },
       {
-        title: "Five-Test simulation",
-        body: "A completed Ashes XI plays a full five-Test series against an all-star side drawn from the same historical pool. Can you go 5-0?",
+        title: "Memory Draft",
+        body: "Build the same kind of XI, but with ratings hidden while you draft. You need to rely on your own cricket knowledge.",
       },
       {
         title: "Daily Ashes Challenge",
-        body: "Seven players are pre-selected for your squad. You must pick four more and win the one-off test by as many runs as possible to reach the daily leaderboard.",
+        body: "Everyone receives the same predetermined sequence for the day. Seven players are locked in, you complete the remaining four picks, and your first ranked attempt is the one that counts.",
       },
       {
         title: "Challenge a Friend",
-        body: "After completing a team, you can generate a private link to send to a friend. They will draft a team to play yours. After the game they can share the results link with you.",
+        body: "After completing an Ashes XI, generate a private link and ask a friend to draft a side in the same mode before they simulate the five-Test series.",
       },
       {
         title: "World Cup mode",
-        body: "Players are selected from previous ODI World Cup squads and you will play 3 group games before a semi-final and final to win the World Cup.",
+        body: "World Cup mode uses historic ODI squads and a tournament path: group stage, semi-final, and final.",
       },
       {
-        title: "Player Leaderboards",
-        body: "The most selected players from solo and friend challenge games will appear on the leaderboard. (Some players appear in more available squads than others)",
+        title: "Community favourites",
+        body: "Leaderboards show which players appear most often in completed teams. They reflect community selections, not a definitive player ranking.",
       },
     ]),
   });
@@ -361,13 +439,13 @@ function applyAboutLanding(html) {
   return applyHomeLanding(html, {
     eyebrow: "About Ashes 5-0",
     title: "The historic cricket XI game",
-    tagline: "Draft a side from the past and see how it performs.",
+    tagline: "Build a side from real squads and see how it performs.",
     lede:
       "Ashes 5-0 is an independent cricket project built around historic squads, hidden future choices and simulation-led series outcomes.",
     panelKicker: "About",
     panelTitle: "What the project is",
     panelCopy:
-      'Play the <a href="/ashes">Ashes mode</a>, try the <a href="/daily">Daily Challenge</a>, set up a private <a href="/challenge">friend challenge</a>, or read the <a href="/how-to-play">rules guide</a>.',
+      'Play the <a href="/ashes">Ashes draft</a>, try the <a href="/daily">Daily Challenge</a>, set up a private <a href="/challenge">friend challenge</a>, or read the <a href="/methodology">methodology</a>.',
     playButtonHidden: true,
     controlsHidden: true,
     hideConfigGrid: true,
@@ -378,23 +456,105 @@ function applyAboutLanding(html) {
     rulesHtml: copyGrid([
       {
         title: "What is Ashes 5-0?",
-        body: "A cricket version of the popular 82-0 game. Draft a team from previous Ashes or World Cup teams to take on a historic Ashes XI in a 5 test series.",
+        body: "A cricket version of 82-0. Draft a team from previous Ashes or World Cup squads and see how it performs in a simulated match, series, or tournament.",
       },
       {
         title: "Game Modes",
-        body: "You can play a full Ashes test in both classic and memory mode. Each day there is a new challenge and you can take on a friend in Challenge mode using either classic or memory rules. World Cup mode is also available with its own historic squad pool.",
+        body: "Classic mode shows ratings while you draft and Memory hides them. Daily Challenge gives everyone the same four-player finish, Challenge a Friend lets you send a private Ashes XI, and World Cup mode switches to ODI tournament play.",
       },
       {
         title: "Simulations and Ratings",
-        body: "The player ratings are used in the match simulations. If there are any ratings you think should be corrected, please get in touch through the feedback form.",
+        body: "Player ratings are used in the match simulations. If you think a rating should be corrected, send it through the feedback form.",
       },
       {
         title: "Other Projects",
-        body: "I run the sports data visualisation page @datavizmich on instagram. If you enjoy this game, you may find that page interesting too.",
+        body: 'I also run the sports data visualisation page <a href="https://www.instagram.com/datavizmich/" rel="noopener noreferrer">@datavizmich on Instagram</a>.',
       },
       {
         title: "Feedback",
-        body: "I would love to have any feedback you have on the site. Improvements, bugs or new features. Let me know through the feedback button at the bottom of the page.",
+        body: "If you have feedback on the site, spot a bug, or want to suggest a feature, use the feedback button at the bottom of the page.",
+      },
+    ]),
+  });
+}
+
+function applyMethodologyLanding(html) {
+  return applyHomeLanding(html, {
+    eyebrow: "Methodology",
+    title: "How the ratings and simulations work",
+    tagline: "A high-level guide to the model behind the game.",
+    lede:
+      "Ashes 5-0 uses player ratings and role-based lineup rules to compare historic players, balance XIs, and simulate series or tournaments.",
+    panelKicker: "Methodology",
+    panelTitle: "What the game currently models",
+    panelCopy:
+      'This page explains the current high-level approach from the codebase. Read the <a href="/about">About</a> page for project context or send <a href="/feedback">feedback</a> if you spot a data issue.',
+    playButtonHidden: true,
+    controlsHidden: true,
+    hideConfigGrid: true,
+    homeChallengeHidden: true,
+    homeDailyHidden: true,
+    homeLeaderboardHidden: true,
+    homeCompetitionHidden: true,
+    rulesHtml: copyGrid([
+      {
+        title: "Player ratings",
+        body: "Each player record includes batting, bowling, fielding, and experience values. Draft-facing ratings are visible in Classic mode and hidden in Memory mode.",
+      },
+      {
+        title: "Role and position fit",
+        body: "Every XI slot has accepted cricket roles. Drafting logic checks whether a player can fill the required slot before they can be assigned.",
+      },
+      {
+        title: "Era comparison",
+        body: "Historic players are compared through the shared ratings model rather than through one single raw era statistic. The goal is to make mixed-era drafts playable without pretending the model is perfect.",
+      },
+      {
+        title: "Team balance",
+        body: "The game derives team strength from the finished XI, with batting, bowling, fielding, and experience combined into an overall power score.",
+      },
+      {
+        title: "Simulation model",
+        body: "Match outcomes use team strength, slot fit, and weighted random variation. Stronger teams have the edge, but the result is not completely deterministic.",
+      },
+      {
+        title: "Corrections",
+        body: "If you spot a data issue, a role mismatch, or a rating that looks off, use the feedback form so it can be reviewed and corrected.",
+      },
+    ]),
+  });
+}
+
+function applyFeedbackLanding(html) {
+  return applyHomeLanding(html, {
+    eyebrow: "Feedback",
+    title: "Report a bug or suggest an improvement",
+    tagline: "Ratings, copy, UX, and data corrections are all useful.",
+    lede:
+      "Use the feedback form in the footer to send bugs, improvement ideas, or rating corrections. Include the page, mode, and what you expected to happen where possible.",
+    panelKicker: "What to send",
+    panelTitle: "Useful feedback",
+    panelCopy:
+      'The quickest route is the footer form. If you are reviewing ratings or methodology, include the player, squad, and the issue you want corrected.',
+    playButtonHidden: true,
+    controlsHidden: true,
+    hideConfigGrid: true,
+    homeChallengeHidden: true,
+    homeDailyHidden: true,
+    homeLeaderboardHidden: true,
+    homeCompetitionHidden: true,
+    rulesHtml: copyGrid([
+      {
+        title: "Gameplay bugs",
+        body: "Include the mode, what you clicked, and what the game did instead.",
+      },
+      {
+        title: "Rating corrections",
+        body: "Name the player, squad or era, and the part of the rating you think needs review.",
+      },
+      {
+        title: "Copy or terminology",
+        body: "Flag any unclear wording, especially where Ashes and World Cup terminology should stay separate.",
       },
     ]),
   });
@@ -405,15 +565,44 @@ function applyWorldCupLanding(html) {
     competition: "worldcup",
     eyebrow: "World Cup XI",
     title: "Build your World Cup XI",
-    tagline: "Roll a World Cup squad. Lock one player. Build your XI.",
+    tagline: "Build an ODI XI, then survive the tournament route.",
     lede:
-      "Build a World Cup cricket XI from historic tournament squads, make one selection at a time and see how your side performs across the tournament route.",
+      "Build a World Cup ODI XI from historic tournament squads, make one selection at a time and see how your side performs across the group stage and knockout rounds.",
     panelKicker: "How it works",
     panelTitle: "World Cup mode",
     panelCopy:
       'Try the <a href="/world-cup/daily">World Cup Daily Challenge</a>, compare completed XIs on the <a href="/world-cup/leaderboard">World Cup leaderboard</a>, or return to <a href="/ashes">Ashes mode</a>.',
     playLabel: "Start World Cup",
     homeChallengeHidden: true,
+    previewCard: {
+      competition: "worldcup",
+      kicker: "World Cup Daily",
+      score: "One-day ODI",
+      hideScore: false,
+      label: "Seven players locked in",
+      summary: "4 choices finish the ODI XI",
+      players: ["Tendulkar", "Gilchrist", "Kallis"],
+      statOneLabel: "Players today",
+      statOneValue: "27",
+      statTwoLabel: "Leading score",
+      statTwoValue: "No result yet",
+      statThreeLabel: "Locked in",
+      statThreeValue: "7 players",
+    },
+    rulesHtml: copyGrid([
+      {
+        title: "ODI drafting",
+        body: "Roll a historic World Cup squad, choose one player, and keep building until your ODI XI is complete.",
+      },
+      {
+        title: "Tournament route",
+        body: "Your side plays the group stage first, then aims for the semi-final and final.",
+      },
+      {
+        title: "Separate from Ashes mode",
+        body: "World Cup mode is an ODI tournament experience, not a five-Test Ashes series.",
+      },
+    ]),
   });
 
   nextHtml = replaceElementText(nextHtml, "data-home-format-value", "ODI");
@@ -434,15 +623,29 @@ function applyWorldCupLanding(html) {
 function applyAshesLanding(html) {
   const nextHtml = applyHomeLanding(html, {
     eyebrow: "Ashes 5-0",
-    title: "Can your Ashes XI go 5-0?",
-    tagline: "Roll a squad. Lock one player. Build your XI.",
+    title: "Build your full Ashes XI",
+    tagline: "Classic shows ratings. Memory hides them.",
     lede:
-      "Roll historic England and Australia squads, lock one player at a time and build an all-time Ashes XI capable of completing a five-Test whitewash.",
+      "Roll historic England and Australia squads, lock one player at a time, and build an all-time Ashes XI for a five-Test series.",
     panelKicker: "How it works",
     panelTitle: "Ashes mode",
     panelCopy:
       'Try the <a href="/daily">Daily Challenge</a>, create a private <a href="/challenge">Challenge a Friend</a> link, or read the <a href="/how-to-play">full rules</a> before you draft.',
     playLabel: "Start Ashes mode",
+    rulesHtml: copyGrid([
+      {
+        title: "Classic mode",
+        body: "Player ratings are visible while you build your XI.",
+      },
+      {
+        title: "Memory mode",
+        body: "Player ratings are hidden while you draft. Pick using your own cricket knowledge.",
+      },
+      {
+        title: "Five-Test series",
+        body: "Complete the XI, then simulate the full five-Test series against a historic opposition side.",
+      },
+    ]),
   });
 
   return nextHtml;
@@ -451,16 +654,17 @@ function applyAshesLanding(html) {
 function applyHomepage(html) {
   const nextHtml = applyHomeLanding(html, {
     eyebrow: "Ashes 5-0",
-    title: "Can your Ashes XI go 5-0?",
-    tagline: "Roll a squad. Lock one player. Build your XI.",
+    title: "Can your all-time Ashes XI go 5-0?",
+    tagline: "Draft from historic squads and back your cricket judgement.",
     lede:
-      "Roll historic squads, lock one player at a time and build an all-time XI capable of completing an Ashes whitewash.",
-    panelKicker: "How it works",
-    panelTitle: "Ashes 5-0",
-    panelCopy:
-      'Play the full <a href="/ashes">Ashes mode</a>, try the <a href="/daily">Daily Challenge</a>, create a private <a href="/challenge">friend challenge</a>, or explore the <a href="/leaderboard">community picks</a>.',
-    playLabel: "Start a solo game",
-    hideSiteNav: true,
+      "Draft players from historic Ashes squads, build your XI and simulate a five-Test series. The Daily Challenge is the fastest way to start.",
+    panelKicker: "Choose a mode",
+    panelTitle: "Start with the Daily Challenge",
+    playButtonHidden: true,
+    controlsHidden: true,
+    hideConfigGrid: true,
+    hideEyebrow: true,
+    rulesHtml: modeCardGrid(),
   });
 
   return nextHtml;
@@ -477,7 +681,7 @@ function applyChallengeLanding(html) {
   nextHtml = replaceElementText(nextHtml, "data-game-player-count", "11 picks");
   nextHtml = replaceElementText(nextHtml, "data-game-mode", "Challenge");
   nextHtml = replaceElementText(nextHtml, "data-game-eyebrow", "Challenge a Friend");
-  nextHtml = replaceElementText(nextHtml, "data-game-title", "Build a cricket XI and face a friend");
+  nextHtml = replaceElementText(nextHtml, "data-game-title", "Build an Ashes XI and challenge a friend");
   nextHtml = replaceElementText(nextHtml, "data-current-squad", "Roll a squad");
   nextHtml = replaceElementText(nextHtml, "data-lineup-status", "Awaiting first pick");
   nextHtml = replaceElementText(nextHtml, "data-roster-kicker", "How it works");
@@ -489,7 +693,7 @@ function applyChallengeLanding(html) {
     copyGrid([
       {
         title: "1. Build your XI",
-        body: "Draft a full historic cricket XI in classic or memory mode and lock the side you want to send.",
+        body: "Draft a full historic Ashes XI in Classic or Memory mode and lock the side you want to send.",
       },
       {
         title: "2. Generate and share a private link",
@@ -497,7 +701,7 @@ function applyChallengeLanding(html) {
       },
       {
         title: "3. Your friend drafts and plays",
-        body: "They open the link, draft their own XI and then play a five-Test series against your saved team.",
+        body: "They open the link, draft their own XI in the same mode, and then play a five-Test series against your saved team.",
       },
       {
         title: "4. Compare or challenge them back",
@@ -541,6 +745,10 @@ function pageHtmlTransform(pageKey) {
       return applyHowToPlayLanding;
     case "about":
       return applyAboutLanding;
+    case "methodology":
+      return applyMethodologyLanding;
+    case "feedback":
+      return applyFeedbackLanding;
     case "worldCup":
       return applyWorldCupLanding;
     default:
@@ -617,11 +825,15 @@ export async function renderPublicPage(context, pageKey) {
       pageKey === "howToPlay"
         ? "How to Play"
         : pageKey === "worldCup"
-          ? "World Cup mode"
+              ? "World Cup mode"
           : pageKey === "worldCupDaily"
-            ? "World Cup Daily Challenge"
+          ? "World Cup Daily Challenge"
             : pageKey === "worldCupLeaderboard"
               ? "World Cup Player Leaderboard"
+              : pageKey === "methodology"
+                ? "Methodology"
+                : pageKey === "feedback"
+                  ? "Feedback"
               : page.title,
       canonical,
     );

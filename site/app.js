@@ -5,11 +5,17 @@ import {
   canonicalUrlForPageKey,
   publicPageKeyForPath,
 } from "./shared/public-pages.js";
+import { playableModeDef } from "./shared/modes.js";
 
 const CANONICAL_SITE_ORIGIN = "https://ashes-5-0.co.uk";
 const SEO_HOME_TITLE = PUBLIC_PAGE_DEFS.home.title;
 const SEO_HOME_DESCRIPTION = PUBLIC_PAGE_DEFS.home.description;
-const STATIC_HOME_PAGE_KEYS = new Set(["about", "howToPlay"]);
+const STATIC_HOME_PAGE_KEYS = new Set([
+  "about",
+  "howToPlay",
+  "methodology",
+  "feedback",
+]);
 
 const XI_SLOTS = [
   { label: "Opener", accepts: ["Opener"], focus: "batting", row: 5, col: 2 },
@@ -126,6 +132,16 @@ const els = {};
 function bindElements() {
   const selectors = {
     siteNav: "[data-site-nav]",
+    navToggle: "[data-nav-toggle]",
+    navLinks: "[data-nav-links]",
+    homePrimaryCta: "[data-home-primary-cta]",
+    homeSecondaryCta: "[data-home-secondary-cta]",
+    homePreviewCard: "[data-home-preview-card]",
+    homePreviewKicker: "[data-home-preview-kicker]",
+    homePreviewScore: "[data-home-preview-score]",
+    homePreviewLabel: "[data-home-preview-label]",
+    homePreviewSummary: "[data-home-preview-summary]",
+    homePreviewPlayers: "[data-home-preview-players]",
     homeView: "[data-home-view]",
     leaderboardView: "[data-leaderboard-view]",
     gameView: "[data-game-view]",
@@ -138,6 +154,7 @@ function bindElements() {
     homePanelTitle: "[data-home-panel-title]",
     homePanelCopy: "[data-home-panel-copy]",
     homeConfigGrid: "[data-home-config-grid]",
+    homeControls: "[data-home-controls]",
     homeResponseNameRow: "[data-home-response-name-row]",
     homeResponseName: "[data-home-response-name]",
     homeMode: "[data-home-mode]",
@@ -214,6 +231,8 @@ function bindElements() {
     seriesNext: "[data-series-next]",
     seriesAll: "[data-series-all]",
     draftMeter: "[data-draft-meter]",
+    draftMeterTitle: "[data-draft-meter-title]",
+    draftMeterCopy: "[data-draft-meter-copy]",
     draftBatting: "[data-draft-batting]",
     draftBowling: "[data-draft-bowling]",
     draftFielding: "[data-draft-fielding]",
@@ -229,6 +248,7 @@ function bindElements() {
     sendResultBack: "[data-send-result-back]",
     challengeBack: "[data-challenge-back]",
     shareResult: "[data-share-result]",
+    whatsappShare: "[data-whatsapp-share]",
     copyLink: "[data-copy-link]",
     downloadShare: "[data-download-share]",
     shareStatus: "[data-share-status]",
@@ -240,6 +260,7 @@ function bindElements() {
     feedbackHoneypot: "[data-feedback-honeypot]",
     feedbackStatus: "[data-feedback-status]",
     feedbackSubmit: "[data-feedback-submit]",
+    liveRegion: "[data-live-region]",
   };
 
   const optionalSelectors = {
@@ -255,7 +276,12 @@ function bindElements() {
     els[key] = document.querySelector(selector);
   }
 
+  els.navLinkNodes = [...document.querySelectorAll("[data-nav-link]")];
+
+  const optionalKeys = new Set(Object.keys(optionalSelectors));
+
   const missing = Object.entries(els)
+    .filter(([key]) => !optionalKeys.has(key))
     .filter(([, value]) => !value)
     .map(([key]) => key);
 
@@ -405,15 +431,15 @@ function leaderboardCopyForCompetition(competition = currentLeaderboardCompetiti
   const worldCup = normalizeCompetitionValue(competition) === "worldcup";
   return {
     title: worldCup
-      ? "See which World Cup players appear most often in completed XIs."
-      : "See which Ashes players appear most often in completed XIs.",
+      ? "Community favourites from completed World Cup XIs."
+      : "Community favourites from completed Ashes XIs.",
     lede: worldCup
-      ? "See which World Cup players are chosen most often across completed solo XIs, World Cup Daily Challenges and community drafts."
-      : "See which players are chosen most often across completed solo XIs, Daily Challenges, challenge teams and community drafts.",
+      ? "See which World Cup ODI players are selected most often across completed XIs, daily challenges, and community drafts."
+      : "See which Ashes players are selected most often across completed XIs, Daily Challenges, challenge teams, and community drafts.",
     loading: "Loading community statistics.",
     intro: worldCup
-      ? "Rankings update as more completed teams are recorded. World Cup Daily picks are counted once a daily XI is finished."
-      : "Rankings update as more completed teams are recorded. Daily Challenge picks are counted once a daily XI is finished.",
+      ? "Selection counts update as more completed teams are recorded. World Cup Daily picks are counted once a daily XI is finished."
+      : "Selection counts update as more completed teams are recorded. Daily Challenge picks are counted once a daily XI is finished.",
     empty: worldCup
       ? "No completed World Cup teams match these filters yet."
       : "No completed Ashes teams match these filters yet.",
@@ -596,6 +622,99 @@ function modeLabel() {
   return "Classic";
 }
 
+function currentModeDef() {
+  if (dailyChallengeActive()) {
+    return playableModeDef("memory");
+  }
+  if (isChallengeMode()) {
+    return playableModeDef(currentChallengePlayableMode());
+  }
+  return playableModeDef(STATE.mode);
+}
+
+function showPlayerRatingsInDraft() {
+  return currentModeDef().showPlayerRatings && !dailyChallengeActive();
+}
+
+function currentModeDraftNote() {
+  if (dailyChallengeActive()) {
+    return "Ratings stay hidden in the Daily Challenge until the result is complete.";
+  }
+  return currentModeDef().draftNote;
+}
+
+function prefersReducedMotion() {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+function announce(message) {
+  if (!els.liveRegion) return;
+  els.liveRegion.textContent = "";
+  window.setTimeout(() => {
+    els.liveRegion.textContent = String(message ?? "");
+  }, 10);
+}
+
+function parsePreferredModeFromLocation() {
+  const url = new URL(window.location.href);
+  const requested = url.searchParams.get("mode");
+  return requested === "memory" ? "memory" : requested === "classic" ? "classic" : "";
+}
+
+function scrollViewportTop() {
+  window.scrollTo({
+    top: 0,
+    left: 0,
+    behavior: prefersReducedMotion() ? "auto" : "smooth",
+  });
+}
+
+function homePreviewFallbackPlayers(competition = STATE.competition) {
+  return competition === "worldcup"
+    ? ["Tendulkar", "Gilchrist", "Kallis"]
+    : ["Compton", "Bradman", "Botham"];
+}
+
+function homePreviewPlayerNames(summary, competition = STATE.competition) {
+  const fixedPlayers = Array.isArray(summary?.fixedPlayers) ? summary.fixedPlayers : [];
+  const names = fixedPlayers
+    .map((player) => player?.name)
+    .filter(Boolean)
+    .slice(0, 3);
+  return names.length ? names : homePreviewFallbackPlayers(competition);
+}
+
+function homePreviewLeaderText(summary) {
+  return summary?.leaderboardPreview?.margin || "No result yet";
+}
+
+function renderHomePreviewCard(summary = null) {
+  if (!els.homePreviewCard) return;
+
+  const worldCup = STATE.competition === "worldcup";
+  const competition = worldCup ? "worldcup" : "ashes";
+  const playerCount = Number(summary?.todayPlayerCount) || 27;
+  const players = homePreviewPlayerNames(summary, competition);
+
+  els.homePreviewCard.dataset.competition = competition;
+  els.homePreviewKicker.textContent = worldCup ? "World Cup Daily" : "Daily Challenge";
+  els.homePreviewScore.hidden = !worldCup;
+  els.homePreviewScore.textContent = worldCup ? "One-day ODI" : "";
+  els.homePreviewLabel.textContent = "Seven players locked in";
+  els.homePreviewSummary.textContent = worldCup
+    ? "4 choices finish the ODI XI"
+    : "4 choices decide the XI";
+  els.homePreviewPlayers.innerHTML = players
+    .map((name) => `<span>${escapeHtml(name)}</span>`)
+    .join("");
+  els.homeSquadsLabel.textContent = "Players today";
+  els.totalSquads.textContent = String(playerCount);
+  els.homePlayersLabel.textContent = "Leading score";
+  els.totalPlayers.textContent = homePreviewLeaderText(summary);
+  els.homeFormatLabel.textContent = "Locked in";
+  els.homeFormatValue.textContent = "7 players";
+}
+
 function currentPathname() {
   const pathname = window.location.pathname.replace(/\/index\.html$/i, "/");
   return pathname === "" ? "/" : pathname.replace(/\/+$/u, "") || "/";
@@ -620,6 +739,32 @@ function staticHomePageActive() {
 
 function mobileBuilderViewport() {
   return window.matchMedia("(max-width: 760px)").matches;
+}
+
+function activeNavKey() {
+  const pageKey = currentPublicPageKey();
+  if (pageKey === "about") return "about";
+  if (pageKey === "howToPlay") return "howToPlay";
+  if (pageKey === "leaderboard" || pageKey === "worldCupLeaderboard") return "leaderboard";
+  if (pageKey === "daily") return "daily";
+  if (pageKey === "worldCup" || pageKey === "worldCupDaily") return "worldCup";
+  if (pageKey === "ashes" || pageKey === "challenge") return "play";
+  return "";
+}
+
+function closeSiteNav() {
+  if (!els.siteNav || !els.navToggle || !els.navLinks) return;
+  els.siteNav.dataset.open = "false";
+  els.navToggle.setAttribute("aria-expanded", "false");
+}
+
+function toggleSiteNav(forceOpen) {
+  if (!els.siteNav || !els.navToggle || !els.navLinks) return;
+  const nextOpen = typeof forceOpen === "boolean"
+    ? forceOpen
+    : els.siteNav.dataset.open !== "true";
+  els.siteNav.dataset.open = nextOpen ? "true" : "false";
+  els.navToggle.setAttribute("aria-expanded", nextOpen ? "true" : "false");
 }
 
 function blurActiveBuilderControl() {
@@ -836,6 +981,38 @@ function baseDailyAnalyticsProps(overrides = {}) {
 
 function trackDailyEvent(name, overrides = {}) {
   trackEvent(name, baseDailyAnalyticsProps(overrides));
+}
+
+function deviceCategory() {
+  if (window.matchMedia("(max-width: 760px)").matches) return "mobile";
+  if (window.matchMedia("(max-width: 1040px)").matches) return "tablet";
+  return "desktop";
+}
+
+function analyticsModeValue() {
+  if (dailyChallengeActive()) {
+    return currentDailyAttemptMode() === "practice" ? "daily_practice" : "daily";
+  }
+  if (isChallengeMode()) {
+    return currentChallengePlayableMode() === "memory" ? "friend_memory" : "friend_classic";
+  }
+  return currentModeDef().key;
+}
+
+function analyticsChallengeType() {
+  if (dailyChallengeActive()) return "daily";
+  if (isChallengeMode() || challengeLineupLoaded() || resultSnapshotLoaded()) return "friend";
+  return STATE.competition === "worldcup" ? "worldcup" : "solo";
+}
+
+function trackStandardEvent(name, overrides = {}) {
+  trackEvent(name, {
+    mode: analyticsModeValue(),
+    device_category: deviceCategory(),
+    challenge_type: analyticsChallengeType(),
+    completion_stage: STATE.view,
+    ...overrides,
+  });
 }
 
 function base64UrlEncodeBytes(bytes) {
@@ -1704,10 +1881,15 @@ async function startDailyAttempt(attemptMode = "ranked") {
     });
     applyDailyAttemptPayload(payload);
     trackDailyEvent("daily_attempt_started", { attempt_mode: attemptMode });
+    trackStandardEvent("game_started", {
+      mode: attemptMode === "practice" ? "daily_practice" : "daily",
+    });
     if (payload.currentRoll?.rollNumber) {
       trackDailyEvent("daily_roll_revealed", { roll_number: payload.currentRoll.rollNumber, source: "start" });
     }
+    announce("Daily challenge started. First squad ready.");
     renderAll();
+    scrollViewportTop();
     return payload;
   } finally {
     STATE.daily.loadingAction = false;
@@ -1715,7 +1897,7 @@ async function startDailyAttempt(attemptMode = "ranked") {
   }
 }
 
-async function openDailyChallenge(targetCompetition = currentDailyCompetition()) {
+async function openDailyChallenge(targetCompetition = currentDailyCompetition(), { autoStart = false } = {}) {
   prepareDailyView(targetCompetition);
   STATE.view = "game";
   renderAll();
@@ -1727,10 +1909,16 @@ async function openDailyChallenge(targetCompetition = currentDailyCompetition())
 
   if (summary?.rankedAttempt?.attemptId) {
     await resumeDailyAttempt(summary.rankedAttempt.attemptId);
-    return;
+    scrollViewportTop();
+    return summary;
   }
 
   renderAll();
+  scrollViewportTop();
+  if (autoStart) {
+    await startDailyAttempt("ranked");
+  }
+  return summary;
 }
 
 async function lockDailySelection(slotIndex) {
@@ -1744,6 +1932,7 @@ async function lockDailySelection(slotIndex) {
     if (!player?.selectable || !(player.validSlotIndexes ?? []).includes(slotIndex)) {
       throw new Error(player?.unavailableReason || "That choice is unavailable.");
     }
+    const firstPick = STATE.daily.lockedSelections.length === 0;
 
     trackDailyEvent("daily_player_lock_confirmed", {
       roll_number: STATE.daily.currentRoll.rollNumber,
@@ -1761,12 +1950,20 @@ async function lockDailySelection(slotIndex) {
     );
 
     applyDailyAttemptPayload(payload);
+    if (firstPick) {
+      trackStandardEvent("first_pick", { mode: analyticsModeValue() });
+    }
+    trackStandardEvent("player_assigned", { mode: analyticsModeValue() });
     if (payload.attempt.draftComplete) {
+      announce(`${player.name} assigned. Daily draft complete.`);
+      trackStandardEvent("draft_completed", { mode: analyticsModeValue() });
       if (payload.attempt.attemptMode === "ranked") {
         trackDailyEvent("daily_ranked_draft_completed", { total_rolls: payload.challenge.totalRolls });
       }
       trackDailyEvent("daily_draft_recap_viewed", { source: "post-lock" });
     } else if (payload.currentRoll?.rollNumber) {
+      const slotLabel = XI_SLOTS[slotIndex]?.label ?? "that slot";
+      announce(`${player.name} assigned to ${slotLabel}. Next squad ready.`);
       trackDailyEvent("daily_next_roll_revealed", { roll_number: payload.currentRoll.rollNumber });
       trackDailyEvent("daily_roll_revealed", { roll_number: payload.currentRoll.rollNumber, source: "next-roll" });
     }
@@ -1783,6 +1980,7 @@ async function simulateDailyTest() {
   if (!dailyChallengeActive() || !STATE.daily.attempt?.draftComplete) return;
 
   STATE.daily.loadingAction = true;
+  trackStandardEvent("simulation_started", { mode: analyticsModeValue() });
   renderAll();
   try {
     const payload = await postJsonRequest(
@@ -1793,6 +1991,9 @@ async function simulateDailyTest() {
       },
     );
     applyDailyAttemptPayload(payload);
+    trackStandardEvent("simulation_completed", { mode: analyticsModeValue() });
+    trackStandardEvent("daily_rank_viewed", { mode: analyticsModeValue() });
+    announce("Simulation completed.");
     renderAll();
   } finally {
     STATE.daily.loadingAction = false;
@@ -1802,6 +2003,9 @@ async function simulateDailyTest() {
 
 async function startDailyPractice() {
   const dailyCompetition = currentDailyCompetition();
+  trackStandardEvent("replay_started", {
+    mode: dailyCompetition === "worldcup" ? "worldcup_daily_practice" : "daily_practice",
+  });
   prepareDailyView(dailyCompetition);
   const summary = await loadDailySummary({ force: true, competition: dailyCompetition });
   STATE.view = "game";
@@ -1846,6 +2050,7 @@ async function ensureGeneratedChallengeLink() {
   })
     .then((data) => {
       STATE.generatedChallenge = { id: data.id, url: data.url };
+      trackStandardEvent("challenge_created", { mode: analyticsModeValue() });
       return STATE.generatedChallenge;
     })
     .finally(() => {
@@ -2007,9 +2212,9 @@ function competitionConfig() {
       format: "limited-overs",
       homeEyebrow: "World Cup XI",
       homeTitle: "Build your World Cup XI",
-      homeTagline: "Roll a World Cup squad. Lock one player. Build your XI.",
+      homeTagline: "Build an ODI XI, then survive the tournament route.",
       homeLede:
-        "Each roll produces a historic World Cup squad. Pick one player from the squad to lock into your XI. Build your team, then survive the group stage and knockout rounds.",
+        "Each roll produces a historic World Cup squad. Pick one player from the squad to lock into your XI, then play through the group stage and knockout rounds.",
       squadsLabel: "World Cup squads",
       gameEyebrow: "World Cup builder",
       gameTitle: "Roll a squad. Choose one player. Place them in the XI.",
@@ -2040,19 +2245,19 @@ function competitionConfig() {
         : "A Challenge XI is waiting. Draft your Ashes side and take it on."
       : isChallengeMode()
         ? "Build a cricket XI and face a friend."
-        : "Can your Ashes XI go 5-0?",
+        : "Build your full Ashes XI",
     homeTagline: loadedChallenge
       ? ""
       : isChallengeMode()
         ? "Build your XI. Generate a private link. See who wins."
-        : "Roll a squad. Lock one player. Build your XI.",
+        : "Classic shows ratings. Memory hides them.",
     homeLede: loadedChallenge
       ? creatorName
         ? `This link contains ${creatorName}'s saved Ashes XI. Accept the ${challengeModeLabel} challenge, draft your own side, and then play a five-Test series against it.`
         : `This link contains a saved Ashes XI. Draft your own side in the required ${challengeModeLabel} mode, then simulate a five-Test challenge series against it.`
       : isChallengeMode()
         ? "Complete a historic Ashes XI, share a private challenge link, and see whether someone else can draft a side strong enough to beat it."
-        : "Roll historic Ashes squads, lock one player at a time and build an all-time XI capable of completing an Ashes whitewash.",
+        : "Roll historic England and Australia squads, lock one player at a time, and build an all-time Ashes XI for a five-Test series.",
     squadsLabel: "Ashes squads",
     gameEyebrow: "XI builder",
     gameTitle: loadedChallenge
@@ -2141,12 +2346,85 @@ function playerCanPlay(player) {
   return XI_SLOTS.some((slot, index) => !STATE.lineup.has(index) && slotAcceptsPlayer(slot, player));
 }
 
+function slotLabelsFromIndexes(slotIndexes = []) {
+  return slotIndexes
+    .map((slotIndex) => XI_SLOTS[slotIndex]?.label ?? "")
+    .filter(Boolean);
+}
+
+function openSlotIndexes() {
+  return XI_SLOTS
+    .map((_, index) => index)
+    .filter((index) => !STATE.lineup.has(index));
+}
+
+function availableSlotIndexesForPlayer(player) {
+  return openSlotIndexes().filter((slotIndex) => slotAcceptsPlayer(XI_SLOTS[slotIndex], player));
+}
+
+function playerRoleText(player) {
+  return Array.isArray(player?.roles) && player.roles.length
+    ? player.roles.join(" / ")
+    : "Historic player";
+}
+
+function playerEraText(player) {
+  const team = String(player?.squadTeam ?? "").trim();
+  const year = String(player?.squadYear ?? "").trim();
+  return `${team}${team && year ? " " : ""}${year}`.trim();
+}
+
+function playerRatingText(player) {
+  return `Bat ${player.batting} / Bowl ${player.bowling}`;
+}
+
+function buildPlayerCardHtml(player, {
+  selected = false,
+  unavailable = false,
+  slotIndexes = [],
+  buttonDataAttr = "",
+  note = "",
+} = {}) {
+  const showRatings = showPlayerRatingsInDraft();
+  const eligibleLabels = slotLabelsFromIndexes(slotIndexes);
+  const eligibleText = eligibleLabels.length ? eligibleLabels.join(", ") : "No open slot";
+  const ratingHtml = showRatings
+    ? `<span class="player-rating" aria-label="${escapeHtml(playerRatingText(player))}">${escapeHtml(playerRatingText(player))}</span>`
+    : "";
+  const noteHtml = note ? `<span class="player-note">${escapeHtml(note)}</span>` : "";
+
+  return `
+    <button
+      class="player-card ${selected ? "selected" : ""} ${unavailable ? "unavailable" : ""}"
+      type="button"
+      ${buttonDataAttr}
+      ${unavailable ? "disabled" : ""}
+      aria-disabled="${unavailable ? "true" : "false"}"
+    >
+      <span class="player-card-topline">
+        <span class="player-name">${escapeHtml(player.name)}</span>
+        ${ratingHtml}
+      </span>
+      <span class="player-role">${escapeHtml(playerRoleText(player))}</span>
+      <span class="player-meta">Eligible: ${escapeHtml(eligibleText)}</span>
+      <span class="player-meta">${escapeHtml(playerEraText(player))}</span>
+      ${noteHtml}
+    </button>
+  `;
+}
+
+function dailyChoiceProgressText() {
+  const totalRolls = STATE.daily.challenge?.totalRolls ?? 4;
+  const madeChoices = STATE.daily.lockedSelections.length;
+  return `${madeChoices} of ${totalRolls} choices made`;
+}
+
 function seriesComplete() {
   return Boolean(STATE.series) && STATE.series.revealed >= STATE.series.matches.length;
 }
 
 function ratingLabel(value) {
-  return isMemoryMode() && !seriesComplete() ? "??" : String(value);
+  return currentModeDef().showPlayerRatings || seriesComplete() ? String(value) : "??";
 }
 
 function ratingPairLabel(player) {
@@ -2342,6 +2620,40 @@ function seriesWinnerLabel() {
   if (STATE.series.userWins > STATE.series.starWins) return `${currentSeriesUserLabel()} lead the series`;
   if (STATE.series.starWins > STATE.series.userWins) return `${competition.oppositionShortTitle} lead the series`;
   return "Series level";
+}
+
+function seriesScoreShort(series = STATE.series) {
+  if (!series) return "";
+  return `${series.userWins}-${series.starWins}`;
+}
+
+function completedSeriesOutcomeText(series = STATE.series) {
+  if (!series) return "";
+  if (series.tournamentType === "worldcup") {
+    return series.statusText ?? "Tournament complete";
+  }
+  if (series.userWins > series.starWins) {
+    return `Won ${seriesScoreShort(series)}`;
+  }
+  if (series.userWins < series.starWins) {
+    return `Lost ${seriesScoreShort(series)}`;
+  }
+  return `Drew ${seriesScoreShort(series)}`;
+}
+
+function completedSeriesSummaryText(series = STATE.series) {
+  if (!series) return "";
+  if (series.tournamentType === "worldcup") {
+    return series.statusText ?? "Tournament complete";
+  }
+  const opponent = competitionConfig().oppositionTitle;
+  if (series.userWins > series.starWins) {
+    return `Your XI beat ${opponent} ${seriesScoreShort(series)} in the five-Test series.`;
+  }
+  if (series.userWins < series.starWins) {
+    return `${opponent} beat your XI ${seriesScoreShort(series)} in the five-Test series.`;
+  }
+  return `Your XI drew the five-Test series ${seriesScoreShort(series)} with ${opponent}.`;
 }
 
 function performancePointsForCard(card) {
@@ -3191,14 +3503,46 @@ function closeFeedbackPanel() {
 }
 
 function renderDraftMeter() {
-  const hideDailyMeter = dailyChallengeActive()
-    && currentDailyStage() === "intro"
-    && currentDailyPlayerPool().length === 0;
-  els.draftMeter.hidden = hideDailyMeter;
-  if (hideDailyMeter) {
+  const lineup = userLineup();
+  const progressLabels = [...els.draftMeter.querySelectorAll(".metric span")];
+  if (!progressLabels.length) {
     return;
   }
 
+  if (dailyChallengeActive() || !showPlayerRatingsInDraft()) {
+    const dailyLineupCount = STATE.daily.fixedPlayers.length + STATE.daily.lockedSelections.length;
+    const selectionsValue = dailyChallengeActive()
+      ? dailyChoiceProgressText()
+      : `${lineup.length} / ${XI_SLOTS.length}`;
+    const openSlotsValue = dailyChallengeActive()
+      ? String(Math.max(0, XI_SLOTS.length - dailyLineupCount))
+      : String(Math.max(0, XI_SLOTS.length - lineup.length));
+    const activeChoices = dailyChallengeActive()
+      ? String(STATE.daily.currentRoll?.players?.filter((player) => player.selectable).length ?? 0)
+      : String(STATE.currentSquad?.players?.filter((player) => playerCanPlay(player)).length ?? 0);
+
+    els.draftMeter.hidden = false;
+    els.draftMeterTitle.textContent = "Draft progress";
+    els.draftMeterCopy.textContent = currentModeDraftNote();
+    progressLabels[0].textContent = dailyChallengeActive() ? "Choices" : "Selections";
+    progressLabels[1].textContent = "Open slots";
+    progressLabels[2].textContent = "Live options";
+    progressLabels[3].textContent = "Mode";
+    els.draftBatting.textContent = selectionsValue;
+    els.draftBowling.textContent = openSlotsValue;
+    els.draftFielding.textContent = activeChoices;
+    els.draftOverall.textContent = dailyChallengeActive() ? "Hidden ratings" : currentModeDef().shortLabel;
+    els.draftMeter.dataset.grade = "hidden";
+    return;
+  }
+
+  els.draftMeter.hidden = false;
+  els.draftMeterTitle.textContent = "Current XI";
+  els.draftMeterCopy.textContent = "Ratings update as you draft.";
+  progressLabels[0].textContent = "Batting";
+  progressLabels[1].textContent = "Bowling";
+  progressLabels[2].textContent = "Fielding";
+  progressLabels[3].textContent = "Overall";
   const metrics = draftMetricsFromLineup(userLineup());
   els.draftBatting.textContent = String(metrics.batting);
   els.draftBowling.textContent = String(metrics.bowling);
@@ -3280,12 +3624,17 @@ function renderSeriesInsights() {
     : `
       <div class="insights-grid">
         <article class="insight-card insight-primary">
-          <span class="insight-label">Team grade</span>
+          <span class="insight-label">Series result</span>
+          <strong>${escapeHtml(completedSeriesOutcomeText(STATE.series))}</strong>
+          <p>${escapeHtml(completedSeriesSummaryText(STATE.series))}</p>
+        </article>
+        <article class="insight-card">
+          <span class="insight-label">Completed XI</span>
           <strong>Overall ${userMetrics.overall} · ${userMetrics.grade}</strong>
           <p>Batting ${userMetrics.batting} · Bowling ${userMetrics.bowling} · Fielding ${userMetrics.fielding}</p>
         </article>
         <article class="insight-card">
-          <span class="insight-label">XI rating</span>
+          <span class="insight-label">Series edge</span>
           <strong>Your XI is stronger than ${strengthPercent}% of generated XIs</strong>
           <p>${competition.oppositionTitle}: ${starMetrics.overall} overall · ${starMetrics.grade}</p>
         </article>
@@ -3428,6 +3777,8 @@ function renderStats() {
   const loadedChallenge = challengeLineupLoaded();
   const routeError = STATE.view === "home" ? STATE.routeError : null;
   const publicPage = currentPublicPageDef();
+  const pageKey = currentPublicPageKey();
+  const homePage = pageKey === "home";
   const dailySummary = currentDailyCompetition() === STATE.competition ? STATE.daily.summary : null;
   const dailyRankedAttempt = dailySummary?.rankedAttempt ?? null;
   const dailyLabelNode = els.homeDaily?.querySelector(".feature-action-label") ?? null;
@@ -3435,9 +3786,20 @@ function renderStats() {
   const dailyRouteLabel = worldCupHome ? "World Cup daily" : "Daily challenge";
   const dailyResumeLabel = worldCupHome ? "Resume World Cup daily" : "Resume daily challenge";
   const dailyResultLabel = worldCupHome ? "Today's World Cup result" : "Today's daily result";
-  const leaderboardLabel = worldCupHome ? "World Cup leaderboard" : "Player leaderboard";
-  els.totalSquads.textContent = String(STATE.squads.length);
-  els.totalPlayers.textContent = String(STATE.catalog.length);
+  const leaderboardLabel = worldCupHome ? "World Cup community favourites" : "Community favourites";
+  const heroActions = els.homePrimaryCta?.parentElement ?? null;
+  const heroTrust = document.querySelector("[data-home-trust]") ?? null;
+  els.homeEyebrow.hidden = homePage && !routeError;
+  if (homePage) {
+    renderHomePreviewCard(dailySummary);
+  } else {
+    els.totalSquads.textContent = String(STATE.squads.length);
+    els.totalPlayers.textContent = String(STATE.catalog.length);
+    els.homeSquadsLabel.textContent = competition.squadsLabel;
+    els.homePlayersLabel.textContent = "Total players";
+    els.homeFormatLabel.textContent = competition.format === "limited-overs" ? "Match format" : "Series format";
+    els.homeFormatValue.textContent = competition.format === "limited-overs" ? "ODI" : "5 Tests";
+  }
   els.gameSquadCount.textContent = dailyChallengeActive()
     ? (STATE.daily.challenge?.date ?? STATE.daily.summary?.date ?? currentDailyReferenceDateText())
     : `${STATE.squads.length} squads`;
@@ -3457,46 +3819,74 @@ function renderStats() {
     els.gamePlayerCount.textContent = `${STATE.catalog.length} players`;
     els.leaderboardTotal.textContent = STATE.leaderboard.totalTeams === null ? "Loading" : String(STATE.leaderboard.totalTeams);
     document.body.dataset.competition = competition.theme;
+    if (heroActions) heroActions.hidden = true;
+    if (heroTrust) heroTrust.hidden = true;
     return;
   }
 
-  els.homeEyebrow.textContent = routeError ? "Link problem" : competition.homeEyebrow;
-  els.homeTitle.textContent = routeError ? routeError.title : competition.homeTitle;
-  els.homeTagline.hidden = !competition.homeTagline || Boolean(routeError);
-  els.homeTagline.textContent = routeError ? "" : competition.homeTagline;
-  els.homeLede.textContent = routeError ? routeError.message : competition.homeLede;
-  els.homePanelKicker.textContent = routeError ? "Helpful 404" : loadedChallenge ? "Challenge received" : "How it works";
+  els.homeEyebrow.textContent = routeError
+    ? "Link problem"
+    : homePage
+      ? "Ashes 5-0"
+      : competition.homeEyebrow;
+  els.homeTitle.textContent = routeError
+    ? routeError.title
+    : homePage
+      ? "Can your all-time Ashes XI go 5-0?"
+      : competition.homeTitle;
+  els.homeTagline.hidden = Boolean(routeError) || (homePage ? false : !competition.homeTagline);
+  els.homeTagline.textContent = routeError
+    ? ""
+    : homePage
+      ? "Draft from historic squads and back your cricket judgement."
+      : competition.homeTagline;
+  els.homeLede.textContent = routeError
+    ? routeError.message
+    : homePage
+      ? "Draft players from historic Ashes squads, build your XI and simulate a five-Test series. The Daily Challenge is the fastest way to start."
+      : competition.homeLede;
+  if (heroActions) {
+    heroActions.hidden = !homePage || loadedChallenge || Boolean(routeError);
+  }
+  if (heroTrust) {
+    heroTrust.hidden = !homePage || loadedChallenge || Boolean(routeError);
+  }
+  els.homePanelKicker.textContent = routeError
+    ? "Helpful 404"
+    : loadedChallenge
+      ? "Challenge received"
+      : homePage
+        ? "Choose a mode"
+        : "How it works";
   els.homePanelTitle.textContent = routeError
     ? "Start a fresh game"
     : loadedChallenge
       ? "Accept challenge"
-      : currentPublicPageKey() === "challenge"
+      : homePage
+        ? "Start with the Daily Challenge"
+      : pageKey === "challenge"
         ? "Friend challenge"
-        : currentPublicPageKey() === "worldCup"
+        : pageKey === "worldCup"
           ? "World Cup mode"
-          : currentPublicPageKey() === "ashes"
+          : pageKey === "ashes"
             ? "Ashes mode"
             : "Squad Roller";
-  els.homePanelCopy.hidden = loadedChallenge;
+  els.homePanelCopy.hidden = loadedChallenge || homePage;
   els.homePanelCopy.innerHTML = routeError
     ? "That saved link is unavailable. You can still draft a new XI, open the leaderboard, or ask for a fresh short link."
     : loadedChallenge
       ? ""
-      : currentPublicPageKey() === "worldCup"
+      : pageKey === "worldCup"
         ? 'Try the <a href="/world-cup/daily">World Cup Daily Challenge</a>, compare completed XIs on the <a href="/world-cup/leaderboard">World Cup leaderboard</a>, or return to <a href="/ashes">Ashes mode</a>.'
-      : currentPublicPageKey() === "challenge"
+      : pageKey === "challenge"
         ? 'Read the <a href="/how-to-play">rules</a>, compare selections on the <a href="/leaderboard">leaderboard</a>, or return to the main <a href="/ashes">Ashes mode</a>.'
-        : currentPublicPageKey() === "ashes"
+        : pageKey === "ashes"
           ? 'Try the <a href="/daily">Daily Challenge</a>, create a private <a href="/challenge">friend challenge</a>, or read the <a href="/how-to-play">full rules</a>.'
-          : "New feature: turn your completed Ashes XI into a private challenge link.";
-  els.homeConfigGrid.hidden = loadedChallenge || Boolean(routeError);
+          : "Build your XI, compare community favourites, and explore the other modes once you know the basics.";
+  els.homeConfigGrid.hidden = loadedChallenge || Boolean(routeError) || homePage;
   els.homeResponseNameRow.hidden = !loadedChallenge;
   els.homeResponseName.value = currentChallengeResponseName();
   els.homeRulesGrid.hidden = loadedChallenge || Boolean(routeError);
-  els.homeSquadsLabel.textContent = competition.squadsLabel;
-  els.homePlayersLabel.textContent = "Total players";
-  els.homeFormatLabel.textContent = competition.format === "limited-overs" ? "Match format" : "Series format";
-  els.homeFormatValue.textContent = competition.format === "limited-overs" ? "ODI" : "5 Tests";
   if (els.homeRuleOne) {
     els.homeRuleOne.textContent = `Roll a previous ${competition.name} squad.`;
   }
@@ -3509,8 +3899,8 @@ function renderStats() {
   }
   els.homeCompetition.innerHTML = floatingBadgeLabelHtml(competition.modeButton, !worldCupHome);
   const showHomeActions = !loadedChallenge;
-  els.homeChallenge.hidden = !showHomeActions || worldCupHome;
-  els.homeDaily.hidden = !showHomeActions;
+  els.homeChallenge.hidden = !showHomeActions || worldCupHome || homePage;
+  els.homeDaily.hidden = !showHomeActions || homePage;
   if (dailyLabelNode) {
     dailyLabelNode.textContent = STATE.daily.loadingSummary
       ? "Loading daily..."
@@ -3523,22 +3913,23 @@ function renderStats() {
   els.homeDaily.title = worldCupHome
     ? "Play the ranked World Cup Daily Challenge with the same hidden roll sequence as everyone else."
     : "Play the ranked Daily Ashes Challenge with the same hidden roll sequence as everyone else.";
-  els.homeLeaderboard.hidden = !showHomeActions;
+  els.homeLeaderboard.hidden = !showHomeActions || homePage;
   els.homeLeaderboard.textContent = leaderboardLabel;
-  if (currentPublicPageKey() === "challenge") {
+  if (pageKey === "challenge") {
     els.homeChallenge.hidden = true;
   }
-  els.homeCompetition.hidden = loadedChallenge;
+  els.homeCompetition.hidden = loadedChallenge || homePage;
+  els.homeControls.hidden = homePage;
   els.playGame.textContent = routeError
     ? "Start a new game"
     : loadedChallenge
-    ? "Accept challenge"
-    : currentPublicPageKey() === "challenge"
-      ? "Build a challenge XI"
+      ? "Accept challenge"
+      : pageKey === "challenge"
+        ? "Build a challenge XI"
     : STATE.competition === "worldcup"
       ? "Start World Cup"
-      : currentPublicPageKey() === "ashes"
-        ? "Start Ashes mode"
+      : pageKey === "ashes"
+        ? "Start drafting"
         : "Start a solo game";
   els.leaderboardTotal.textContent = STATE.leaderboard.totalTeams === null ? "Loading" : String(STATE.leaderboard.totalTeams);
   els.leaderboardMetricLabel.textContent = leaderboardMetricLabel(STATE.leaderboard.metric);
@@ -3551,7 +3942,7 @@ function renderStats() {
     if (dailyChallengeActive()) {
       els.boardCopy.innerHTML = dailyBoardCopyHtml();
     } else {
-      els.boardCopy.textContent = "Click a player first, then click a valid slot.";
+      els.boardCopy.innerHTML = `${escapeHtml(currentModeDraftNote())} <span>Select a player, then choose a highlighted slot.</span>`;
     }
   }
   els.seriesEyebrow.textContent = competition.seriesEyebrow;
@@ -3567,8 +3958,26 @@ function renderView() {
   els.leaderboardView.hidden = STATE.view !== "leaderboard";
   els.gameView.hidden = STATE.view !== "game";
   els.seriesView.hidden = STATE.view !== "series";
-  els.siteNav.hidden = currentPublicPageKey() === "home" && STATE.view === "home";
   document.body.dataset.view = STATE.view;
+}
+
+function renderSiteNav() {
+  if (!els.siteNav || !els.navLinkNodes) return;
+  const currentKey = activeNavKey();
+  els.siteNav.hidden = false;
+
+  for (const link of els.navLinkNodes) {
+    const key = link.dataset.navLink ?? "";
+    if (key === currentKey) {
+      link.setAttribute("aria-current", "page");
+    } else {
+      link.removeAttribute("aria-current");
+    }
+  }
+
+  if (!mobileBuilderViewport()) {
+    closeSiteNav();
+  }
 }
 
 function dailyDraftHelpHtml() {
@@ -3590,7 +3999,9 @@ function dailyBoardCopyHtml() {
     return `Draft complete. Your XI is ready for the ${worldCupDaily ? "ODI" : "Test"}.`;
   }
 
-  const label = stage === "draft" ? "Future squads are hidden." : "7 players locked.";
+  const label = stage === "draft"
+    ? "Ratings stay hidden and future squads remain unrevealed."
+    : "Seven players are already locked in and ratings stay hidden.";
   return `<span>${escapeHtml(label)}</span>${dailyDraftHelpHtml()}`;
 }
 
@@ -3663,24 +4074,37 @@ function renderDailyNameInline() {
 
 function dailyBoardGridHtml(lineupMap, targetSlotIndexes = []) {
   const targetSet = new Set(targetSlotIndexes);
+  const fixedSlotSet = new Set((STATE.daily.fixedPlayers ?? []).map((player) => player.slotIndex));
+  const chosenSlotSet = new Set((STATE.daily.lockedSelections ?? []).map((selection) => selection.slotIndex));
   return `
     <div class="board-grid">
       ${XI_SLOTS.map((slot, index) => {
         const player = lineupMap.get(index) ?? null;
-        const canClick = targetSet.has(index) && !player && !STATE.daily.loadingAction;
+        const validTarget = targetSet.has(index) && !player;
+        const canClick = !player && !STATE.daily.loadingAction && Boolean(STATE.daily.pendingPlayerId);
+        const slotState = player
+          ? fixedSlotSet.has(index)
+            ? "Preselected"
+            : chosenSlotSet.has(index)
+              ? "Your pick"
+              : "Locked"
+          : validTarget
+            ? "Tap to place"
+            : STATE.daily.pendingPlayerId
+              ? "Not available for this player"
+              : "Waiting for a player";
         return `
           <button
-            class="slot ${player ? "filled" : "empty"} ${canClick ? "target" : ""}"
+            class="slot ${player ? "filled" : "empty"} ${validTarget ? "target" : ""} ${canClick && !validTarget ? "ineligible" : ""}"
             type="button"
             style="grid-row: ${slot.row}; grid-column: ${slot.col};"
-            ${canClick ? "" : "disabled"}
-            ${canClick ? `data-daily-slot-index="${index}"` : ""}
+            ${canClick ? `data-daily-slot-index="${index}" data-daily-slot-valid="${validTarget ? "true" : "false"}"` : "disabled"}
           >
             <span class="slot-label">${escapeHtml(slot.label)}</span>
             ${
               player
-                ? `<span class="slot-name">${escapeHtml(player.name)}</span><span class="slot-sub">${escapeHtml(player.roles[0])}</span>`
-                : `<span class="slot-sub">${canClick ? "Can fit here" : "Waiting for a player"}</span>`
+                ? `<span class="slot-name">${escapeHtml(player.name)}</span><span class="slot-sub">${escapeHtml(slotState)} · ${escapeHtml(player.roles[0])}</span>`
+                : `<span class="slot-sub">${escapeHtml(slotState)}</span>`
             }
           </button>
         `;
@@ -3779,7 +4203,9 @@ function renderGameMeta() {
       : stage === "recap"
         ? "Draft complete"
         : "Reveal the first squad";
-    els.lineupStatus.textContent = `${selectedCount} / 11 selected`;
+    els.lineupStatus.textContent = stage === "recap"
+      ? `${STATE.daily.challenge?.totalRolls ?? 4} of ${STATE.daily.challenge?.totalRolls ?? 4} choices made`
+      : dailyChoiceProgressText();
     els.rollSquad.hidden = STATE.view !== "game" || stage !== "intro";
     els.rollSquad.textContent = STATE.daily.loadingAction || STATE.daily.loadingSummary ? "Loading..." : "Reveal the first squad";
     els.rollSquad.disabled = STATE.view !== "game" || stage !== "intro" || STATE.daily.loadingAction || STATE.daily.loadingSummary;
@@ -3800,9 +4226,11 @@ function renderGameMeta() {
     els.dailyRouteSwitch.hidden = true;
   }
 
-  els.gameMode.textContent = modeLabel();
+  els.gameMode.textContent = isChallengeMode()
+    ? `${currentModeDef().shortLabel} Challenge`
+    : currentModeDef().cardTitle;
   els.currentSquad.textContent = currentSquadLabel();
-  els.lineupStatus.textContent = `${STATE.lineup.size} / ${XI_SLOTS.length} locked`;
+  els.lineupStatus.textContent = `${STATE.lineup.size} of ${XI_SLOTS.length} selected`;
   els.rollSquad.hidden = false;
   els.startSeries.hidden = STATE.view !== "game" || buildingChallenge;
   els.startSeries.disabled = !lineupComplete() || STATE.view !== "game" || buildingChallenge;
@@ -3864,7 +4292,7 @@ function renderRoster() {
 
     els.rosterTitle.textContent = STATE.daily.currentRoll?.squadLabel ?? "Current squad";
     els.rosterSummary.textContent = selected
-      ? `${selected.name} is selected. Pick a valid slot in your XI.`
+      ? `${selected.name} is selected. Pick one of the highlighted slots in your XI.`
       : `${players.length} players available. Click one, then choose a slot.`;
 
     if (!players.length) {
@@ -3873,32 +4301,26 @@ function renderRoster() {
     }
 
     els.rosterGrid.innerHTML = players
-      .map((player) => {
-        const selectedClass = player.id === STATE.daily.pendingPlayerId ? "selected" : "";
-        const unavailable = !player.selectable || STATE.daily.loadingAction;
-        const subtitle = `${player.roles[0]} · ${ratingPairLabel(player)}`;
-        return `
-          <button
-            class="player-card ${selectedClass} ${unavailable ? "unavailable" : ""}"
-            type="button"
-            data-daily-player-id="${player.id}"
-            ${unavailable ? "disabled" : ""}
-            aria-disabled="${unavailable ? "true" : "false"}"
-          >
-            <span class="player-name">${escapeHtml(player.name)}</span>
-            <span class="player-meta">${escapeHtml(subtitle)}</span>
-            ${!player.selectable ? `<span class="player-meta">${escapeHtml(player.unavailableReason || "Unavailable")}</span>` : ""}
-          </button>
-        `;
-      })
+      .map((player) => buildPlayerCardHtml(player, {
+        selected: player.id === STATE.daily.pendingPlayerId,
+        unavailable: !player.selectable || STATE.daily.loadingAction,
+        slotIndexes: player.validSlotIndexes ?? [],
+        buttonDataAttr: `data-daily-player-id="${player.id}"`,
+        note: player.selectable ? "Ratings stay hidden in the Daily Challenge." : player.unavailableReason || "Unavailable",
+      }))
       .join("");
 
     els.rosterGrid.querySelectorAll("[data-daily-player-id]").forEach((button) => {
       button.addEventListener("click", () => {
         const playerId = button.dataset.dailyPlayerId;
         const nextPlayerId = STATE.daily.pendingPlayerId === playerId ? null : playerId;
+        const firstPreview = !STATE.daily.pendingPlayerId && STATE.daily.lockedSelections.length === 0;
         STATE.daily.pendingPlayerId = nextPlayerId;
         if (nextPlayerId) {
+          announce("Player selected. Choose a highlighted slot.");
+          if (firstPreview) {
+            trackStandardEvent("first_player_viewed", { mode: analyticsModeValue() });
+          }
           trackDailyEvent("daily_player_previewed", {
             roll_number: STATE.daily.currentRoll?.rollNumber ?? 0,
             attempt_mode: currentDailyAttemptMode(),
@@ -3937,7 +4359,7 @@ function renderRoster() {
         ? "A player has been locked. Roll another squad to continue."
         : `Roll a ${competition.name} squad to begin.`;
   } else if (selected) {
-    els.rosterSummary.textContent = `${selected.name} is selected. Pick a valid slot to lock them in.`;
+    els.rosterSummary.textContent = `${selected.name} is selected. Pick one of the highlighted slots to lock them in.`;
   } else {
     els.rosterSummary.textContent = `${players.length} players available. Click one, then choose a slot.`;
   }
@@ -3967,21 +4389,19 @@ function renderRoster() {
   els.rosterGrid.innerHTML = players
     .map((player) => {
       const locked = lineupContainsName(player.name);
-      const selectedClass = player.id === STATE.selectedPlayerId ? "selected" : "";
-      const unavailable = locked || !playerCanPlay(player);
-      const subtitle = `${player.roles[0]} · ${ratingPairLabel(player)}`;
-      return `
-        <button
-          class="player-card ${selectedClass} ${unavailable ? "unavailable" : ""}"
-          type="button"
-          data-player-id="${player.id}"
-          ${unavailable ? "disabled" : ""}
-          aria-disabled="${unavailable ? "true" : "false"}"
-        >
-          <span class="player-name">${escapeHtml(player.name)}</span>
-          <span class="player-meta">${escapeHtml(subtitle)}</span>
-        </button>
-      `;
+      const availableSlots = availableSlotIndexesForPlayer(player);
+      const unavailable = locked || !availableSlots.length;
+      return buildPlayerCardHtml(player, {
+        selected: player.id === STATE.selectedPlayerId,
+        unavailable,
+        slotIndexes: availableSlots,
+        buttonDataAttr: `data-player-id="${player.id}"`,
+        note: locked
+          ? "Already in your XI."
+          : availableSlots.length
+            ? currentModeDraftNote()
+            : "No valid slot remains for this player.",
+      });
     })
     .join("");
 
@@ -3989,7 +4409,14 @@ function renderRoster() {
     button.addEventListener("click", () => {
       const playerId = button.dataset.playerId;
       const nextPlayerId = STATE.selectedPlayerId === playerId ? null : playerId;
+      const firstPreview = !STATE.selectedPlayerId && STATE.lineup.size === 0;
       STATE.selectedPlayerId = nextPlayerId;
+      if (nextPlayerId) {
+        announce("Player selected. Choose a highlighted slot.");
+        if (firstPreview) {
+          trackStandardEvent("first_player_viewed", { mode: analyticsModeValue() });
+        }
+      }
       renderRoster();
       renderBoard();
       if (nextPlayerId) {
@@ -4030,6 +4457,13 @@ function renderBoard() {
     els.board.querySelectorAll("[data-daily-slot-index]").forEach((button) => {
       button.addEventListener("click", () => {
         button.blur();
+        const valid = button.dataset.dailySlotValid === "true";
+        if (!valid) {
+          const pendingPlayer = STATE.daily.currentRoll?.players?.find((player) => player.id === STATE.daily.pendingPlayerId);
+          const slotLabel = XI_SLOTS[Number(button.dataset.dailySlotIndex)]?.label ?? "that slot";
+          announce(`${pendingPlayer?.name ?? "This player"} cannot be placed at ${slotLabel}. Choose a highlighted slot.`);
+          return;
+        }
         const slotIndex = Number(button.dataset.dailySlotIndex);
         void lockDailySelection(slotIndex);
       });
@@ -4045,20 +4479,19 @@ function renderBoard() {
       ${XI_SLOTS.map((slot, index) => {
         const player = STATE.lineup.get(index) ?? null;
         const canAccept = !rolling && selected ? slotAcceptsPlayer(slot, selected) : false;
-        const canClick = Boolean(selected && canAccept && !player);
+        const canClick = Boolean(selected && !player);
         return `
           <button
-            class="slot ${player ? "filled" : "empty"} ${canClick ? "target" : ""}"
+            class="slot ${player ? "filled" : "empty"} ${canAccept && canClick ? "target" : ""} ${canClick && !canAccept ? "ineligible" : ""}"
             type="button"
             style="grid-row: ${slot.row}; grid-column: ${slot.col};"
-            data-slot-index="${index}"
-            ${canClick ? "" : "disabled"}
+            ${canClick ? `data-slot-index="${index}" data-slot-valid="${canAccept ? "true" : "false"}"` : "disabled"}
           >
             <span class="slot-label">${escapeHtml(slot.label)}</span>
             ${
               player
                 ? `<span class="slot-name">${escapeHtml(player.name)}</span><span class="slot-sub">${escapeHtml(player.roles[0])}</span>`
-                : `<span class="slot-sub">${selected ? "Can fit here" : "Waiting for a player"}</span>`
+                : `<span class="slot-sub">${selected ? (canAccept ? "Tap to place" : "Not available for this player") : "Waiting for a player"}</span>`
             }
           </button>
         `;
@@ -4072,9 +4505,15 @@ function renderBoard() {
       const index = Number(button.dataset.slotIndex);
       const slot = XI_SLOTS[index];
       const player = STATE.catalog.find((candidate) => candidate.id === STATE.selectedPlayerId);
-      if (!player || !slot || STATE.lineup.has(index) || !slotAcceptsPlayer(slot, player)) return;
+      const valid = button.dataset.slotValid === "true";
+      if (!player || !slot || STATE.lineup.has(index)) return;
+      if (!valid || !slotAcceptsPlayer(slot, player)) {
+        announce(`${player.name} cannot be placed at ${slot.label}. Choose a highlighted slot.`);
+        return;
+      }
       if (lineupContainsName(player.name)) return;
 
+      const firstPick = STATE.lineup.size === 0;
       STATE.lineup.set(index, player);
       if (STATE.lineup.size === XI_SLOTS.length && isChallengeMode()) {
         const role = challengeLineupLoaded() ? "recipient" : "creator";
@@ -4086,8 +4525,16 @@ function renderBoard() {
           });
         }
       }
+      if (firstPick) {
+        trackStandardEvent("first_pick", { mode: analyticsModeValue() });
+      }
+      trackStandardEvent("player_assigned", { mode: analyticsModeValue() });
+      if (STATE.lineup.size === XI_SLOTS.length) {
+        trackStandardEvent("draft_completed", { mode: analyticsModeValue() });
+      }
       STATE.selectedPlayerId = null;
       STATE.currentSquad = null;
+      announce(`${player.name} assigned to ${slot.label}.`);
       renderAll();
       scrollBuilderTargetIntoView(els.rollSquad.closest(".controls") ?? els.rollSquad);
     });
@@ -4170,9 +4617,11 @@ function renderSeriesSummary() {
   const sendTarget = currentChallengeSendTarget();
   const dailyRouteSwitchTarget = dailyPathForCompetition(otherDailyCompetition());
   const dailyRouteSwitchLabel = currentDailyCompetition() === "worldcup" ? "Try the Ashes daily" : "Try the World Cup daily";
-  els.seriesProgress.textContent = `${STATE.series.revealed} / ${STATE.series.matches.length} ${competition.seriesProgressLabel}`;
+  els.seriesProgress.textContent = completed
+    ? completedSeriesOutcomeText(STATE.series)
+    : `${STATE.series.revealed} / ${STATE.series.matches.length} ${competition.seriesProgressLabel}`;
   els.seriesStatus.textContent = completed
-    ? "Series complete"
+    ? completedSeriesSummaryText(STATE.series)
     : STATE.series.revealed === 0
       ? "Ready to simulate"
       : "Simulation in progress";
@@ -4196,7 +4645,7 @@ function renderSeriesSummary() {
       currentDailyCompetition() !== "worldcup",
     );
   }
-  els.seriesLeaderboard.textContent = STATE.competition === "worldcup" ? "World Cup leaderboard" : "Player leaderboard";
+  els.seriesLeaderboard.textContent = STATE.competition === "worldcup" ? "World Cup community favourites" : "Community favourites";
   if (els.challengeBack) {
     els.challengeBack.hidden = dailyChallengeActive() || !completed || (!challengeLineupLoaded() && !resultLoaded);
   }
@@ -4544,7 +4993,7 @@ function renderLeaderboard() {
   }
 
   els.leaderboardStatus.textContent = leaderboard.totalTeams
-    ? `${leaderboard.totalTeams} completed ${leaderboard.totalTeams === 1 ? "team" : "teams"} represented. Showing the top ${leaderboard.limit} players.`
+    ? `${leaderboard.totalTeams} completed ${leaderboard.totalTeams === 1 ? "team" : "teams"} represented. Showing the top ${leaderboard.limit} community favourites by selection count.`
     : copy.empty;
 
   if (!leaderboard.entries.length) {
@@ -4558,8 +5007,8 @@ function renderLeaderboard() {
         <tr>
           <th>Rank</th>
           <th>Player</th>
-          <th>Selections</th>
-          <th>Share</th>
+          <th>Selection count</th>
+          <th>Pick share</th>
         </tr>
       </thead>
       <tbody>
@@ -4587,6 +5036,7 @@ function renderAll() {
   syncSeoMetadata();
   renderStats();
   renderView();
+  renderSiteNav();
   renderGameMeta();
   renderDailyNameInline();
   renderDraftMeter();
@@ -4611,6 +5061,17 @@ function rollSquad() {
   const pool = STATE.squads.filter(squadHasAvailablePlayer);
   const chosen = randomChoice(pool.length ? pool : STATE.squads);
   if (!chosen) return;
+  if (STATE.lineup.size === 0 && !STATE.currentSquad) {
+    announce("Game started. First squad ready.");
+    trackStandardEvent("game_started", { mode: analyticsModeValue() });
+  }
+
+  if (prefersReducedMotion()) {
+    STATE.currentSquad = decorateSquad(chosen);
+    STATE.selectedPlayerId = null;
+    renderAll();
+    return;
+  }
 
   const candidates = shuffle(
     [...STATE.squads]
@@ -5453,6 +5914,7 @@ function startSeries() {
   clearTimer();
   const competition = competitionConfig();
   try {
+    trackStandardEvent("simulation_started", { mode: analyticsModeValue() });
     STATE.achievementDetail = null;
     STATE.achievementPinned = false;
     STATE.result = null;
@@ -5495,8 +5957,12 @@ function revealNextSeriesMatch() {
         series_result: seriesResult,
       });
     }
+    announce(`Simulation completed. ${completedSeriesOutcomeText(STATE.series)}.`);
     renderAll();
     return;
+  }
+  if (STATE.series.revealed === STATE.series.matches.length) {
+    announce(`Simulation completed. ${completedSeriesOutcomeText(STATE.series)}.`);
   }
   renderSeries();
 }
@@ -5518,8 +5984,12 @@ function revealAllSeriesMatches() {
         series_result: seriesResult,
       });
     }
+    announce(`Simulation completed. ${completedSeriesOutcomeText(STATE.series)}.`);
     renderAll();
     return;
+  }
+  if (!wasComplete) {
+    announce(`Simulation completed. ${completedSeriesOutcomeText(STATE.series)}.`);
   }
   renderSeries();
 }
@@ -5651,6 +6121,21 @@ function wireControls() {
     });
   };
 
+  els.navToggle.addEventListener("click", () => {
+    toggleSiteNav();
+  });
+  els.navLinkNodes.forEach((link) => {
+    link.addEventListener("click", () => {
+      closeSiteNav();
+    });
+  });
+  els.homePrimaryCta.addEventListener("click", () => {
+    trackStandardEvent("mode_selected", { mode: "daily" });
+  });
+  els.homeSecondaryCta.addEventListener("click", () => {
+    trackStandardEvent("mode_selected", { mode: "classic" });
+  });
+
   els.playGame.addEventListener("click", () => {
     if (STATE.routeError && routeUsesDedicatedPath()) {
       replaceBrowserPath("/");
@@ -5663,6 +6148,7 @@ function wireControls() {
     }
     STATE.view = "game";
     renderAll();
+    scrollViewportTop();
   });
   els.homeLeaderboard.addEventListener("click", () => {
     window.location.assign(leaderboardPathForCompetition(STATE.competition));
@@ -5698,12 +6184,15 @@ function wireControls() {
     window.location.assign(leaderboardPathForCompetition(STATE.competition));
   });
   els.homeChallenge.addEventListener("click", () => {
+    trackStandardEvent("mode_selected", { mode: "friend_classic" });
     window.location.assign("/challenge");
   });
   els.homeDaily.addEventListener("click", () => {
+    trackStandardEvent("mode_selected", { mode: STATE.competition === "worldcup" ? "worldcup_daily" : "daily" });
     window.location.assign(dailyPathForCompetition(STATE.competition));
   });
   els.homeCompetition.addEventListener("click", () => {
+    trackStandardEvent("mode_selected", { mode: STATE.competition === "worldcup" ? "classic" : "worldcup" });
     window.location.assign(STATE.competition === "worldcup" ? "/ashes" : "/world-cup");
   });
   els.challengeName.addEventListener("input", () => {
@@ -5725,6 +6214,9 @@ function wireControls() {
     }
 
     STATE.challengeDraftMode = normalizePlayableMode(els.challengeMode.value);
+    trackStandardEvent("mode_selected", {
+      mode: STATE.challengeDraftMode === "memory" ? "friend_memory" : "friend_classic",
+    });
     setChallengeStatus("");
     renderAll();
   });
@@ -5744,12 +6236,16 @@ function wireControls() {
     if (STATE.mode === "challenge") {
       STATE.challengeDraftMode = normalizePlayableMode(els.homeMode.value);
       STATE.mode = STATE.challengeDraftMode;
+      trackStandardEvent("mode_selected", {
+        mode: STATE.challengeDraftMode === "memory" ? "friend_memory" : "friend_classic",
+      });
       setChallengeStatus("");
       renderAll();
       return;
     }
 
     STATE.mode = normalizePlayableMode(els.homeMode.value);
+    trackStandardEvent("mode_selected", { mode: STATE.mode });
     renderAll();
   });
   els.leaderboardMetric.addEventListener("change", () => {
@@ -5765,6 +6261,11 @@ function wireControls() {
     void loadLeaderboard();
   });
   window.addEventListener("focus", refreshDailySummaryOnReturn);
+  window.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeSiteNav();
+    }
+  });
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") {
       refreshDailySummaryOnReturn();
@@ -5788,6 +6289,8 @@ function wireControls() {
             text,
             files: [file],
           });
+          trackStandardEvent("result_shared", { share_destination: "web_share" });
+          announce("Share sheet opened.");
           return;
         } catch (error) {
           if (!(error instanceof DOMException && error.name === "AbortError")) {
@@ -5805,6 +6308,8 @@ function wireControls() {
             text,
             url: shareUrl(),
           });
+          trackStandardEvent("result_shared", { share_destination: "web_share" });
+          announce("Share sheet opened.");
           return;
         } catch (error) {
           if (error instanceof DOMException && error.name === "AbortError") return;
@@ -5817,9 +6322,29 @@ function wireControls() {
         "_blank",
         "noopener,noreferrer",
       );
+      trackStandardEvent("result_shared", { share_destination: "x" });
+      announce("Share window opened.");
     } catch (error) {
       console.error("Share action failed:", error);
       setShareStatus("Could not prepare the share.");
+    }
+  });
+  els.whatsappShare.addEventListener("click", async () => {
+    try {
+      if (resultSnapshotLoaded() || (challengeLineupLoaded() && seriesComplete())) {
+        const result = currentChallengeResultRecord();
+        if (!result) return;
+        const url = currentResultUrl() || result.shortUrl || resultUrlForRecord(result);
+        openWhatsAppShare(formatChallengeResultShareText(result, url));
+      } else {
+        openWhatsAppShare(formatShareText());
+      }
+      trackStandardEvent("result_shared", { share_destination: "whatsapp" });
+      setShareStatus("WhatsApp share opened.");
+      announce("WhatsApp share opened.");
+    } catch (error) {
+      console.error("WhatsApp share failed:", error);
+      setShareStatus("Could not open WhatsApp share.");
     }
   });
   els.sendResultBack.addEventListener("click", async () => {
@@ -6526,6 +7051,14 @@ function setShareStatus(message) {
   els.shareStatus.textContent = message;
 }
 
+function openWhatsAppShare(text) {
+  window.open(
+    `https://wa.me/?text=${encodeURIComponent(text)}`,
+    "_blank",
+    "noopener,noreferrer",
+  );
+}
+
 async function writeTextToClipboard(text) {
   if (navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(text);
@@ -6582,6 +7115,7 @@ async function copySeriesLink() {
   const url = shareUrl();
   await writeTextToClipboard(url);
   setShareStatus("Link copied.");
+  announce("Link copied.");
 }
 
 function currentChallengeResultRecord() {
@@ -6615,8 +7149,10 @@ async function copyChallengeLink() {
   await writeTextToClipboard(
     challengeInviteText(url, currentChallengeCreatorName(), currentChallengePlayableMode()),
   );
+  trackStandardEvent("challenge_link_copied", { mode: analyticsModeValue() });
   trackChallengeEvent("challenge_link_copied", { role: challengeLineupLoaded() ? "recipient" : "creator" });
   setChallengeStatus("Invite copied.");
+  announce("Invite copied.");
 }
 
 async function copyChallengeResultLink() {
@@ -6637,6 +7173,7 @@ async function copyChallengeResultLink() {
     series_result: challengeSeriesOutcome(result),
   });
   setShareStatus("Result link copied.");
+  announce("Result link copied.");
 }
 
 async function downloadSeriesShareImage() {
@@ -6656,6 +7193,7 @@ async function downloadSeriesShareImage() {
   link.remove();
   window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
   setShareStatus("Download started.");
+  announce("Download started.");
 }
 
 async function downloadChallengeResultImage() {
@@ -6685,6 +7223,7 @@ async function downloadChallengeResultImage() {
     series_result: challengeSeriesOutcome(result),
   });
   setShareStatus("Download started.");
+  announce("Download started.");
 }
 
 async function shareChallengeResult(source = "series-complete") {
@@ -6712,6 +7251,7 @@ async function shareChallengeResult(source = "series-complete") {
   if (file && navigator.share && navigator.canShare?.({ files: [file] })) {
     try {
       await navigator.share({ title, text, url, files: [file] });
+      trackStandardEvent("result_shared", { share_destination: "web_share" });
       trackChallengeEvent("challenge_result_share_api_resolved", {
         role: "recipient",
         source,
@@ -6728,6 +7268,7 @@ async function shareChallengeResult(source = "series-complete") {
   if (navigator.share) {
     try {
       await navigator.share({ title, text, url });
+      trackStandardEvent("result_shared", { share_destination: "web_share" });
       trackChallengeEvent("challenge_result_share_api_resolved", {
         role: "recipient",
         source,
@@ -6742,6 +7283,7 @@ async function shareChallengeResult(source = "series-complete") {
   }
 
   await writeTextToClipboard(text);
+  trackStandardEvent("result_shared", { share_destination: "copy" });
   setShareStatus("Result link copied.");
 }
 
@@ -6766,6 +7308,11 @@ function init() {
   STATE.daily.participantId = loadOrCreateDailyParticipantId();
   const routeType = String(BOOTSTRAP?.route?.type ?? "").trim();
   const currentPageKey = currentPublicPageKey();
+  const preferredMode = parsePreferredModeFromLocation();
+
+  if (currentPageKey === "ashes" && preferredMode) {
+    STATE.mode = preferredMode;
+  }
 
   const result = loadResultFromUrl();
   if (result) {
@@ -6793,6 +7340,9 @@ function init() {
       STATE.competition = "ashes";
       STATE.squads = ASHES_SQUADS;
       STATE.mode = "challenge";
+      trackStandardEvent("challenge_opened", {
+        mode: challenge.mode === "memory" ? "friend_memory" : "friend_classic",
+      });
       trackChallengeEvent("challenge_link_opened", {
         role: "recipient",
         challenge_mode: normalizePlayableMode(challenge.mode),
@@ -6833,6 +7383,9 @@ function init() {
         STATE.competition = "ashes";
         STATE.squads = ASHES_SQUADS;
         STATE.mode = "challenge";
+        trackStandardEvent("challenge_opened", {
+          mode: bootstrappedChallenge.mode === "memory" ? "friend_memory" : "friend_classic",
+        });
         trackChallengeEvent("challenge_link_opened", {
           role: "recipient",
           challenge_mode: normalizePlayableMode(bootstrappedChallenge.mode),
@@ -6888,10 +7441,17 @@ function init() {
     } else if (routeType === "challenge-landing" || currentPageKey === "challenge") {
       STATE.challenge = null;
       STATE.result = null;
-      STATE.challengeDraftMode = "classic";
+      STATE.challengeDraftMode = preferredMode || "classic";
       STATE.competition = "ashes";
       STATE.squads = ASHES_SQUADS;
       STATE.mode = "challenge";
+      STATE.view = "game";
+    } else if (currentPageKey === "ashes") {
+      STATE.challenge = null;
+      STATE.result = null;
+      STATE.competition = "ashes";
+      STATE.squads = ASHES_SQUADS;
+      STATE.mode = preferredMode || "classic";
       STATE.view = "game";
     } else if (routeType === "world-cup" || currentPageKey === "worldCup") {
       STATE.challenge = null;
@@ -6899,7 +7459,7 @@ function init() {
       STATE.competition = "worldcup";
       STATE.squads = WORLD_CUP_SQUADS;
       STATE.mode = "classic";
-      STATE.view = "home";
+      STATE.view = "game";
     } else if (routeType === "daily" || currentPageKey === "daily") {
       prepareDailyView("ashes");
       STATE.view = "game";
@@ -6923,16 +7483,19 @@ function init() {
   addCatalogMetadata();
   wireControls();
   renderAll();
+  trackStandardEvent("landing_view", {
+    page: currentPageKey || "unknown",
+  });
   if (STATE.view === "leaderboard") {
     void loadLeaderboard();
   }
   if (routeType === "daily" || currentPageKey === "daily") {
-    void openDailyChallenge("ashes").catch((error) => {
+    void openDailyChallenge("ashes", { autoStart: true }).catch((error) => {
       console.error("Daily summary preload failed:", error);
       renderAll();
     });
   } else if (routeType === "world-cup-daily" || currentPageKey === "worldCupDaily") {
-    void openDailyChallenge("worldcup").catch((error) => {
+    void openDailyChallenge("worldcup", { autoStart: true }).catch((error) => {
       console.error("Daily summary preload failed:", error);
       renderAll();
     });

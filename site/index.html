@@ -7,26 +7,26 @@
     <link rel="manifest" href="/site.webmanifest">
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Ashes 5-0 Game - Build an All-Time Cricket XI</title>
+    <title>Ashes 5-0 - Free All-Time Cricket XI Draft Game</title>
     <meta
       name="description"
-      content="Can your all-time Ashes XI win 5-0? Roll historic squads, make hidden picks, simulate a five-Test series and challenge friends to beat your team."
+      content="Draft players from historic Ashes squads, build an all-time XI and simulate a five-Test series. Play the free daily cricket challenge or challenge a friend."
     />
     <link rel="canonical" href="https://ashes-5-0.co.uk/">
     <meta name="robots" content="index, follow" />
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="Ashes 5-0 Game - Build an All-Time Cricket XI" />
+    <meta property="og:title" content="Ashes 5-0 - Free All-Time Cricket XI Draft Game" />
     <meta
       property="og:description"
-      content="Can your all-time Ashes XI win 5-0? Roll historic squads, make hidden picks, simulate a five-Test series and challenge friends to beat your team."
+      content="Draft players from historic Ashes squads, build an all-time XI and simulate a five-Test series. Play the free daily cricket challenge or challenge a friend."
     />
     <meta property="og:url" content="https://ashes-5-0.co.uk/" />
     <meta property="og:image" content="https://ashes-5-0.co.uk/android-chrome-512x512.png" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Ashes 5-0 Game - Build an All-Time Cricket XI" />
+    <meta name="twitter:title" content="Ashes 5-0 - Free All-Time Cricket XI Draft Game" />
     <meta
       name="twitter:description"
-      content="Can your all-time Ashes XI win 5-0? Roll historic squads, make hidden picks, simulate a five-Test series and challenge friends to beat your team."
+      content="Draft players from historic Ashes squads, build an all-time XI and simulate a five-Test series. Play the free daily cricket challenge or challenge a friend."
     />
     <meta name="twitter:url" content="https://ashes-5-0.co.uk/" />
     <meta name="twitter:image" content="https://ashes-5-0.co.uk/android-chrome-512x512.png" />
@@ -44,37 +44,78 @@
     <div class="background glow-b"></div>
 
     <nav class="site-nav" aria-label="Primary" data-site-nav hidden>
-      <a class="ghost button-link site-nav-link" href="/">Home</a>
+      <a class="site-nav-brand" href="/" data-nav-brand>
+        <span class="site-nav-brand-mark" aria-hidden="true">5-0</span>
+        <span class="site-nav-brand-text">Ashes 5-0</span>
+      </a>
+      <button
+        class="ghost site-nav-toggle"
+        data-nav-toggle
+        type="button"
+        aria-expanded="false"
+        aria-controls="site-nav-links"
+      >
+        Menu
+      </button>
+      <div class="site-nav-links" id="site-nav-links" data-nav-links>
+        <a class="site-nav-link" href="/ashes" data-nav-link="play">Play</a>
+        <a class="site-nav-link" href="/daily" data-nav-link="daily">Daily</a>
+        <a class="site-nav-link" href="/world-cup" data-nav-link="worldCup">World Cup</a>
+        <a class="site-nav-link" href="/leaderboard" data-nav-link="leaderboard">Leaderboards</a>
+        <a class="site-nav-link" href="/how-to-play" data-nav-link="howToPlay">How to Play</a>
+        <a class="site-nav-link" href="/about" data-nav-link="about">About</a>
+      </div>
     </nav>
 
     <main class="shell">
       <section class="view home-view" data-home-view>
         <header class="hero">
           <div>
-            <p class="eyebrow" data-home-eyebrow>Ashes 5-0</p>
-            <h2 class="hero-title" data-home-title>Can your Ashes XI go 5-0?</h2>
-            <p class="hero-tagline" data-home-tagline>Roll a squad. Lock one player. Build your XI.</p>
+            <p class="eyebrow" data-home-eyebrow hidden>Ashes 5-0</p>
+            <h2 class="hero-title" data-home-title>Can your all-time Ashes XI go 5-0?</h2>
+            <p class="hero-tagline" data-home-tagline>Draft from historic squads and back your cricket judgement.</p>
             <p class="lede" data-home-lede>
-              Roll historic squads, lock one player at a time and build an all-time XI capable of completing an Ashes whitewash.
+              Draft players from historic Ashes squads, build your XI and simulate a five-Test series.
             </p>
-            <p class="hero-links">
-              Explore <a href="/ashes">Ashes mode</a>, the <a href="/daily">Daily Challenge</a>,
-              <a href="/challenge">Challenge a Friend</a>, the <a href="/leaderboard">player leaderboard</a>,
-              <a href="/how-to-play">how it works</a>, and <a href="/world-cup">World Cup mode</a>.
-            </p>
+            <div class="hero-actions" data-home-hero-actions>
+              <a class="primary button-link hero-primary-cta" href="/daily" data-home-primary-cta>Play today&apos;s challenge</a>
+              <a class="secondary button-link hero-secondary-cta" href="/ashes" data-home-secondary-cta>Build a full Ashes XI</a>
+            </div>
+            <ul class="hero-trust" data-home-trust>
+              <li>Free to play</li>
+              <li>No account required</li>
+              <li>New challenge every day</li>
+            </ul>
           </div>
-          <div class="hero-card">
-            <div class="stat">
-              <span data-home-squads-label>Squads</span>
-              <strong data-total-squads></strong>
+          <div class="hero-card hero-preview-card" data-home-preview-card>
+            <div class="preview-header">
+              <span class="preview-kicker" data-home-preview-kicker>Daily Challenge</span>
+              <strong class="preview-score" data-home-preview-score hidden></strong>
             </div>
-            <div class="stat">
-              <span data-home-players-label>Total players</span>
-              <strong data-total-players></strong>
+            <div class="preview-body">
+              <div class="preview-result">
+                <span data-home-preview-label>Seven players locked in</span>
+                <strong data-home-preview-summary>4 choices decide the XI</strong>
+              </div>
+              <div class="preview-lineup" data-home-preview-players>
+                <span>Compton</span>
+                <span>Bradman</span>
+                <span>Botham</span>
+              </div>
             </div>
-            <div class="stat">
-              <span data-home-format-label>Series format</span>
-              <strong data-home-format-value>5 Tests</strong>
+            <div class="preview-footer">
+              <div class="stat">
+                <span data-home-squads-label>Players today</span>
+                <strong data-total-squads>27</strong>
+              </div>
+              <div class="stat">
+                <span data-home-players-label>Leading score</span>
+                <strong data-total-players>No result yet</strong>
+              </div>
+              <div class="stat">
+                <span data-home-format-label>Locked in</span>
+                <strong data-home-format-value>7 players</strong>
+              </div>
             </div>
           </div>
         </header>
@@ -82,8 +123,8 @@
         <section class="panel config-panel">
           <div class="panel-header">
             <div>
-              <p class="panel-kicker" data-home-panel-kicker>How it works</p>
-              <h2 data-home-panel-title>Squad Roller</h2>
+              <p class="panel-kicker" data-home-panel-kicker>Choose a mode</p>
+              <h2 data-home-panel-title>Start with the Daily Challenge</h2>
             </div>
             <p class="panel-subtitle" data-home-panel-copy hidden></p>
           </div>
@@ -111,18 +152,27 @@
           </div>
 
           <div class="rules-grid" data-home-rules-grid>
-            <article class="rule-card">
-              <strong>1</strong>
-              <span data-home-rule-one>Roll a previous squad.</span>
-            </article>
-            <article class="rule-card">
-              <strong>2</strong>
-              <span>Pick one player and lock them into a valid XI slot.</span>
-            </article>
-            <article class="rule-card">
-              <strong>3</strong>
-              <span data-home-rule-three>Repeat until your XI is full, then simulate the series.</span>
-            </article>
+            <a class="mode-card mode-card-recommended" href="/daily" data-home-card="daily">
+              <span class="mode-card-badge">Recommended</span>
+              <strong>Daily Challenge</strong>
+              <p>Complete the same four-player challenge as everyone else and compare your result.</p>
+            </a>
+            <a class="mode-card" href="/ashes?mode=classic" data-home-card="classic">
+              <strong>Classic Draft</strong>
+              <p>Build a complete XI with player ratings visible while you draft.</p>
+            </a>
+            <a class="mode-card" href="/ashes?mode=memory" data-home-card="memory">
+              <strong>Memory Draft</strong>
+              <p>Build your XI without seeing player ratings. Rely on your own cricket knowledge.</p>
+            </a>
+            <a class="mode-card" href="/challenge" data-home-card="challenge">
+              <strong>Challenge a Friend</strong>
+              <p>Build a side, send the challenge and see who produces the stronger result.</p>
+            </a>
+            <a class="mode-card mode-card-worldcup" href="/world-cup" data-home-card="worldCup">
+              <strong>World Cup Mode</strong>
+              <p>Build an ODI XI, then play through the group stage, semi-final, and final.</p>
+            </a>
           </div>
 
           <div class="controls home-controls" data-home-controls>
@@ -335,9 +385,9 @@
           <div class="panel-header">
             <div>
               <p class="panel-kicker">Live strength meter</p>
-              <h2>Current XI</h2>
+              <h2 data-draft-meter-title>Current XI</h2>
             </div>
-            <p class="panel-subtitle">Ratings update as you draft.</p>
+            <p class="panel-subtitle" data-draft-meter-copy>Ratings update as you draft.</p>
           </div>
           <div class="metric-grid">
             <div class="metric">
@@ -464,6 +514,7 @@
             <button class="secondary" data-challenge-back type="button" hidden>Challenge them back</button>
             <button class="secondary" data-series-leaderboard type="button">Player leaderboard</button>
             <button class="secondary" data-share-result type="button">Share to X</button>
+            <button class="secondary" data-whatsapp-share type="button">Share on WhatsApp</button>
             <button class="secondary" data-copy-link type="button">Copy link</button>
             <button class="secondary" data-download-share type="button">Download image</button>
             <button class="secondary" data-reset-builder type="button">Reset builder</button>
@@ -486,20 +537,22 @@
       </section>
     </main>
 
+    <div class="sr-only" aria-live="polite" aria-atomic="true" data-live-region></div>
+
     <footer class="site-footer">
       <div class="footer-rule">---------ashes-5-0.co.uk---------</div>
       <nav class="footer-links" aria-label="Footer">
-        <a href="/">Home</a>
-        <a href="/ashes">Play Ashes mode</a>
+        <a href="/ashes">Play</a>
         <a href="/daily">Daily Challenge</a>
+        <a href="/world-cup">World Cup</a>
         <a href="/challenge">Challenge a Friend</a>
-        <a href="/leaderboard">Leaderboard</a>
-        <a href="/world-cup/daily">World Cup Daily</a>
-        <a href="/world-cup/leaderboard">World Cup leaderboard</a>
+        <a href="/leaderboard">Leaderboards</a>
         <a href="/how-to-play">How to Play</a>
         <a href="/about">About</a>
-        <a href="/world-cup">World Cup mode</a>
+        <a href="/methodology">Methodology</a>
+        <a href="/feedback">Feedback</a>
       </nav>
+      <p class="site-disclaimer">Independent fan-made cricket game. Not affiliated with the ECB, Cricket Australia, ICC, or any official competition.</p>
       <button class="secondary feedback-toggle" data-feedback-toggle type="button" aria-expanded="false">
         Feedback
       </button>

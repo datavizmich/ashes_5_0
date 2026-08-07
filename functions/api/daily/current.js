@@ -1,6 +1,14 @@
 import { errorResponse, json, methodNotAllowed } from "../../_lib/http.js";
-import { ensureDailyStoreSchema, fetchRankedDailyAttemptByParticipant } from "../../_lib/daily-store.js";
-import { buildDailyChallengeSummary, getCurrentDailyChallenge } from "../../../site/shared/daily-ashes.js";
+import {
+  ensureDailyStoreSchema,
+  fetchRankedDailyAttemptByParticipant,
+  listCompletedRankedDailyAttempts,
+} from "../../_lib/daily-store.js";
+import {
+  buildDailyChallengeSummary,
+  buildDailyResultsLeaderboard,
+  getCurrentDailyChallenge,
+} from "../../../site/shared/daily-ashes.js";
 import { validateDailyParticipantId } from "../../_lib/daily.js";
 
 export async function onRequestGet(context) {
@@ -16,10 +24,15 @@ export async function onRequestGet(context) {
       const participantId = validateDailyParticipantId(participantIdParam);
       rankedAttempt = await fetchRankedDailyAttemptByParticipant(context.env.DB, definition.id, participantId);
     }
+    const completedRankedAttempts = await listCompletedRankedDailyAttempts(context.env.DB, definition.id);
+    const leaderboardPreview = buildDailyResultsLeaderboard(completedRankedAttempts);
 
     return json({
       ok: true,
-      challenge: buildDailyChallengeSummary(definition, rankedAttempt),
+      challenge: {
+        ...buildDailyChallengeSummary(definition, rankedAttempt),
+        leaderboardPreview: leaderboardPreview.entries[0] ?? null,
+      },
     });
   } catch (error) {
     return errorResponse(error.status ?? 400, error instanceof Error ? error.message : "Could not load the daily challenge.");

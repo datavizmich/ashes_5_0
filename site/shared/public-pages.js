@@ -6,72 +6,86 @@ export const PUBLIC_PAGE_DEFS = {
   home: {
     key: "home",
     path: "/",
-    title: "Ashes 5-0 Game - Build an All-Time Cricket XI",
+    title: "Ashes 5-0 - Free All-Time Cricket XI Draft Game",
     description:
-      "Can your all-time Ashes XI win 5-0? Roll historic squads, make hidden picks, simulate a five-Test series and challenge friends to beat your team.",
+      "Draft players from historic Ashes squads, build an all-time XI and simulate a five-Test series. Play the free daily cricket challenge or challenge a friend.",
   },
   ashes: {
     key: "ashes",
     path: "/ashes",
-    title: "Ashes 5-0 - Build an All-Time Ashes XI",
+    title: "Build a Full Ashes XI | Ashes 5-0",
     description:
-      "Roll historic England and Australia squads, choose one player at a time and build an all-time Ashes XI capable of winning a five-Test series 5-0.",
+      "Build a full Ashes XI from historic squads. Draft in Classic mode with ratings visible or Memory mode with ratings hidden, then simulate a five-Test series.",
   },
   daily: {
     key: "daily",
     path: "/daily",
-    title: "Ashes 5-0 Daily - Today's Cricket XI Challenge",
+    title: "Daily Challenge | Ashes 5-0",
     description:
-      "Play today's shared Ashes challenge. Complete your XI through four hidden squad rolls, play one Test and compare your result with the daily leaderboard.",
+      "Play today's shared Ashes Daily Challenge. Seven players are locked in, everyone gets the same four-player draft, and your first ranked attempt sets your result.",
   },
   challenge: {
     key: "challenge",
     path: "/challenge",
-    title: "Ashes 5-0 Challenge - Build an XI and Face a Friend",
+    title: "Challenge a Friend | Ashes 5-0",
     description:
-      "Build a historic cricket XI, send a private challenge link and see whether a friend can draft a team capable of beating yours.",
+      "Build a historic Ashes XI, send a private challenge link, and see whether a friend can draft a stronger side over a five-Test series.",
   },
   leaderboard: {
     key: "leaderboard",
     path: "/leaderboard",
-    title: "Ashes 5-0 Leaderboard - Most Selected Cricket Legends",
+    title: "Community Favourites | Ashes 5-0",
     description:
-      "See the cricket legends most frequently selected in completed Ashes 5-0 teams, Daily Challenges and community drafts.",
+      "See which Ashes players are selected most often in completed teams, daily challenges, and community drafts.",
   },
   worldCupDaily: {
     key: "worldCupDaily",
     path: "/world-cup/daily",
     title: "World Cup Daily Challenge | Ashes 5-0",
     description:
-      "Play today's shared World Cup challenge. Complete your XI through four hidden squad rolls, play one ODI and compare your result with the daily leaderboard.",
+      "Play today's shared World Cup Daily Challenge. Seven players are locked in, everyone gets the same four-player ODI draft, and your first ranked attempt sets your result.",
   },
   worldCupLeaderboard: {
     key: "worldCupLeaderboard",
     path: "/world-cup/leaderboard",
-    title: "World Cup Player Leaderboard | Ashes 5-0",
+    title: "World Cup Community Favourites | Ashes 5-0",
     description:
-      "See the World Cup cricket legends most frequently selected in completed World Cup XIs, daily challenges and community drafts.",
+      "See which World Cup ODI players are selected most often in completed XIs, daily challenges, and community drafts.",
   },
   howToPlay: {
     key: "howToPlay",
     path: "/how-to-play",
-    title: "How to Play Ashes 5-0 - Cricket XI Draft Rules",
+    title: "How to Play | Ashes 5-0",
     description:
-      "Learn how to roll historic squads, make hidden player selections, build your XI, play the Daily Ashes Challenge and challenge friends.",
+      "Learn how Classic, Memory, Daily Challenge, Challenge a Friend, and World Cup mode work in Ashes 5-0.",
   },
   about: {
     key: "about",
     path: "/about",
-    title: "About Ashes 5-0 - The Historic Cricket XI Game",
+    title: "About | Ashes 5-0",
     description:
-      "Learn about Ashes 5-0, a historic cricket drafting game featuring classic squads, Test simulations, daily challenges and friend challenges.",
+      "Learn about Ashes 5-0, the independent cricket project inspired by historic squads, difficult selection calls, and simulation-led results.",
+  },
+  methodology: {
+    key: "methodology",
+    path: "/methodology",
+    title: "Methodology | Ashes 5-0",
+    description:
+      "Read a high-level explanation of Ashes 5-0 ratings, era comparisons, team balance, and how the cricket simulations use team strength.",
+  },
+  feedback: {
+    key: "feedback",
+    path: "/feedback",
+    title: "Feedback | Ashes 5-0",
+    description:
+      "Share bugs, ideas, and data corrections for Ashes 5-0, including feedback on ratings, copy, and the drafting experience.",
   },
   worldCup: {
     key: "worldCup",
     path: "/world-cup",
-    title: "World Cup Cricket XI Game | Ashes 5-0",
+    title: "World Cup ODI XI | Ashes 5-0",
     description:
-      "Build a World Cup cricket XI from historic tournament squads, make one selection at a time and simulate how your team performs.",
+      "Build a World Cup ODI XI from historic tournament squads, then play through the group stage and knockout rounds.",
   },
 };
 

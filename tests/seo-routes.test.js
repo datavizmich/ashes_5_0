@@ -9,8 +9,10 @@ import { onRequestGet as ashesRoute } from "../functions/ashes.js";
 import { onRequestGet as challengeLandingRoute } from "../functions/challenge.js";
 import { onRequestGet as shortChallengeRoute } from "../functions/c/[id].js";
 import { onRequestGet as dailyRoute } from "../functions/daily.js";
+import { onRequestGet as feedbackRoute } from "../functions/feedback.js";
 import { onRequestGet as homeRoute } from "../functions/index.js";
 import { onRequestGet as leaderboardRoute } from "../functions/leaderboard.js";
+import { onRequestGet as methodologyRoute } from "../functions/methodology.js";
 import { onRequestGet as shortResultRoute } from "../functions/r/[id].js";
 import { onRequestGet as worldCupRoute } from "../functions/world-cup.js";
 import { onRequestGet as worldCupDailyRoute } from "../functions/world-cup/daily.js";
@@ -37,6 +39,8 @@ const ROUTE_HANDLERS = {
   worldCupLeaderboard: worldCupLeaderboardRoute,
   howToPlay: howToPlayRoute,
   about: aboutRoute,
+  methodology: methodologyRoute,
+  feedback: feedbackRoute,
   worldCup: worldCupRoute,
 };
 
@@ -157,27 +161,36 @@ test("homepage leads with Ashes 5-0 and exposes crawlable navigation and footer 
   const { html } = await renderRoute(homeRoute, "/");
   const primaryNav = extractPrimaryNavHtml(html);
 
-  assert.equal(extractH1Text(html), "Can your Ashes XI go 5-0?");
-  assert.match(primaryNav, /\shidden(?:=|>|\s)/u);
-  assert.match(primaryNav, /href="\/"/u);
-  assert.doesNotMatch(primaryNav, /href="\/ashes"/u);
-  assert.doesNotMatch(primaryNav, /href="\/daily"/u);
-  assert.doesNotMatch(primaryNav, /href="\/challenge"/u);
-  assert.doesNotMatch(primaryNav, /href="\/leaderboard"/u);
-  assert.doesNotMatch(primaryNav, /href="\/how-to-play"/u);
-  assert.doesNotMatch(primaryNav, /href="\/about"/u);
-  assert.doesNotMatch(primaryNav, /href="\/world-cup"/u);
+  assert.equal(extractH1Text(html), "Can your all-time Ashes XI go 5-0?");
+  assert.doesNotMatch(primaryNav, /\shidden(?:=|>|\s)/u);
+  assert.match(primaryNav, /href="\/ashes"/u);
+  assert.match(primaryNav, /href="\/daily"/u);
+  assert.match(primaryNav, /href="\/world-cup"/u);
+  assert.match(primaryNav, /href="\/leaderboard"/u);
+  assert.match(primaryNav, /href="\/how-to-play"/u);
+  assert.match(primaryNav, /href="\/about"/u);
+  assert.match(html, /data-home-primary-cta/u);
+  assert.match(html, /href="\/daily"[^>]*data-home-primary-cta/u);
+  assert.match(html, /href="\/ashes"[^>]*data-home-secondary-cta/u);
+  assert.match(html, /Free to play/u);
+  assert.match(html, /No account required/u);
+  assert.match(html, /New challenge every day/u);
+  assert.match(html, /Daily Challenge/u);
+  assert.match(html, /Classic Draft/u);
+  assert.match(html, /Memory Draft/u);
+  assert.match(html, /Challenge a Friend/u);
+  assert.match(html, /World Cup Mode/u);
 
   for (const href of [
     "/ashes",
     "/daily",
     "/challenge",
     "/leaderboard",
-    "/world-cup/daily",
-    "/world-cup/leaderboard",
+    "/world-cup",
     "/how-to-play",
     "/about",
-    "/world-cup",
+    "/methodology",
+    "/feedback",
   ]) {
     assert.match(html, new RegExp(`href="${href}"`, "u"));
   }
@@ -209,7 +222,7 @@ test("challenge landing explains the friend flow in initial HTML", async () => {
   const { html } = await renderRoute(challengeLandingRoute, "/challenge");
 
   assert.equal(extractTitle(html), PUBLIC_PAGE_DEFS.challenge.title);
-  assert.equal(extractH1Text(html), "Build a cricket XI and face a friend");
+  assert.equal(extractH1Text(html), "Build an Ashes XI and challenge a friend");
   assert.match(html, /data-challenge-mode/u);
   assert.match(html, /<option value="classic">Classic<\/option>/u);
   assert.match(html, /<option value="memory">Memory<\/option>/u);
@@ -243,19 +256,31 @@ test("world cup daily route includes stable explanatory content and ODI language
 
 test("how-to-play and about routes expose stable crawler-facing sections", async () => {
   const howToPlay = await renderRoute(howToPlayRoute, "/how-to-play");
-  assert.match(howToPlay.html, /Full XI drafting/u);
-  assert.match(howToPlay.html, /Five-Test simulation/u);
+  assert.match(howToPlay.html, /Classic Draft/u);
+  assert.match(howToPlay.html, /Memory Draft/u);
   assert.match(howToPlay.html, /Daily Ashes Challenge/u);
   assert.match(howToPlay.html, /Challenge a Friend/u);
   assert.match(howToPlay.html, /World Cup mode/u);
-  assert.match(howToPlay.html, /Player Leaderboards/u);
+  assert.match(howToPlay.html, /Community favourites/u);
 
   const about = await renderRoute(aboutRoute, "/about");
   assert.match(about.html, /What is Ashes 5-0\?/u);
   assert.match(about.html, /Game Modes/u);
   assert.match(about.html, /Simulations and Ratings/u);
   assert.match(about.html, /Other Projects/u);
+  assert.match(about.html, /datavizmich/u);
   assert.match(about.html, /Feedback/u);
+});
+
+test("methodology and feedback routes expose stable crawler-facing sections", async () => {
+  const methodology = await renderRoute(methodologyRoute, "/methodology");
+  assert.match(methodology.html, /Player ratings/u);
+  assert.match(methodology.html, /Role and position fit/u);
+  assert.match(methodology.html, /Corrections/u);
+
+  const feedback = await renderRoute(feedbackRoute, "/feedback");
+  assert.match(feedback.html, /Report a bug or suggest an improvement/u);
+  assert.match(feedback.html, /Gameplay bugs/u);
 });
 
 test("leaderboard route uses neutral loading content instead of zero placeholders", async () => {
@@ -269,8 +294,8 @@ test("world cup leaderboard route uses world-cup-specific heading language", asy
   const { html } = await renderRoute(worldCupLeaderboardRoute, "/world-cup/leaderboard");
 
   assert.equal(extractTitle(html), PUBLIC_PAGE_DEFS.worldCupLeaderboard.title);
-  assert.equal(extractH1Text(html), "See which World Cup players appear most often in completed XIs.");
-  assert.match(html, /World Cup Daily picks are counted/u);
+  assert.equal(extractH1Text(html), "Community favourites from completed World Cup XIs.");
+  assert.match(html, /community favourites/u);
   assert.match(html, /Loading community statistics\./u);
   assert.doesNotMatch(html, /Ashes players appear most often/u);
 });
