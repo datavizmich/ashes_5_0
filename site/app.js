@@ -2347,9 +2347,11 @@ function playerCanPlay(player) {
 }
 
 function slotLabelsFromIndexes(slotIndexes = []) {
-  return slotIndexes
-    .map((slotIndex) => XI_SLOTS[slotIndex]?.label ?? "")
-    .filter(Boolean);
+  return [...new Set(
+    slotIndexes
+      .map((slotIndex) => XI_SLOTS[slotIndex]?.label ?? "")
+      .filter(Boolean),
+  )];
 }
 
 function openSlotIndexes() {
@@ -2368,14 +2370,16 @@ function playerRoleText(player) {
     : "Historic player";
 }
 
-function playerEraText(player) {
-  const team = String(player?.squadTeam ?? "").trim();
-  const year = String(player?.squadYear ?? "").trim();
-  return `${team}${team && year ? " " : ""}${year}`.trim();
-}
-
 function playerRatingText(player) {
   return `Bat ${player.batting} / Bowl ${player.bowling}`;
+}
+
+function playerCardNoteText(note = "") {
+  const normalized = String(note ?? "").trim();
+  if (!normalized) return "";
+  if (normalized === currentModeDraftNote()) return "";
+  if (normalized === "Ratings stay hidden in the Daily Challenge.") return "";
+  return normalized;
 }
 
 function buildPlayerCardHtml(player, {
@@ -2388,10 +2392,11 @@ function buildPlayerCardHtml(player, {
   const showRatings = showPlayerRatingsInDraft();
   const eligibleLabels = slotLabelsFromIndexes(slotIndexes);
   const eligibleText = eligibleLabels.length ? eligibleLabels.join(", ") : "No open slot";
+  const noteText = playerCardNoteText(note);
   const ratingHtml = showRatings
     ? `<span class="player-rating" aria-label="${escapeHtml(playerRatingText(player))}">${escapeHtml(playerRatingText(player))}</span>`
     : "";
-  const noteHtml = note ? `<span class="player-note">${escapeHtml(note)}</span>` : "";
+  const noteHtml = noteText ? `<span class="player-note">${escapeHtml(noteText)}</span>` : "";
 
   return `
     <button
@@ -2407,7 +2412,6 @@ function buildPlayerCardHtml(player, {
       </span>
       <span class="player-role">${escapeHtml(playerRoleText(player))}</span>
       <span class="player-meta">Eligible: ${escapeHtml(eligibleText)}</span>
-      <span class="player-meta">${escapeHtml(playerEraText(player))}</span>
       ${noteHtml}
     </button>
   `;
@@ -2447,10 +2451,37 @@ function playerSlotScore(player, slot) {
   return batting * 0.35 + bowling * 0.35 + fielding * 0.2 + experience * 0.1 + roleBonus;
 }
 
+function hasRole(player, roles) {
+  return roles.some((role) => player.roles.includes(role));
+}
+
+function bowlingRoleBoost(player) {
+  if (hasRole(player, ["Fast Bowler", "Pace Bowler", "Seam Bowler"])) return 8;
+  if (player.roles.includes("Spinner")) return 7;
+  if (player.roles.includes("All-rounder")) return 4;
+  return 0;
+}
+
+function wicketkeeperFieldingBonus(lineup) {
+  const wicketkeeper = lineup.find((player) => player.roles.includes("Wicketkeeper"));
+  if (!wicketkeeper) return 0;
+  return Math.max(0, wicketkeeper.fielding - 60) * 0.08;
+}
+
 function lineupScore(lineup) {
-  const batting = average(lineup.slice(0, 7).map((player) => player.batting));
-  const bowling = average(lineup.slice(7).map((player) => player.bowling));
-  const fielding = average(lineup.map((player) => player.fielding));
+  const topSeven = lineup.slice(0, 7);
+  const tail = lineup.slice(7);
+  const battingCore = average(topSeven.map((player) => player.batting));
+  const tailSupport = average(tail.map((player) => player.batting));
+  const bowlingCore = [...lineup]
+    .sort(
+      (left, right) =>
+        (right.bowling + bowlingRoleBoost(right) * 0.75) - (left.bowling + bowlingRoleBoost(left) * 0.75),
+    )
+    .slice(0, Math.min(5, lineup.length));
+  const batting = battingCore * 0.9 + tailSupport * 0.1;
+  const bowling = average(bowlingCore.map((player) => player.bowling + bowlingRoleBoost(player) * 0.75));
+  const fielding = average(lineup.map((player) => player.fielding)) + wicketkeeperFieldingBonus(lineup);
   const experience = average(lineup.map((player) => player.experience));
   return {
     batting,
@@ -2666,11 +2697,21 @@ function formatDismissal(card) {
   return card.dismissal || "c";
 }
 
-function buildBattingScorecard(lineup, opposition, inningsIndex, conditions = {}, chaseTarget = null, firstInningsLead = 0) {
-  const order = battingOrder(lineup);
+function estimateInningsBalls(batters, extras, wickets, maxBalls = null) {
+  const strikerBalls = batters.reduce((sum, card) => sum + (card.dnb ? 0 : card.balls), 0);
+  const extraBalls = clamp(Math.round(extras * 0.35 + wickets * 0.8 + Math.max(0, normalRandom() * 8)), 0, 18);
+  const estimated = strikerBalls + extraBalls;
+  if (maxBalls !== null) return clamp(estimated, 0, maxBalls);
+  if (estimated === 0) return 0;
+  return clamp(estimated, 60, 540);
+}
+
+function buildBattingScorecard(lineup, opposition, inningsIndex, conditions = {}, chaseTarget = null, firstInningsLead = 0, options = {}) {
+  const order = options.battingOrder ?? battingOrder(lineup);
   const battingStrength = lineupScore(lineup).batting;
   const bowlingStrength = lineupScore(opposition).bowling;
   const pitch = conditions.pitch ?? "balanced";
+  const maxBalls = Number.isFinite(options.maxBalls) ? Math.max(0, Math.round(options.maxBalls)) : null;
   const extras = clamp(
     Math.round(2 + Math.random() * 12 + bowlingStrength / 18 + inningsIndex * 1.4),
     0,
@@ -2681,19 +2722,26 @@ function buildBattingScorecard(lineup, opposition, inningsIndex, conditions = {}
   let wickets = 0;
   let declared = false;
   let chaseComplete = false;
+  let ballsRemaining = maxBalls;
   const batters = [];
 
   for (let index = 0; index < order.length; index += 1) {
+    if (ballsRemaining !== null && ballsRemaining <= 0) break;
+
     const player = order[index];
     const rawRuns = sampleBatterScore(player, bowlingStrength, pitch, inningsIndex);
-    const adjustedRuns = clamp(
+    let adjustedRuns = clamp(
       Math.round(rawRuns * (0.85 + battingStrength / 260) + normalRandom() * 5),
       0,
       260,
     );
-    const balls = adjustedRuns === 0
+    const plannedBalls = adjustedRuns === 0
       ? clamp(Math.round(2 + Math.random() * 11), 1, 24)
       : clamp(Math.round(adjustedRuns * (1.2 + Math.random() * 0.7) + 5), 1, 260);
+    const balls = ballsRemaining === null ? plannedBalls : clamp(plannedBalls, 1, ballsRemaining);
+    if (balls < plannedBalls && adjustedRuns > 0) {
+      adjustedRuns = clamp(Math.round(adjustedRuns * ((balls / plannedBalls) ** 0.92)), 0, adjustedRuns);
+    }
     const fours = adjustedRuns === 0
       ? 0
       : clamp(Math.round(adjustedRuns / 11 + Math.random() * 3), 0, Math.max(0, Math.floor(adjustedRuns / 4)));
@@ -2712,6 +2760,10 @@ function buildBattingScorecard(lineup, opposition, inningsIndex, conditions = {}
       dismissal: randomChoice(dismissalOptions) ?? "c",
     };
 
+    if (ballsRemaining !== null) {
+      ballsRemaining = Math.max(0, ballsRemaining - balls);
+    }
+
     runs += adjustedRuns;
 
     if (chaseTarget !== null && runs + extras >= chaseTarget) {
@@ -2719,6 +2771,14 @@ function buildBattingScorecard(lineup, opposition, inningsIndex, conditions = {}
       card.notOut = true;
       card.dismissal = "not out";
       chaseComplete = true;
+      batters.push(card);
+      break;
+    }
+
+    if (ballsRemaining !== null && ballsRemaining <= 0) {
+      card.out = false;
+      card.notOut = true;
+      card.dismissal = "not out";
       batters.push(card);
       break;
     }
@@ -2754,7 +2814,7 @@ function buildBattingScorecard(lineup, opposition, inningsIndex, conditions = {}
   }
 
   const total = runs + extras;
-  const ballsFaced = clamp(Math.round(total * 1.45 + wickets * 4 + Math.random() * 20), 60, 540);
+  const ballsFaced = estimateInningsBalls(batters, extras, wickets, maxBalls);
   const notOutCount = batters.filter((card) => card.notOut).length;
   const topBatter = [...batters]
     .filter((card) => !card.dnb)
@@ -2775,8 +2835,54 @@ function buildBattingScorecard(lineup, opposition, inningsIndex, conditions = {}
   };
 }
 
-function buildBowlingScorecard(lineup, inningsTotal, wickets, teamEdge = 0) {
-  const ranked = teamBowlingRanking(lineup, teamEdge);
+function reconcileBowlingRuns(bowlers, targetRuns) {
+  if (!bowlers.length) return bowlers;
+  if (targetRuns <= 0) {
+    bowlers.forEach((bowler) => {
+      bowler.runs = 0;
+      bowler.maidens = clamp(bowler.maidens, 0, Math.floor(bowler.balls / 6));
+    });
+    return bowlers;
+  }
+
+  const totalBalls = bowlers.reduce((sum, bowler) => sum + bowler.balls, 0) || 1;
+  const provisional = bowlers.map((bowler) =>
+    Math.max(
+      0.5,
+      targetRuns * (bowler.balls / totalBalls) +
+        (100 - bowler.player.bowling) * 0.18 -
+        bowler.wickets * 1.4 +
+        normalRandom() * 3,
+    ),
+  );
+  const provisionalTotal = provisional.reduce((sum, value) => sum + value, 0) || 1;
+  const exact = provisional.map((value) => (targetRuns * value) / provisionalTotal);
+  const assigned = exact.map((value) => Math.floor(value));
+  let remainder = targetRuns - assigned.reduce((sum, value) => sum + value, 0);
+  const order = exact
+    .map((value, index) => ({
+      index,
+      remainder: value - assigned[index],
+      tiebreak: Math.random(),
+    }))
+    .sort((a, b) => b.remainder - a.remainder || b.tiebreak - a.tiebreak);
+
+  for (let index = 0; index < order.length && remainder > 0; index += 1, remainder -= 1) {
+    assigned[order[index].index] += 1;
+  }
+
+  bowlers.forEach((bowler, index) => {
+    bowler.runs = assigned[index];
+    const overs = bowler.balls / 6;
+    const economyMaidenCap = Math.max(0, Math.floor(overs - bowler.runs / 7.5) + 1);
+    bowler.maidens = clamp(bowler.maidens, 0, Math.min(Math.floor(overs), economyMaidenCap));
+  });
+
+  return bowlers;
+}
+
+function buildBowlingScorecard(lineup, inningsTotal, wickets, teamEdge = 0, options = {}) {
+  const ranked = options.rankedBowlers ?? teamBowlingRanking(lineup, teamEdge);
   const bowlers = ranked.map(({ player, value }) => ({
     name: player.name,
     player,
@@ -2828,11 +2934,13 @@ function buildBowlingScorecard(lineup, inningsTotal, wickets, teamEdge = 0) {
 
   weighted.forEach((entry) => {
     const bowler = entry.bowler;
-    const ballShare = bowler.balls / (totalOvers * 6);
-    bowler.runs = clamp(
-      Math.round(inningsTotal * ballShare + (100 - bowler.player.bowling) * 0.22 + Math.random() * 7),
+    bowler.runs = Math.max(
       0,
-      Math.max(0, inningsTotal + 24),
+      inningsTotal * (bowler.balls / Math.max(1, totalOvers * 6)) +
+        (100 - bowler.player.bowling) * 0.22 -
+        bowler.wickets * 1.2 +
+        teamEdge * -0.08 +
+        Math.random() * 7,
     );
     bowler.maidens = clamp(
       Math.round(bowler.balls / 24 + (bowler.player.bowling - 50) / 24 + Math.random() * 1.4),
@@ -2840,6 +2948,11 @@ function buildBowlingScorecard(lineup, inningsTotal, wickets, teamEdge = 0) {
       12,
     );
   });
+
+  reconcileBowlingRuns(
+    weighted.map((entry) => entry.bowler).filter((bowler) => bowler.balls > 0),
+    inningsTotal,
+  );
 
   return weighted
     .map((entry) => entry.bowler)
@@ -4653,9 +4766,9 @@ function renderSeriesSummary() {
   els.playAgain.classList.toggle("secondary", canSendBack);
   els.sendResultBack.classList.toggle("primary", canSendBack);
   els.sendResultBack.classList.toggle("secondary", !canSendBack);
-  els.shareResult.textContent = canSendBack ? "Share result" : "Share to X";
-  els.copyLink.textContent = canSendBack ? "Copy result link" : "Copy link";
-  els.downloadShare.textContent = canSendBack ? "Download result image" : "Download image";
+  els.shareResult.textContent = primaryShareButtonLabel();
+  els.copyLink.textContent = "Copy link";
+  els.downloadShare.textContent = "Download image";
   els.seriesTitle.textContent = competition.seriesTitle;
   if (els.seriesNext) {
     els.seriesNext.disabled = revealedAll;
@@ -5157,22 +5270,6 @@ function weightedPick(items, getWeight) {
   return items[items.length - 1];
 }
 
-function sampleOutcome(userTeam, starTeam) {
-  const edge = userTeam.overall - starTeam.overall;
-
-  const drawChance = clamp(0.24 - Math.abs(edge) / 500, 0.08, 0.27);
-
-  const winChance =
-    (1 - drawChance) *
-    (1 / (1 + Math.exp(-edge / 40)));
-
-  const roll = Math.random();
-
-  if (roll < winChance) return "win";
-  if (roll < winChance + drawChance) return "draw";
-  return "loss";
-}
-
 function pluralize(value, singular, plural = `${singular}s`) {
   return value === 1 ? singular : plural;
 }
@@ -5224,18 +5321,11 @@ function inningsScoreLabel(innings) {
   return `${innings.total}/${innings.wickets}${innings.declared ? "d" : ""}`;
 }
 
-function teamBowlingRanking(lineup, teamEdge = 0) {
+function teamBowlingRanking(lineup, teamEdge = 0, noiseScale = 22) {
   return [...lineup]
     .map((player) => {
-      const roleBoost = player.roles.includes("Fast Bowler")
-        ? 8
-        : player.roles.includes("Spinner")
-          ? 7
-          : player.roles.includes("All-rounder")
-            ? 4
-            : 0;
-
-      const noise = normalRandom() * 22;
+      const roleBoost = bowlingRoleBoost(player);
+      const noise = normalRandom() * noiseScale;
 
       return {
         player,
@@ -5250,7 +5340,7 @@ function teamBowlingRanking(lineup, teamEdge = 0) {
     .sort((a, b) => b.value - a.value);
 }
 
-function teamBattingRanking(lineup, teamEdge = 0) {
+function teamBattingRanking(lineup, teamEdge = 0, noiseScale = 18) {
   return [...lineup]
     .map((player) => {
       const roleBoost = player.roles.includes("Opener")
@@ -5269,7 +5359,7 @@ function teamBattingRanking(lineup, teamEdge = 0) {
         ? -8
         : 0;
 
-      const noise = normalRandom() * 18;
+      const noise = normalRandom() * noiseScale;
 
       return {
         player,
@@ -5285,72 +5375,10 @@ function teamBattingRanking(lineup, teamEdge = 0) {
     .sort((a, b) => b.value - a.value);
 }
 
-function formatBowlingFigures(player, teamEdge = 0) {
-  const bowling = player?.bowling ?? 50;
-
-  const wickets = clamp(
-    Math.round(0.5 + bowling / 22 + Math.random() * 3 + teamEdge / 20),
-    0,
-    7
-  );
-
-  const runs = clamp(
-    Math.round(
-      35 +
-      (100 - bowling) * 0.5 +
-      Math.random() * 35 -
-      wickets * 4 -
-      teamEdge * 0.5
-    ),
-    12,
-    140
-  );
-
-  return `${wickets}/${runs}`;
-}
-
-function simulateBoxScore(lineup, teamEdge = 0) {
-  const topBatter = weightedPick(lineup, (player) => {
-    const roleBoost = player.roles.includes("Opener")
-      ? 1.15
-      : player.roles.includes("Top Order")
-        ? 1.12
-        : player.roles.includes("Middle Order")
-          ? 1.08
-          : 1;
-
-    return Math.max(1, player.batting ** 2 * roleBoost);
-  });
-
-  const topBowler = weightedPick(lineup, (player) => {
-    const roleBoost = player.roles.includes("Fast Bowler")
-      ? 1.2
-      : player.roles.includes("Spinner")
-        ? 1.15
-        : player.roles.includes("All-rounder")
-          ? 0.85
-          : 0.25;
-
-    return Math.max(1, player.bowling ** 2 * roleBoost);
-  });
-
+function buildMatchPlan(lineup) {
   return {
-    batter: {
-      name: topBatter?.name ?? "Unknown",
-      runs: clamp(
-        Math.round(
-          (topBatter?.batting ?? 50) * 0.85 +
-          normalRandom() * 75 +
-          teamEdge * 0.8
-        ),
-        18,
-        190
-      ),
-    },
-    bowler: {
-      name: topBowler?.name ?? "Unknown",
-      figures: formatBowlingFigures(topBowler ?? { bowling: 50 }, teamEdge),
-    },
+    battingOrder: teamBattingRanking(lineup, 0, 7).map((item) => item.player),
+    bowlingRanks: teamBowlingRanking(lineup, 0, 8),
   };
 }
 
@@ -5391,6 +5419,93 @@ function sampleBatterScore(player, bowlingStrength, pitch, inningsIndex) {
   return clamp(Math.round(score), 0, 260);
 }
 
+function sampleLimitedOversBatterOutcome(
+  player,
+  bowlingStrength,
+  pitch,
+  inningsIndex,
+  wickets,
+  currentRuns,
+  extras,
+  chaseTarget,
+  ballsRemaining,
+  maxBalls,
+) {
+  const batting = player?.batting ?? 45;
+  const experience = player?.experience ?? 50;
+  const phase = 1 - ballsRemaining / Math.max(1, maxBalls);
+  const pitchModifier = {
+    flat: 8,
+    balanced: 0,
+    green: -8,
+    turning: -5,
+    deteriorating: -7,
+  }[pitch] ?? 0;
+  const roleAggression = player.roles.includes("Opener")
+    ? 1.15
+    : player.roles.includes("Top Order")
+      ? 1.08
+      : player.roles.includes("Middle Order")
+        ? 1
+        : player.roles.includes("All-rounder")
+          ? 0.98
+          : 0.9;
+  const wicketPressure = wickets >= 6 ? -16 : wickets >= 4 ? -8 : 0;
+  const requiredRate =
+    chaseTarget === null
+      ? 5.6
+      : (Math.max(0, chaseTarget - (currentRuns + extras)) * 6) / Math.max(1, ballsRemaining);
+  const strikeRate = clamp(
+    70 +
+      batting * 0.42 +
+      experience * 0.05 -
+      bowlingStrength * 0.2 +
+      pitchModifier +
+      phase * 18 +
+      (roleAggression - 1) * 48 +
+      (requiredRate - 5.6) * 6 +
+      wicketPressure +
+      normalRandom() * 16,
+    45,
+    172,
+  );
+  const ballIntent = player.roles.includes("Opener")
+    ? 34
+    : player.roles.includes("Top Order")
+      ? 28
+      : player.roles.includes("Middle Order")
+        ? 20
+        : player.roles.includes("All-rounder")
+          ? 15
+          : 11;
+  const plannedBalls = clamp(
+    Math.round(
+      ballIntent * (0.56 + batting / 180) * (1 - phase * 0.45) +
+        experience * 0.05 +
+        normalRandom() * 7,
+    ),
+    1,
+    ballsRemaining,
+  );
+  const duckChance = clamp(
+    0.14 - batting / 1000 - experience / 2800 + Math.max(0, bowlingStrength - batting) / 850 + (requiredRate > 7 ? 0.015 : 0),
+    0.03,
+    0.24,
+  );
+
+  if (Math.random() < duckChance) {
+    return {
+      runs: clamp(Math.floor(Math.random() * 4), 0, 6),
+      balls: clamp(Math.round(1 + Math.random() * 6), 1, ballsRemaining),
+    };
+  }
+
+  return {
+    runs: clamp(Math.round(plannedBalls * strikeRate / 100 + normalRandom() * 5), 0, 180),
+    balls: plannedBalls,
+  };
+}
+
 function shouldDeclare(runs, wickets, inningsIndex, lead = 0) {
   if (!(inningsIndex === 1 || inningsIndex === 3)) return false;
   if (wickets >= 9) return false;
@@ -5406,49 +5521,9 @@ function shouldDeclare(runs, wickets, inningsIndex, lead = 0) {
   return false;
 }
 
-function simulateInnings(lineup, opposition, inningsIndex, conditions = {}, chaseTarget = null, firstInningsLead = 0) {
-  const order = battingOrder(lineup);
-  const bowlingStrength = lineupScore(opposition).bowling;
-  const pitch = conditions.pitch ?? "balanced";
-
-  let runs = 0;
-  let wickets = 0;
-  let declared = false;
-
-  for (let i = 0; i < order.length; i += 1) {
-    runs += sampleBatterScore(order[i], bowlingStrength, pitch, inningsIndex);
-    runs += Math.round(Math.random() * 7); // extras
-
-    if (chaseTarget !== null && runs >= chaseTarget) {
-      return {
-        runs,
-        wickets,
-        declared: false,
-        chaseComplete: true,
-      };
-    }
-
-    wickets += 1;
-
-    if (shouldDeclare(runs, wickets, inningsIndex, firstInningsLead)) {
-      declared = true;
-      break;
-    }
-
-    if (wickets >= 10) break;
-  }
-
+function buildDidNotBatInnings(lineup, battingOrderOverride = null) {
   return {
-    runs,
-    wickets,
-    declared,
-    chaseComplete: false,
-  };
-}
-
-function buildDidNotBatInnings(lineup) {
-  return {
-    batters: battingOrder(lineup).map((player) => ({
+    batters: (battingOrderOverride ?? battingOrder(lineup)).map((player) => ({
       name: player.name,
       runs: 0,
       balls: 0,
@@ -5473,8 +5548,16 @@ function buildDidNotBatInnings(lineup) {
   };
 }
 
-function buildLimitedOversBattingScorecard(lineup, opposition, inningsIndex, conditions = {}, chaseTarget = null, oversLimit = 50) {
-  const order = battingOrder(lineup);
+function buildLimitedOversBattingScorecard(
+  lineup,
+  opposition,
+  inningsIndex,
+  conditions = {},
+  chaseTarget = null,
+  oversLimit = 50,
+  options = {},
+) {
+  const order = options.battingOrder ?? battingOrder(lineup);
   const bowlingStrength = lineupScore(opposition).bowling;
   const pitch = conditions.pitch ?? "balanced";
   const maxBalls = oversLimit * 6;
@@ -5494,28 +5577,20 @@ function buildLimitedOversBattingScorecard(lineup, opposition, inningsIndex, con
       break;
     }
 
-    const rawRuns = sampleBatterScore(player, bowlingStrength, pitch, inningsIndex);
-    const batting = player?.batting ?? 45;
-    const aggression = player.roles.includes("Opener")
-      ? 1.15
-      : player.roles.includes("Top Order")
-        ? 1.08
-        : player.roles.includes("Middle Order")
-          ? 1.0
-          : player.roles.includes("All-rounder")
-            ? 0.95
-            : 0.88;
-    const pressure = clamp(0.82 + ballsRemaining / maxBalls * 0.28, 0.82, 1.1);
-    const adjustedRuns = clamp(
-      Math.round(rawRuns * aggression * pressure * 0.9 + batting * 0.08 + normalRandom() * 5),
-      0,
-      180,
-    );
-    const balls = clamp(
-      Math.round(4 + adjustedRuns * (0.58 + Math.random() * 0.34) + (100 - batting) * 0.03),
-      1,
+    const outcome = sampleLimitedOversBatterOutcome(
+      player,
+      bowlingStrength,
+      pitch,
+      inningsIndex,
+      wickets,
+      runs,
+      totalExtras,
+      chaseTarget,
       ballsRemaining,
+      maxBalls,
     );
+    const adjustedRuns = outcome.runs;
+    const balls = outcome.balls;
 
     ballsRemaining -= balls;
     runs += adjustedRuns;
@@ -5591,8 +5666,8 @@ function buildLimitedOversBattingScorecard(lineup, opposition, inningsIndex, con
   };
 }
 
-function buildLimitedOversBowlingScorecard(lineup, inningsBalls, wickets, teamEdge = 0) {
-  const ranked = teamBowlingRanking(lineup, teamEdge);
+function buildLimitedOversBowlingScorecard(lineup, inningsTotal, inningsBalls, wickets, teamEdge = 0, options = {}) {
+  const ranked = options.rankedBowlers ?? teamBowlingRanking(lineup, teamEdge);
   const bowlers = ranked.map(({ player, value }) => ({
     name: player.name,
     player,
@@ -5636,11 +5711,13 @@ function buildLimitedOversBowlingScorecard(lineup, inningsBalls, wickets, teamEd
   });
 
   working.forEach((bowler) => {
-    const ballShare = bowler.balls / (totalOvers * 6);
-    bowler.runs = clamp(
-      Math.round(inningsBalls * ballShare + (100 - bowler.player.bowling) * 0.18 + Math.random() * 6),
+    bowler.runs = Math.max(
       0,
-      Math.max(0, inningsBalls + 18),
+      inningsTotal * (bowler.balls / Math.max(1, totalOvers * 6)) +
+        (100 - bowler.player.bowling) * 0.16 -
+        bowler.wickets * 1.3 +
+        teamEdge * -0.1 +
+        Math.random() * 6,
     );
     bowler.maidens = clamp(
       Math.round(bowler.balls / 30 + (bowler.player.bowling - 50) / 30 + Math.random() * 1.2),
@@ -5649,7 +5726,10 @@ function buildLimitedOversBowlingScorecard(lineup, inningsBalls, wickets, teamEd
     );
   });
 
+  reconcileBowlingRuns(working.filter((bowler) => bowler.balls > 0), inningsTotal);
+
   return working
+    .filter((bowler) => bowler.balls > 0)
     .map((bowler) => ({
       name: bowler.name,
       overs: ballsToOvers(bowler.balls),
@@ -5660,17 +5740,37 @@ function buildLimitedOversBowlingScorecard(lineup, inningsBalls, wickets, teamEd
     .sort((a, b) => b.wickets - a.wickets || a.runs - b.runs);
 }
 
+function testMatchBallBudget(conditions = {}) {
+  const pitchAdjustment = {
+    flat: 80,
+    balanced: 0,
+    green: -40,
+    turning: -20,
+    deteriorating: -90,
+  }[conditions.pitch ?? "balanced"] ?? 0;
+  return 2700 + pitchAdjustment;
+}
+
 function simulateTestMatch(userLineup, starLineup, conditions = {}) {
-  const user1 = buildBattingScorecard(userLineup, starLineup, 1, conditions);
-  const star1 = buildBattingScorecard(starLineup, userLineup, 2, conditions);
+  const userPlan = buildMatchPlan(userLineup);
+  const starPlan = buildMatchPlan(starLineup);
+  const user1 = buildBattingScorecard(userLineup, starLineup, 1, conditions, null, 0, {
+    battingOrder: userPlan.battingOrder,
+  });
+  const star1 = buildBattingScorecard(starLineup, userLineup, 2, conditions, null, 0, {
+    battingOrder: starPlan.battingOrder,
+  });
 
   const userLead = user1.total - star1.total;
-  const user2 = buildBattingScorecard(userLineup, starLineup, 3, conditions, null, userLead);
+  const user2 = buildBattingScorecard(userLineup, starLineup, 3, conditions, null, userLead, {
+    battingOrder: userPlan.battingOrder,
+  });
 
   const target = user1.total + user2.total - star1.total + 1;
+  const remainingFourthInningsBalls = Math.max(0, testMatchBallBudget(conditions) - user1.balls - star1.balls - user2.balls);
   const star2 = target <= 0
     ? {
-        batters: battingOrder(starLineup).map((player) => ({
+        batters: starPlan.battingOrder.map((player) => ({
           name: player.name,
           runs: 0,
           balls: 0,
@@ -5693,12 +5793,23 @@ function simulateTestMatch(userLineup, starLineup, conditions = {}) {
         topBatter: null,
         bowling: [],
       }
-    : buildBattingScorecard(starLineup, userLineup, 4, conditions, target);
+    : buildBattingScorecard(starLineup, userLineup, 4, conditions, target, 0, {
+        battingOrder: starPlan.battingOrder,
+        maxBalls: remainingFourthInningsBalls,
+      });
 
-  const user1Bowling = buildBowlingScorecard(starLineup, user1.total, user1.wickets, 0);
-  const star1Bowling = buildBowlingScorecard(userLineup, star1.total, star1.wickets, 0);
-  const user2Bowling = buildBowlingScorecard(starLineup, user2.total, user2.wickets, userLead);
-  const star2Bowling = target <= 0 ? [] : buildBowlingScorecard(userLineup, star2.total, star2.wickets, -userLead);
+  const user1Bowling = buildBowlingScorecard(starLineup, user1.total, user1.wickets, 0, {
+    rankedBowlers: starPlan.bowlingRanks,
+  });
+  const star1Bowling = buildBowlingScorecard(userLineup, star1.total, star1.wickets, 0, {
+    rankedBowlers: userPlan.bowlingRanks,
+  });
+  const user2Bowling = buildBowlingScorecard(starLineup, user2.total, user2.wickets, userLead, {
+    rankedBowlers: starPlan.bowlingRanks,
+  });
+  const star2Bowling = target <= 0 ? [] : buildBowlingScorecard(userLineup, star2.total, star2.wickets, -userLead, {
+    rankedBowlers: userPlan.bowlingRanks,
+  });
 
   user1.bowling = user1Bowling;
   star1.bowling = star1Bowling;
@@ -5732,10 +5843,20 @@ function simulateTestMatch(userLineup, starLineup, conditions = {}) {
 }
 
 function simulateLimitedOversMatch(userLineup, starLineup, conditions = {}) {
-  const user1 = buildLimitedOversBattingScorecard(userLineup, starLineup, 1, conditions, null, 50);
-  const star1 = buildLimitedOversBattingScorecard(starLineup, userLineup, 2, conditions, null, 50);
-  const user1Bowling = buildLimitedOversBowlingScorecard(starLineup, user1.balls, user1.wickets, 0);
-  const star1Bowling = buildLimitedOversBowlingScorecard(userLineup, star1.balls, star1.wickets, user1.total - star1.total);
+  const userPlan = buildMatchPlan(userLineup);
+  const starPlan = buildMatchPlan(starLineup);
+  const user1 = buildLimitedOversBattingScorecard(userLineup, starLineup, 1, conditions, null, 50, {
+    battingOrder: userPlan.battingOrder,
+  });
+  const star1 = buildLimitedOversBattingScorecard(starLineup, userLineup, 2, conditions, user1.total + 1, 50, {
+    battingOrder: starPlan.battingOrder,
+  });
+  const user1Bowling = buildLimitedOversBowlingScorecard(starLineup, user1.total, user1.balls, user1.wickets, 0, {
+    rankedBowlers: starPlan.bowlingRanks,
+  });
+  const star1Bowling = buildLimitedOversBowlingScorecard(userLineup, star1.total, star1.balls, star1.wickets, user1.total - star1.total, {
+    rankedBowlers: userPlan.bowlingRanks,
+  });
 
   user1.bowling = user1Bowling;
   star1.bowling = star1Bowling;
@@ -5753,8 +5874,8 @@ function simulateLimitedOversMatch(userLineup, starLineup, conditions = {}) {
     innings: {
       user1,
       star1,
-      user2: buildDidNotBatInnings(userLineup),
-      star2: buildDidNotBatInnings(starLineup),
+      user2: buildDidNotBatInnings(userLineup, userPlan.battingOrder),
+      star2: buildDidNotBatInnings(starLineup, starPlan.battingOrder),
     },
     userTotal: user1.total,
     starTotal: star1.total,
@@ -5926,7 +6047,7 @@ function startSeries() {
       void persistSoloTeamIfNeeded();
     }
     if (!challengeLineupLoaded()) {
-      prepareSeriesShareAsset(STATE.series, modeLabel(), competitionConfig().title, competitionConfig().theme);
+      prepareSeriesShareAsset(STATE.series);
     }
     setShareStatus("");
     STATE.view = "series";
@@ -6665,7 +6786,110 @@ function fitCanvasText(ctx, text, maxWidth, maxSize, minSize, weight = 700, fami
   ctx.font = `${weight} ${size}px ${family}`;
 }
 
-async function createSeriesShareFile(series, modeLabel, competitionTitle, competitionTheme) {
+function shareScoreText(series = STATE.series) {
+  if (!series) return "";
+  return `${series.userWins}-${series.starWins}${(series.draws ?? 0) ? `-${series.draws}` : ""}`;
+}
+
+function singleMatchOutcomeText(series = STATE.series, matchLabel = competitionConfig().matchLabel) {
+  if (!series) return `${matchLabel} complete`;
+  if (series.userWins > series.starWins) return `Won the ${matchLabel}`;
+  if (series.userWins < series.starWins) return `Lost the ${matchLabel}`;
+  return `Drew the ${matchLabel}`;
+}
+
+function primaryShareButtonLabel() {
+  return typeof navigator !== "undefined" && typeof navigator.share === "function" ? "Share" : "Share to X";
+}
+
+function shareAssetFileName({ challenge = false } = {}) {
+  const competitionSlug = dailyChallengeActive()
+    ? currentDailyCompetition() === "worldcup"
+      ? "world-cup"
+      : "ashes"
+    : (STATE.series?.tournamentType === "worldcup" || STATE.competition === "worldcup")
+      ? "world-cup"
+      : "ashes";
+
+  if (challenge) {
+    const challengeMode = currentChallengePlayableMode() === "memory" ? "memory" : "classic";
+    return `${competitionSlug}-challenge-${challengeMode}-result.png`;
+  }
+
+  if (dailyChallengeActive()) {
+    return `${competitionSlug}-${currentDailyAttemptMode() === "practice" ? "daily-practice" : "daily"}-result.png`;
+  }
+
+  return `${competitionSlug}-${isMemoryMode() ? "memory" : "classic"}-result.png`;
+}
+
+function sharePlayerMetaText(player, slotIndex = -1) {
+  const role = playerRoleText(player);
+
+  if (dailyChallengeActive()) {
+    const fixedSlotIndexes = new Set((STATE.daily.fixedPlayers ?? []).map((entry) => entry?.slotIndex));
+    const chosenSlotIndexes = new Set((STATE.daily.lockedSelections ?? []).map((entry) => entry?.slotIndex));
+    const source = fixedSlotIndexes.has(slotIndex)
+      ? "Locked in"
+      : chosenSlotIndexes.has(slotIndex)
+        ? "Your pick"
+        : "";
+    return source ? `${role} · ${source}` : role;
+  }
+
+  const year = String(player?.squadYear ?? "").trim();
+  return year ? `${role} · ${year}` : role;
+}
+
+function buildSeriesShareContext(series = STATE.series) {
+  const competition = competitionConfig();
+  const isWorldCup = series?.tournamentType === "worldcup" || competition.theme === "worldcup";
+  const isDaily = dailyChallengeActive();
+  const rankedDaily = isDaily && currentDailyAttemptMode() !== "practice";
+  const metrics = teamMetricsFromLineup(series?.userLineup ?? []);
+
+  const modeDeck = isDaily
+    ? isWorldCup
+      ? rankedDaily
+        ? "World Cup Daily · One-off ODI"
+        : "World Cup Daily Practice · One-off ODI"
+      : rankedDaily
+        ? "Daily Challenge · One-off Test"
+        : "Daily Practice · One-off Test"
+    : isWorldCup
+      ? `${modeLabel()} · ODI tournament`
+      : `${modeLabel()} · Five-Test series`;
+
+  const resultHeadline = isWorldCup
+    ? series?.statusText ?? "Tournament complete"
+    : isDaily
+      ? singleMatchOutcomeText(series, competition.matchLabel)
+      : completedSeriesOutcomeText(series);
+
+  const resultSummary = isWorldCup
+    ? series?.matches?.[series.matches.length - 1]?.summary ?? "ODI tournament complete"
+    : isDaily
+      ? series?.matches?.[0]?.summary ?? `${competition.matchLabel} complete`
+      : completedSeriesSummaryText(series);
+
+  return {
+    title: "Ashes 5-0",
+    modeDeck,
+    resultHeadline,
+    resultSummary,
+    lineupHeading: isDaily ? "Completed XI" : "Selected XI",
+    cta: isWorldCup ? "Can you beat this ODI XI?" : "Can you beat this XI?",
+    fileName: shareAssetFileName(),
+    metricCards: [
+      { label: "Mode", value: modeLabel() },
+      { label: "Format", value: isDaily ? `One ${competition.matchLabel}` : isWorldCup ? "ODI tournament" : "5 Tests" },
+      { label: "Batting", value: metrics.batting || 0 },
+      { label: "Overall", value: `${metrics.overall || 0} · ${metrics.grade || "N/A"}` },
+    ],
+  };
+}
+
+async function createSeriesShareFile(series, shareContext) {
   if (!series) return null;
   if (document.fonts?.ready) {
     try {
@@ -6688,7 +6912,7 @@ async function createSeriesShareFile(series, modeLabel, competitionTitle, compet
   if (!ctx) return null;
   ctx.scale(scale, scale);
 
-  const isWorldCup = competitionTheme === "worldcup";
+  const isWorldCup = series?.tournamentType === "worldcup" || STATE.competition === "worldcup";
   const palette = isWorldCup
     ? {
         bgStart: "#06162f",
@@ -6743,38 +6967,27 @@ async function createSeriesShareFile(series, modeLabel, competitionTitle, compet
   ctx.strokeRect(24, 24, width - 48, height - 48);
 
   ctx.fillStyle = palette.text;
-  fitCanvasText(ctx, competitionTitle, 700, 66, 42, 800, "Oswald");
-  ctx.fillText(competitionTitle, 80, 118);
+  fitCanvasText(ctx, shareContext.title, 520, 66, 42, 800, "Oswald");
+  ctx.fillText(shareContext.title, 80, 118);
 
-  const modeText = `${modeLabel} series complete`;
   ctx.fillStyle = palette.textStrong;
-  fitCanvasText(ctx, modeText, 560, 28, 18, 600, "Inter");
-  ctx.fillText(modeText, 80, 155);
+  fitCanvasText(ctx, shareContext.modeDeck, width - 160, 28, 18, 600, "Inter");
+  ctx.fillText(shareContext.modeDeck, 80, 155);
 
-  const resultText =
-    series.userWins > series.starWins
-      ? `Your XI won the series ${series.userWins}-${series.starWins}-${series.draws}`
-      : series.userWins < series.starWins
-        ? `Your XI lost the series ${series.userWins}-${series.starWins}-${series.draws}`
-        : `The series finished level ${series.userWins}-${series.starWins}-${series.draws}`;
   ctx.fillStyle = palette.accent;
-  fitCanvasText(ctx, resultText, 900, 30, 18, 700, "Inter");
-  ctx.fillText(resultText, 80, 192);
+  fitCanvasText(ctx, shareContext.resultHeadline, width - 160, 42, 22, 700, "Inter");
+  ctx.fillText(shareContext.resultHeadline, 80, 206);
 
-  const metrics = teamMetricsFromLineup(series.userLineup);
-  const metricCards = [
-    { label: "Batting", value: metrics.batting },
-    { label: "Bowling", value: metrics.bowling },
-    { label: "Fielding", value: metrics.fielding },
-    { label: "Overall", value: `${metrics.overall} · ${metrics.grade}` },
-  ];
+  ctx.fillStyle = palette.muted;
+  fitCanvasText(ctx, shareContext.resultSummary, width - 160, 18, 12, 600, "Inter");
+  ctx.fillText(shareContext.resultSummary, 80, 238);
 
-  const cardY = 242;
+  const cardY = 282;
   const cardW = 344;
   const cardH = 112;
   const gap = 20;
 
-  metricCards.forEach((card, index) => {
+  shareContext.metricCards.forEach((card, index) => {
     const x = 80 + index * (cardW + gap);
     ctx.fillStyle = index % 2 === 0 ? palette.cardFill : palette.cardAltFill;
     roundRectPath(ctx, x, cardY, cardW, cardH, 24);
@@ -6792,14 +7005,14 @@ async function createSeriesShareFile(series, modeLabel, competitionTitle, compet
   });
 
   ctx.fillStyle = palette.accent;
-  fitCanvasText(ctx, "Your XI", 380, 28, 18, 800, "Inter");
-  ctx.fillText("Your XI", 80, 430);
+  fitCanvasText(ctx, shareContext.lineupHeading, 420, 28, 18, 800, "Inter");
+  ctx.fillText(shareContext.lineupHeading, 80, 470);
 
   ctx.fillStyle = palette.muted;
-  fitCanvasText(ctx, "Player ratings", 360, 16, 12, 600, "Inter");
-  ctx.fillText("Player ratings", 185, 430);
+  fitCanvasText(ctx, shareContext.cta, width - 320, 16, 12, 600, "Inter");
+  ctx.fillText(shareContext.cta, 250, 470);
 
-  const rowsTop = 462;
+  const rowsTop = 502;
   const rowHeight = 80;
   const rowGap = 10;
   const rowWidth = width - 160;
@@ -6807,6 +7020,7 @@ async function createSeriesShareFile(series, modeLabel, competitionTitle, compet
   series.userLineup.forEach((player, index) => {
     const y = rowsTop + index * (rowHeight + rowGap);
     const slot = XI_SLOTS[index];
+    const metaText = sharePlayerMetaText(player, index);
     ctx.fillStyle = index % 2 === 0 ? palette.cardFill : palette.cardAltFill;
     roundRectPath(ctx, 80, y, rowWidth, rowHeight, 22);
     ctx.fill();
@@ -6822,13 +7036,13 @@ async function createSeriesShareFile(series, modeLabel, competitionTitle, compet
     ctx.fillText(player.name, 104, y + 58);
 
     ctx.fillStyle = isWorldCup ? "#4a6384" : "#5f5d56";
-    fitCanvasText(ctx, `Bat ${player.batting}  Bowl ${player.bowling}  Field ${player.fielding}`, 310, 16, 12, 600, "Roboto Mono");
-    ctx.fillText(`Bat ${player.batting}  Bowl ${player.bowling}  Field ${player.fielding}`, 1120, y + 33);
-
-    ctx.fillStyle = isWorldCup ? "#0c2d57" : "#123524";
-    fitCanvasText(ctx, `Overall ${playerOverall(player)}`, 170, 22, 14, 800, "Oswald");
-    ctx.fillText(`Overall ${playerOverall(player)}`, 1290, y + 58);
+    fitCanvasText(ctx, metaText, 440, 16, 11, 600, "Inter");
+    ctx.fillText(metaText, 1000, y + 48);
   });
+
+  ctx.fillStyle = palette.textStrong;
+  fitCanvasText(ctx, "Play at ashes-5-0.co.uk", 320, 20, 13, 700, "Inter");
+  ctx.fillText("Play at ashes-5-0.co.uk", 80, height - 82);
 
   ctx.fillStyle = palette.muted;
   fitCanvasText(ctx, "ashes-5-0.co.uk", 300, 18, 13, 600, "Roboto Mono");
@@ -6844,7 +7058,7 @@ async function createSeriesShareFile(series, modeLabel, competitionTitle, compet
     }, "image/png");
   });
 
-  return new File([blob], `${isWorldCup ? "world-cup" : "ashes"}-xi-team.png`, { type: "image/png" });
+  return new File([blob], shareContext.fileName, { type: "image/png" });
 }
 
 async function createChallengeResultShareFile(result) {
@@ -7001,13 +7215,14 @@ async function createChallengeResultShareFile(result) {
     }, "image/png");
   });
 
-  return new File([blob], "ashes-5-0-challenge-result.png", { type: "image/png" });
+  return new File([blob], shareAssetFileName({ challenge: true }), { type: "image/png" });
 }
 
-function prepareSeriesShareAsset(series, modeLabel, competitionTitle, competitionTheme) {
+function prepareSeriesShareAsset(series) {
   if (!series || STATE.seriesShareAsset || STATE.seriesShareAssetPromise) return;
   const seriesRef = series;
-  STATE.seriesShareAssetPromise = createSeriesShareFile(seriesRef, modeLabel, competitionTitle, competitionTheme)
+  const shareContext = buildSeriesShareContext(seriesRef);
+  STATE.seriesShareAssetPromise = createSeriesShareFile(seriesRef, shareContext)
     .then((file) => {
       if (STATE.series === seriesRef) {
         STATE.seriesShareAsset = file;
@@ -7099,8 +7314,7 @@ async function ensureSeriesShareAsset() {
   if (!STATE.series) return null;
   if (STATE.seriesShareAsset) return STATE.seriesShareAsset;
   if (!STATE.seriesShareAssetPromise) {
-    const competition = competitionConfig();
-    prepareSeriesShareAsset(STATE.series, modeLabel(), competition.title, competition.theme);
+    prepareSeriesShareAsset(STATE.series);
   }
 
   try {
@@ -7186,7 +7400,7 @@ async function downloadSeriesShareImage() {
   const objectUrl = URL.createObjectURL(file);
   const link = document.createElement("a");
   link.href = objectUrl;
-  link.download = file.name || `${competitionConfig().theme === "worldcup" ? "world-cup" : "ashes"}-xi-team.png`;
+  link.download = file.name || shareAssetFileName();
   link.rel = "noopener";
   document.body.appendChild(link);
   link.click();
@@ -7211,7 +7425,7 @@ async function downloadChallengeResultImage() {
   const objectUrl = URL.createObjectURL(file);
   const link = document.createElement("a");
   link.href = objectUrl;
-  link.download = file.name || "ashes-5-0-challenge-result.png";
+  link.download = file.name || shareAssetFileName({ challenge: true });
   link.rel = "noopener";
   document.body.appendChild(link);
   link.click();
@@ -7292,14 +7506,21 @@ function formatShareText() {
     return `I just played ${competitionConfig().title}. ${shareUrl()}`;
   }
 
+  const competition = competitionConfig();
+  if (STATE.series.tournamentType === "worldcup") {
+    return `I just finished a ${modeLabel()} World Cup XI run and ended as ${STATE.series.statusText ?? "tournament complete"}. ${shareUrl()}`;
+  }
+  if (dailyChallengeActive()) {
+    return `I just finished the ${competition.title} and ${singleMatchOutcomeText(STATE.series, competition.matchLabel).toLowerCase()}. ${shareUrl()}`;
+  }
+
   const seriesResult =
     STATE.series.userWins > STATE.series.starWins
       ? "won"
       : STATE.series.userWins < STATE.series.starWins
         ? "lost"
         : "drew";
-  const competition = competitionConfig();
-  return `I just finished a ${modeLabel()} ${competition.title} series and ${seriesResult} the ${competition.seriesDescriptor} ${STATE.series.userWins}-${STATE.series.starWins}-${STATE.series.draws}. ${shareUrl()}`;
+  return `I just finished a ${modeLabel()} ${competition.title} and ${seriesResult} the ${competition.seriesDescriptor} ${shareScoreText(STATE.series)}. ${shareUrl()}`;
 }
 
 function init() {

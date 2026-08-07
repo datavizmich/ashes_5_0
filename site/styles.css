@@ -517,7 +517,7 @@ body[data-competition="worldcup"] .hero-card::before {
 }
 
 .preview-footer {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .preview-header {
@@ -611,6 +611,24 @@ body[data-competition="worldcup"] .hero-card::before {
 .hero-preview-card[data-competition="worldcup"] .preview-lineup span {
   background: rgba(248, 248, 255, 0.14);
   border-color: rgba(103, 183, 255, 0.26);
+}
+
+.hero-preview-card .stat {
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: flex-start;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.hero-preview-card .stat:last-child {
+  grid-column: 1 / -1;
+}
+
+.hero-preview-card .stat strong {
+  max-width: 100%;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
 }
 
 .panel {
