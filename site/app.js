@@ -712,8 +712,8 @@ function scrollViewportTop() {
 
 function homePreviewFallbackPlayers(competition = STATE.competition) {
   return competition === "worldcup"
-    ? ["Tendulkar", "Gilchrist", "Kallis"]
-    : ["Compton", "Bradman", "Botham"];
+    ? ["Tendulkar", "Gilchrist", "Kallis", "Akram"]
+    : ["Compton", "Bradman", "Botham", "Warne"];
 }
 
 function homePreviewPlayerNames(summary, competition = STATE.competition) {
@@ -721,8 +721,14 @@ function homePreviewPlayerNames(summary, competition = STATE.competition) {
   const names = fixedPlayers
     .map((player) => player?.name)
     .filter(Boolean)
-    .slice(0, 3);
-  return names.length ? names : homePreviewFallbackPlayers(competition);
+    .slice(0, 4);
+  const fallback = homePreviewFallbackPlayers(competition);
+  const merged = [...names];
+  for (const playerName of fallback) {
+    if (merged.length >= 4) break;
+    if (!merged.includes(playerName)) merged.push(playerName);
+  }
+  return merged.length ? merged : fallback;
 }
 
 function homePreviewLeaderText(summary) {
