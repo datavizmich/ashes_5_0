@@ -740,7 +740,10 @@ function renderHomePreviewCard(summary = null) {
 
   const worldCup = STATE.competition === "worldcup";
   const competition = worldCup ? "worldcup" : "ashes";
-  const playerCount = Number(summary?.todayPlayerCount) || 27;
+  const rankedParticipantsCount = summary?.rankedParticipantsCount;
+  const participantCount = Number.isFinite(Number(rankedParticipantsCount))
+    ? Number(rankedParticipantsCount)
+    : null;
   const players = homePreviewPlayerNames(summary, competition);
 
   els.homePreviewCard.dataset.competition = competition;
@@ -754,8 +757,8 @@ function renderHomePreviewCard(summary = null) {
   els.homePreviewPlayers.innerHTML = players
     .map((name) => `<span>${escapeHtml(name)}</span>`)
     .join("");
-  els.homeSquadsLabel.textContent = "Players today";
-  els.totalSquads.textContent = String(playerCount);
+  els.homeSquadsLabel.textContent = "Users today";
+  els.totalSquads.textContent = participantCount === null ? "Loading" : String(participantCount);
   els.homePlayersLabel.textContent = "Leading score";
   els.totalPlayers.textContent = homePreviewLeaderText(summary);
   els.homeFormatLabel.textContent = "Locked in";

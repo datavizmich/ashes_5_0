@@ -307,3 +307,15 @@ export async function listCompletedRankedDailyAttempts(db, challengeId) {
     selections: selectionsByAttemptId.get(attempt.id) ?? [],
   }));
 }
+
+export async function countRankedDailyParticipants(db, challengeId) {
+  const row = await db
+    .prepare(
+      `SELECT COUNT(DISTINCT participant_id) AS total
+       FROM daily_attempts
+       WHERE challenge_id = ?1 AND attempt_mode = 'ranked'`,
+    )
+    .bind(challengeId)
+    .first();
+  return Number(row?.total ?? 0);
+}

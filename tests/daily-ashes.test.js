@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { buildDailyAttemptResponse, buildDailySimulationResult } from "../functions/_lib/daily.js";
-import { ensureDailyStoreSchema } from "../functions/_lib/daily-store.js";
+import { countRankedDailyParticipants, ensureDailyStoreSchema } from "../functions/_lib/daily-store.js";
 import {
   buildDailyCommunityStats,
   buildDailyCompletedXI,
@@ -159,6 +159,29 @@ test("daily schema bootstrap creates the daily tables once per database binding"
   const slotIndexCreateIndex = prepared.findIndex((statement) => statement.includes("idx_daily_attempt_selections_slot"));
   const slotIndexAlter = prepared.findIndex((statement) => statement === "ALTER TABLE daily_attempt_selections ADD COLUMN slot_index INTEGER");
   assert.ok(slotIndexCreateIndex > slotIndexAlter);
+});
+
+test("ranked daily participant count comes from the stored ranked attempts", async () => {
+  const statements = [];
+  const db = {
+    prepare(statement) {
+      statements.push(statement);
+      return {
+        bind(challengeId) {
+          assert.equal(challengeId, sundayDefinition.id);
+          return this;
+        },
+        async first() {
+          return { total: 14 };
+        },
+      };
+    },
+  };
+
+  const count = await countRankedDailyParticipants(db, sundayDefinition.id);
+
+  assert.equal(count, 14);
+  assert.ok(statements.some((statement) => statement.includes("COUNT(DISTINCT participant_id)")));
 });
 
 test("attempt response only exposes the current roll before drafting is complete", () => {

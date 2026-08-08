@@ -1,5 +1,6 @@
 import { errorResponse, json, methodNotAllowed, readJson } from "./http.js";
 import {
+  countRankedDailyParticipants,
   addDailySelection,
   createDailyAttempt,
   createOrFetchRankedDailyAttempt,
@@ -36,12 +37,14 @@ export function createCurrentDailyHandlers({
           rankedAttempt = await fetchRankedDailyAttemptByParticipant(context.env.DB, definition.id, participantId);
         }
         const completedRankedAttempts = await listCompletedRankedDailyAttempts(context.env.DB, definition.id);
+        const rankedParticipantsCount = await countRankedDailyParticipants(context.env.DB, definition.id);
         const leaderboardPreview = buildDailyResultsLeaderboard(completedRankedAttempts);
 
         return json({
           ok: true,
           challenge: {
             ...buildDailyChallengeSummary(definition, rankedAttempt),
+            rankedParticipantsCount,
             leaderboardPreview: leaderboardPreview.entries[0] ?? null,
           },
         });
