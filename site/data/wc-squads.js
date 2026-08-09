@@ -566,6 +566,63 @@ const RAW_WORLD_CUP_SQUADS = [
       { name: "Fazalhaq Farooqi", roles: ["Fast Bowler"], batting: 16, bowling: 86, fielding: 74, experience: 72 },
       { name: "Noor Ahmad", roles: ["Spinner"], batting: 18, bowling: 84, fielding: 76, experience: 64 }
     ]
+  },
+  {
+    id: "wi-1975wc",
+    label: "West Indies 1975 World Cup squad",
+    team: "West Indies",
+    year: 1975,
+    players: [
+      { name: "Gordon Greenidge", roles: ["Opener"], batting: 92, bowling: 5, fielding: 82, experience: 92 },
+      { name: "Roy Fredericks", roles: ["Opener"], batting: 88, bowling: 5, fielding: 80, experience: 86 },
+      { name: "Alvin Kallicharran", roles: ["Top Order"], batting: 90, bowling: 8, fielding: 84, experience: 92 },
+      { name: "Viv Richards", roles: ["Middle Order"], batting: 96, bowling: 20, fielding: 90, experience: 84 },
+      { name: "Clive Lloyd", roles: ["Middle Order"], batting: 95, bowling: 15, fielding: 86, experience: 97 },
+      { name: "Deryck Murray", roles: ["Wicketkeeper"], batting: 76, bowling: 0, fielding: 90, experience: 92 },
+      { name: "Keith Boyce", roles: ["All-rounder"], batting: 82, bowling: 84, fielding: 86, experience: 86 },
+      { name: "Bernard Julien", roles: ["All-rounder"], batting: 78, bowling: 82, fielding: 82, experience: 84 },
+      { name: "Lance Gibbs", roles: ["Spinner"], batting: 20, bowling: 88, fielding: 78, experience: 96 },
+      { name: "Andy Roberts", roles: ["Fast Bowler"], batting: 24, bowling: 94, fielding: 80, experience: 92 },
+      { name: "Vanburn Holder", roles: ["Fast Bowler"], batting: 20, bowling: 84, fielding: 76, experience: 84 }
+    ]
+  },
+  {
+    id: "nz-2015wc",
+    label: "New Zealand 2015 World Cup squad",
+    team: "New Zealand",
+    year: 2015,
+    players: [
+      { name: "Brendon McCullum", roles: ["Opener"], batting: 94, bowling: 0, fielding: 88, experience: 95 },
+      { name: "Martin Guptill", roles: ["Opener"], batting: 91, bowling: 0, fielding: 84, experience: 90 },
+      { name: "Kane Williamson", roles: ["Top Order"], batting: 92, bowling: 35, fielding: 90, experience: 89 },
+      { name: "Ross Taylor", roles: ["Middle Order"], batting: 89, bowling: 10, fielding: 84, experience: 94 },
+      { name: "Luke Ronchi", roles: ["Wicketkeeper"], batting: 82, bowling: 0, fielding: 84, experience: 82 },
+      { name: "Grant Elliott", roles: ["All-rounder"], batting: 80, bowling: 74, fielding: 82, experience: 88 },
+      { name: "Corey Anderson", roles: ["All-rounder"], batting: 84, bowling: 78, fielding: 80, experience: 78 },
+      { name: "Daniel Vettori", roles: ["Spinner"], batting: 62, bowling: 88, fielding: 86, experience: 98 },
+      { name: "Tim Southee", roles: ["Fast Bowler"], batting: 20, bowling: 90, fielding: 80, experience: 90 },
+      { name: "Trent Boult", roles: ["Fast Bowler"], batting: 18, bowling: 92, fielding: 82, experience: 88 },
+      { name: "Matt Henry", roles: ["Fast Bowler"], batting: 16, bowling: 84, fielding: 76, experience: 76 }
+    ]
+  },
+  {
+    id: "sco-2015wc",
+    label: "Scotland 2015 World Cup squad",
+    team: "Scotland",
+    year: 2015,
+    players: [
+      { name: "Kyle Coetzer", roles: ["Opener"], batting: 78, bowling: 10, fielding: 80, experience: 84 },
+      { name: "Calum MacLeod", roles: ["Opener"], batting: 76, bowling: 15, fielding: 78, experience: 78 },
+      { name: "Preston Mommsen", roles: ["Top Order"], batting: 74, bowling: 10, fielding: 76, experience: 80 },
+      { name: "Richie Berrington", roles: ["Middle Order"], batting: 76, bowling: 25, fielding: 78, experience: 82 },
+      { name: "Matt Machan", roles: ["Middle Order"], batting: 72, bowling: 20, fielding: 74, experience: 70 },
+      { name: "Matthew Cross", roles: ["Wicketkeeper"], batting: 68, bowling: 0, fielding: 76, experience: 68 },
+      { name: "Josh Davey", roles: ["All-rounder"], batting: 66, bowling: 72, fielding: 74, experience: 72 },
+      { name: "Majid Haq", roles: ["Spinner"], batting: 60, bowling: 78, fielding: 76, experience: 86 },
+      { name: "Safyaan Sharif", roles: ["Fast Bowler"], batting: 58, bowling: 76, fielding: 72, experience: 74 },
+      { name: "Alasdair Evans", roles: ["Fast Bowler"], batting: 56, bowling: 74, fielding: 70, experience: 72 },
+      { name: "Iain Wardlaw", roles: ["Fast Bowler"], batting: 54, bowling: 75, fielding: 70, experience: 76 }
+    ]
   }
   
 ];
