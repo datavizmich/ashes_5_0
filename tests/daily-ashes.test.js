@@ -155,6 +155,9 @@ test("daily schema bootstrap creates the daily tables once per database binding"
   assert.ok(prepared.includes("PRAGMA table_info(daily_attempts)"));
   assert.ok(prepared.includes("PRAGMA table_info(daily_attempt_selections)"));
   assert.ok(alteredStatements.includes("ALTER TABLE daily_attempts ADD COLUMN display_name TEXT NOT NULL DEFAULT ''"));
+  assert.ok(alteredStatements.includes("ALTER TABLE daily_attempts ADD COLUMN hidden_from_public INTEGER NOT NULL DEFAULT 0"));
+  assert.ok(alteredStatements.includes("ALTER TABLE daily_attempts ADD COLUMN hidden_reason TEXT NOT NULL DEFAULT ''"));
+  assert.ok(alteredStatements.includes("ALTER TABLE daily_attempts ADD COLUMN hidden_at TEXT"));
   assert.ok(alteredStatements.includes("ALTER TABLE daily_attempt_selections ADD COLUMN slot_index INTEGER"));
   const slotIndexCreateIndex = prepared.findIndex((statement) => statement.includes("idx_daily_attempt_selections_slot"));
   const slotIndexAlter = prepared.findIndex((statement) => statement === "ALTER TABLE daily_attempt_selections ADD COLUMN slot_index INTEGER");

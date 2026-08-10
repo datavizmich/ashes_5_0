@@ -735,6 +735,21 @@ function homePreviewLeaderText(summary) {
   return summary?.leaderboardPreview?.margin || "No result yet";
 }
 
+function homePreviewWinnersText(summary) {
+  const rankedParticipantsCount = Number(summary?.rankedParticipantsCount);
+  const totalWinners = Number(summary?.leaderboardStats?.totalWinners);
+
+  if (!Number.isFinite(rankedParticipantsCount) || !Number.isFinite(totalWinners)) {
+    return "Loading";
+  }
+
+  if (rankedParticipantsCount <= 0) {
+    return "No entries yet";
+  }
+
+  return `${Math.max(0, totalWinners)}/${Math.max(0, rankedParticipantsCount)} users`;
+}
+
 function renderHomePreviewCard(summary = null) {
   if (!els.homePreviewCard) return;
 
@@ -761,8 +776,8 @@ function renderHomePreviewCard(summary = null) {
   els.totalSquads.textContent = participantCount === null ? "Loading" : String(participantCount);
   els.homePlayersLabel.textContent = "Leading score";
   els.totalPlayers.textContent = homePreviewLeaderText(summary);
-  els.homeFormatLabel.textContent = "Locked in";
-  els.homeFormatValue.textContent = "7 players";
+  els.homeFormatLabel.textContent = "Won today";
+  els.homeFormatValue.textContent = homePreviewWinnersText(summary);
 }
 
 function currentPathname() {
@@ -1973,6 +1988,9 @@ async function startDailyAttempt(attemptMode = "ranked") {
     renderAll();
     scrollViewportTop();
     return payload;
+  } catch (error) {
+    console.error("Daily attempt start failed:", error);
+    window.alert(error instanceof Error ? error.message : "Could not start the daily challenge.");
   } finally {
     STATE.daily.loadingAction = false;
     renderAll();
@@ -2077,6 +2095,9 @@ async function simulateDailyTest() {
     trackStandardEvent("daily_rank_viewed", { mode: analyticsModeValue() });
     announce("Simulation completed.");
     renderAll();
+  } catch (error) {
+    console.error("Daily simulation failed:", error);
+    window.alert(error instanceof Error ? error.message : "Could not complete the daily simulation.");
   } finally {
     STATE.daily.loadingAction = false;
     renderAll();

@@ -11,10 +11,13 @@ const DAILY_SCHEMA_BASE_STATEMENTS = [
      current_roll_number INTEGER NOT NULL DEFAULT 1,
      draft_complete INTEGER NOT NULL DEFAULT 0 CHECK (draft_complete IN (0, 1)),
      simulation_complete INTEGER NOT NULL DEFAULT 0 CHECK (simulation_complete IN (0, 1)),
+     hidden_from_public INTEGER NOT NULL DEFAULT 0 CHECK (hidden_from_public IN (0, 1)),
+     hidden_reason TEXT NOT NULL DEFAULT '',
      result_json TEXT,
      created_at TEXT NOT NULL,
      updated_at TEXT NOT NULL,
-     completed_at TEXT
+     completed_at TEXT,
+     hidden_at TEXT
    )`,
   `CREATE TABLE IF NOT EXISTS daily_attempt_selections (
      attempt_id TEXT NOT NULL,
@@ -56,6 +59,15 @@ async function ensureDailyStoreColumns(db) {
   const dailyAttemptColumns = await tableColumnNames(db, "daily_attempts");
   if (!dailyAttemptColumns.has("display_name")) {
     await db.prepare("ALTER TABLE daily_attempts ADD COLUMN display_name TEXT NOT NULL DEFAULT ''").run();
+  }
+  if (!dailyAttemptColumns.has("hidden_from_public")) {
+    await db.prepare("ALTER TABLE daily_attempts ADD COLUMN hidden_from_public INTEGER NOT NULL DEFAULT 0").run();
+  }
+  if (!dailyAttemptColumns.has("hidden_reason")) {
+    await db.prepare("ALTER TABLE daily_attempts ADD COLUMN hidden_reason TEXT NOT NULL DEFAULT ''").run();
+  }
+  if (!dailyAttemptColumns.has("hidden_at")) {
+    await db.prepare("ALTER TABLE daily_attempts ADD COLUMN hidden_at TEXT").run();
   }
 
   const selectionColumns = await tableColumnNames(db, "daily_attempt_selections");
@@ -105,10 +117,13 @@ function buildDailyAttemptRecord(row) {
     currentRollNumber: Number(row.current_roll_number ?? 1),
     draftComplete: Boolean(row.draft_complete),
     simulationComplete: Boolean(row.simulation_complete),
+    hiddenFromPublic: Boolean(row.hidden_from_public),
+    hiddenReason: row.hidden_reason ?? "",
     result: row.result_json ? JSON.parse(row.result_json) : null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     completedAt: row.completed_at ?? null,
+    hiddenAt: row.hidden_at ?? null,
   };
 }
 
@@ -132,7 +147,8 @@ export async function fetchDailyAttemptById(db, attemptId) {
   const row = await db
     .prepare(
       `SELECT id, challenge_id, participant_id, attempt_mode, submission_key, display_name, current_roll_number,
-              draft_complete, simulation_complete, result_json, created_at, updated_at, completed_at
+              draft_complete, simulation_complete, hidden_from_public, hidden_reason, result_json,
+              created_at, updated_at, completed_at, hidden_at
        FROM daily_attempts
        WHERE id = ?1`,
     )
@@ -145,7 +161,8 @@ export async function fetchRankedDailyAttemptByParticipant(db, challengeId, part
   const row = await db
     .prepare(
       `SELECT id, challenge_id, participant_id, attempt_mode, submission_key, display_name, current_roll_number,
-              draft_complete, simulation_complete, result_json, created_at, updated_at, completed_at
+              draft_complete, simulation_complete, hidden_from_public, hidden_reason, result_json,
+              created_at, updated_at, completed_at, hidden_at
        FROM daily_attempts
        WHERE challenge_id = ?1 AND participant_id = ?2 AND attempt_mode = 'ranked'`,
     )
@@ -180,8 +197,8 @@ export async function createDailyAttempt(db, payload, createdAt) {
     .prepare(
       `INSERT INTO daily_attempts (
          id, challenge_id, participant_id, attempt_mode, submission_key, display_name, current_roll_number,
-         draft_complete, simulation_complete, result_json, created_at, updated_at, completed_at
-       ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, 0, 0, NULL, ?7, ?7, NULL)`,
+         draft_complete, simulation_complete, hidden_from_public, hidden_reason, result_json, created_at, updated_at, completed_at, hidden_at
+       ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, 0, 0, 0, '', NULL, ?7, ?7, NULL, NULL)`,
     )
     .bind(
       publicId,
@@ -272,9 +289,10 @@ export async function listCompletedRankedDailyAttempts(db, challengeId) {
   const attemptsResult = await db
     .prepare(
       `SELECT id, challenge_id, participant_id, attempt_mode, submission_key, display_name, current_roll_number,
-              draft_complete, simulation_complete, result_json, created_at, updated_at, completed_at
+              draft_complete, simulation_complete, hidden_from_public, hidden_reason, result_json,
+              created_at, updated_at, completed_at, hidden_at
        FROM daily_attempts
-       WHERE challenge_id = ?1 AND attempt_mode = 'ranked' AND draft_complete = 1`,
+       WHERE challenge_id = ?1 AND attempt_mode = 'ranked' AND draft_complete = 1 AND hidden_from_public = 0`,
     )
     .bind(challengeId)
     .all();
@@ -318,4 +336,40 @@ export async function countRankedDailyParticipants(db, challengeId) {
     .bind(challengeId)
     .first();
   return Number(row?.total ?? 0);
+}
+
+export async function listRankedDailyAttemptsByChallenge(db, challengeId) {
+  const attemptsResult = await db
+    .prepare(
+      `SELECT id, challenge_id, participant_id, attempt_mode, submission_key, display_name, current_roll_number,
+              draft_complete, simulation_complete, hidden_from_public, hidden_reason, result_json,
+              created_at, updated_at, completed_at, hidden_at
+       FROM daily_attempts
+       WHERE challenge_id = ?1 AND attempt_mode = 'ranked'
+       ORDER BY COALESCE(completed_at, updated_at, created_at) DESC`,
+    )
+    .bind(challengeId)
+    .all();
+
+  return (attemptsResult.results ?? []).map(buildDailyAttemptRecord).filter(Boolean);
+}
+
+export async function updateDailyAttemptVisibility(db, attemptId, hiddenFromPublic, hiddenReason, updatedAt) {
+  await db
+    .prepare(
+      `UPDATE daily_attempts
+       SET hidden_from_public = ?2,
+           hidden_reason = ?3,
+           hidden_at = ?4,
+           updated_at = ?5
+       WHERE id = ?1`,
+    )
+    .bind(
+      attemptId,
+      hiddenFromPublic ? 1 : 0,
+      hiddenReason ?? "",
+      hiddenFromPublic ? updatedAt : null,
+      updatedAt,
+    )
+    .run();
 }

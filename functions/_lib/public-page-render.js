@@ -94,8 +94,8 @@ function applyPreviewCard(html, {
   statOneValue = "Loading",
   statTwoLabel = "Leading score",
   statTwoValue = "No result yet",
-  statThreeLabel = "Locked in",
-  statThreeValue = "7 players",
+  statThreeLabel = "Won today",
+  statThreeValue = "Loading",
   hideScore = true,
 } = {}) {
   let nextHtml = setElementAttribute(html, "data-home-preview-card", "data-competition", competition);
@@ -586,8 +586,8 @@ function applyWorldCupLanding(html) {
       statOneValue: "Loading",
       statTwoLabel: "Leading score",
       statTwoValue: "No result yet",
-      statThreeLabel: "Locked in",
-      statThreeValue: "7 players",
+      statThreeLabel: "Won today",
+      statThreeValue: "Loading",
     },
     rulesHtml: copyGrid([
       {

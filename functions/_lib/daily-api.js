@@ -45,6 +45,10 @@ export function createCurrentDailyHandlers({
           challenge: {
             ...buildDailyChallengeSummary(definition, rankedAttempt),
             rankedParticipantsCount,
+            leaderboardStats: {
+              totalCompletedPlayers: leaderboardPreview.totalCompletedPlayers,
+              totalWinners: leaderboardPreview.totalWinners,
+            },
             leaderboardPreview: leaderboardPreview.entries[0] ?? null,
           },
         });

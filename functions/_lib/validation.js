@@ -4,11 +4,11 @@ import {
   XI_SLOTS,
   lineupIdsToPlayersForCompetition,
   normalizeCompetition,
-  normalizeDisplayName,
   normalizePlayableMode,
   sanitizePlainText,
   validateLineupPlayerIdsForCompetition,
 } from "../../site/shared/ashes-core.js";
+import { validatePublicDisplayName } from "./display-name-moderation.js";
 
 function asBoundedInteger(value, label, min, max) {
   if (!Number.isInteger(value) || value < min || value > max) {
@@ -130,7 +130,7 @@ export function validateTeamPayload(payload) {
     submissionKey,
     competition,
     mode,
-    displayName: normalizeDisplayName(team.displayName),
+    displayName: validatePublicDisplayName(team.displayName),
     lineupPlayerIds,
     lineup,
     dataVersion: team.dataVersion,

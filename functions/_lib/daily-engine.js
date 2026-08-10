@@ -1,4 +1,4 @@
-import { normalizeDisplayName } from "../../site/shared/ashes-core.js";
+import { validatePublicDisplayName } from "./display-name-moderation.js";
 
 function asAttemptError(message, status = 400) {
   const error = new Error(message);
@@ -51,7 +51,7 @@ export function createDailyAttemptHelpers({
       participantId: validateDailyParticipantId(body.participantId),
       submissionKey: validateSubmissionKey(body.submissionKey, "Submission key"),
       attemptMode,
-      displayName: normalizeDisplayName(body.displayName),
+      displayName: validatePublicDisplayName(body.displayName),
     };
   }
 
@@ -92,7 +92,7 @@ export function createDailyAttemptHelpers({
 
     return {
       participantId: validateDailyParticipantId(body.participantId),
-      displayName: normalizeDisplayName(body.displayName),
+      displayName: validatePublicDisplayName(body.displayName),
     };
   }
 
