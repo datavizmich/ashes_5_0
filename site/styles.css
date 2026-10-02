@@ -2412,3 +2412,77 @@ button.achievement-badge:focus-visible {
     padding: 0.8rem 0.85rem;
   }
 }
+
+/* Daily-first home: scoped so the game board and scorecard keep their layouts. */
+.home-view[data-daily-hub="true"] > .hero {
+  grid-template-columns: minmax(0, 1fr);
+  margin-bottom: 1.5rem;
+}
+.home-view[data-daily-hub="true"] .hero-title {
+  max-width: 25ch;
+  font-size: clamp(2rem, 4.5vw, 3.8rem);
+  line-height: 1.08;
+  text-wrap: balance;
+}
+.home-view[data-daily-hub="true"] .lede { max-width: 75ch; }
+.home-view[data-daily-hub="true"] .hero-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+.daily-card {
+  display: grid;
+  align-content: start;
+  gap: 0.65rem;
+  padding: clamp(1rem, 2vw, 1.5rem);
+  border-radius: 1.2rem;
+  border: 2px solid #e6bd45;
+  background: #f5edd7;
+  color: #17251d;
+  text-decoration: none;
+  min-width: 0;
+}
+.daily-card-worldcup { background: #e3edfc; border-color: #91b7f0; color: #14294a; }
+.daily-card strong { font-size: clamp(1.4rem, 3vw, 2rem); line-height: 1.15; }
+.daily-card-format { font-size: 0.85rem; font-weight: 700; }
+.daily-card-description { line-height: 1.5; }
+.daily-card-status { font-size: 0.9rem; min-height: 1.5em; }
+.daily-card-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.65rem;
+  margin-top: 0.3rem;
+  background: #163c2b;
+  color: white;
+  font-weight: 800;
+}
+.daily-card-worldcup .daily-card-action { background: #183d70; }
+.daily-card:hover { border-color: white; }
+.daily-card[data-completed="true"] .daily-card-status { font-weight: 800; }
+.daily-hub-status, .daily-hub-reset { grid-column: 1 / -1; margin: 0; line-height: 1.5; }
+.daily-hub-status { min-height: 1.5em; }
+.daily-hub-reset { font-size: 0.85rem; color: rgba(255,255,255,0.85); }
+.home-view[data-daily-hub="true"] .rules-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.home-view[data-daily-hub="true"] .hero-trust { display: none; } /* Benefits are in the short intro. */
+.skip-link { position: fixed; left: 1rem; top: -100px; z-index: 1000; padding: 1rem; background: white; color: #102b1e; border-radius: 0.5rem; }
+.skip-link:focus { top: 1rem; }
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 3px solid #f8cd58;
+  outline-offset: 4px;
+}
+.daily-card:focus-visible { outline-color: white; }
+.daily-load-error { margin: 1rem 0; padding: 1rem; border: 2px solid #f8cd58; border-radius: 0.75rem; }
+.daily-load-error p { margin: 0 0 0.75rem; }
+@media (max-width: 760px) {
+  .home-view[data-daily-hub="true"] .hero-actions,
+  .home-view[data-daily-hub="true"] .rules-grid { grid-template-columns: minmax(0, 1fr); }
+  .daily-card { gap: 0.45rem; padding: 1rem; }
+  .home-view[data-daily-hub="true"] .hero-title { font-size: clamp(1.9rem, 7vw, 2.8rem); }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .daily-card, .mode-card { transition: none; }
+}

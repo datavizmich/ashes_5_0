@@ -1,4 +1,4 @@
-import { CANONICAL_SITE_ORIGIN } from "../../site/shared/ashes-core.js";
+import { CANONICAL_SITE_ORIGIN } from "../../site/shared/site-config.js";
 import { SITE_SOCIAL_IMAGE_URL } from "../../site/shared/public-pages.js";
 
 const DEFAULT_TITLE = "Ashes 5-0 Game - Build an All-Time Cricket XI";
