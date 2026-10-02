@@ -157,21 +157,21 @@ test("every intended public route returns successfully with unique metadata and 
   }
 });
 
-test("homepage leads with Ashes 5-0 and exposes crawlable navigation and footer links", async () => {
+test("homepage exposes both daily games before full drafts with crawlable navigation", async () => {
   const { html } = await renderRoute(homeRoute, "/");
   const primaryNav = extractPrimaryNavHtml(html);
 
-  assert.equal(extractH1Text(html), "Can your all-time Ashes XI go 5-0?");
+  assert.equal(extractH1Text(html), "Your cricket judgement. Two daily challenges.");
   assert.doesNotMatch(primaryNav, /\shidden(?:=|>|\s)/u);
-  assert.match(primaryNav, /href="\/ashes"/u);
+  assert.match(primaryNav, /href="\/#draft-modes"/u);
   assert.match(primaryNav, /href="\/daily"/u);
-  assert.match(primaryNav, /href="\/world-cup"/u);
+  assert.match(primaryNav, /href="\/world-cup\/daily"/u);
   assert.match(primaryNav, /href="\/leaderboard"/u);
   assert.match(primaryNav, /href="\/how-to-play"/u);
-  assert.match(primaryNav, /href="\/about"/u);
+  assert.match(primaryNav, /href="\/"/u);
   assert.match(html, /data-home-primary-cta/u);
   assert.match(html, /href="\/daily"[^>]*data-home-primary-cta/u);
-  assert.match(html, /href="\/ashes"[^>]*data-home-secondary-cta/u);
+  assert.match(html, /href="\/world-cup\/daily"[^>]*data-home-secondary-cta/u);
   assert.match(html, /Free to play/u);
   assert.match(html, /No account required/u);
   assert.match(html, /New challenge every day/u);
@@ -179,7 +179,7 @@ test("homepage leads with Ashes 5-0 and exposes crawlable navigation and footer 
   assert.match(html, /Classic Draft/u);
   assert.match(html, /Memory Draft/u);
   assert.match(html, /Challenge a Friend/u);
-  assert.match(html, /World Cup Mode/u);
+  assert.match(html, /World Cup Full Draft/u);
 
   for (const href of [
     "/ashes",

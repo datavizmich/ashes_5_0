@@ -1,14 +1,14 @@
-import { CANONICAL_SITE_ORIGIN } from "./ashes-core.js";
+import { CANONICAL_SITE_ORIGIN } from "./site-config.js";
 
-export const SITE_SOCIAL_IMAGE_URL = `${CANONICAL_SITE_ORIGIN}/android-chrome-512x512.png`;
+export const SITE_SOCIAL_IMAGE_URL = `${CANONICAL_SITE_ORIGIN}/social/daily-cricket.png`;
 
 export const PUBLIC_PAGE_DEFS = {
   home: {
     key: "home",
     path: "/",
-    title: "Ashes 5-0 - Free All-Time Cricket XI Draft Game",
+    title: "Daily Cricket Games: Ashes and World Cup | Ashes 5-0",
     description:
-      "Draft players from historic Ashes squads, build an all-time XI and simulate a five-Test series. Play the free daily cricket challenge or challenge a friend.",
+      "Play free Ashes and World Cup daily cricket challenges. Make four picks, complete your XI and play one Test or ODI. No account required.",
   },
   ashes: {
     key: "ashes",
@@ -20,7 +20,7 @@ export const PUBLIC_PAGE_DEFS = {
   daily: {
     key: "daily",
     path: "/daily",
-    title: "Daily Challenge | Ashes 5-0",
+    title: "Daily Ashes Cricket Game | Ashes 5-0",
     description:
       "Play today's shared Ashes Daily Challenge. Seven players are locked in, everyone gets the same four-player draft, and your first ranked attempt sets your result.",
   },
@@ -41,7 +41,7 @@ export const PUBLIC_PAGE_DEFS = {
   worldCupDaily: {
     key: "worldCupDaily",
     path: "/world-cup/daily",
-    title: "World Cup Daily Challenge | Ashes 5-0",
+    title: "Daily World Cup Cricket Game | Ashes 5-0",
     description:
       "Play today's shared World Cup Daily Challenge. Seven players are locked in, everyone gets the same four-player ODI draft, and your first ranked attempt sets your result.",
   },

@@ -6,8 +6,12 @@ import {
   publicPageKeyForPath,
 } from "./shared/public-pages.js";
 import { playableModeDef } from "./shared/modes.js";
+import { HOME_COPY } from "./shared/homepage.js";
+import { initDailyHub } from "./ui/daily-hub.js";
+import { formatDailyShare } from "./shared/daily-share.js";
+import { recordDailyCompletion } from "./shared/daily-history.js";
 
-const CANONICAL_SITE_ORIGIN = "https://ashes-5-0.co.uk";
+import { CANONICAL_SITE_ORIGIN } from "./shared/site-config.js";
 const SEO_HOME_TITLE = PUBLIC_PAGE_DEFS.home.title;
 const SEO_HOME_DESCRIPTION = PUBLIC_PAGE_DEFS.home.description;
 const STATIC_HOME_PAGE_KEYS = new Set([
@@ -49,6 +53,7 @@ function buildInitialDailyState() {
     competition: "ashes",
     active: false,
     loadingSummary: false,
+    loadError: "",
     loadingAction: false,
     summary: null,
     participantId: "",
@@ -812,8 +817,9 @@ function activeNavKey() {
   if (pageKey === "howToPlay") return "howToPlay";
   if (pageKey === "leaderboard" || pageKey === "worldCupLeaderboard") return "leaderboard";
   if (pageKey === "daily") return "daily";
-  if (pageKey === "worldCup" || pageKey === "worldCupDaily") return "worldCup";
-  if (pageKey === "ashes" || pageKey === "challenge") return "play";
+  if (pageKey === "worldCupDaily") return "worldCupDaily";
+  if (pageKey === "home") return "home";
+  if (pageKey === "worldCup" || pageKey === "ashes" || pageKey === "challenge") return "draft";
   return "";
 }
 
@@ -1073,6 +1079,7 @@ function analyticsChallengeType() {
 function trackStandardEvent(name, overrides = {}) {
   trackEvent(name, {
     mode: analyticsModeValue(),
+    competition: STATE.competition,
     device_category: deviceCategory(),
     challenge_type: analyticsChallengeType(),
     completion_stage: STATE.view,
@@ -1766,19 +1773,26 @@ async function postJsonRequest(url, payload) {
 }
 
 async function getJsonRequest(url) {
-  const response = await fetch(url, {
-    method: "GET",
-    headers: {
-      Accept: "application/json",
-    },
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12_000);
+  try {
+    const response = await fetch(url, {
+      signal: controller.signal,
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+      },
+    });
 
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok || data.ok === false) {
-    throw new Error(data.error || "Request failed.");
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data.ok === false) {
+      throw new Error(data.error || "Request failed.");
+    }
+
+    return data;
+  } finally {
+    clearTimeout(timeout);
   }
-
-  return data;
 }
 
 function applyDailySummaryPayload(challengeSummary) {
@@ -1819,6 +1833,12 @@ function applyDailySummaryPayload(challengeSummary) {
 
 function applyDailyAttemptPayload(payload) {
   if (!payload?.challenge || !payload?.attempt) return null;
+  recordDailyCompletion({
+    competition: currentDailyCompetition(),
+    date: payload.challenge.date,
+    attemptMode: payload.attempt.attemptMode,
+    simulationComplete: payload.attempt.simulationComplete,
+  });
 
   const storedDisplayName = payload.attempt.attemptMode === "ranked"
     ? loadStoredDailyDisplayName(payload.challenge.id, payload.attempt.attemptMode)
@@ -4000,8 +4020,10 @@ function renderStats() {
   const heroActions = els.homePrimaryCta?.parentElement ?? null;
   const heroTrust = document.querySelector("[data-home-trust]") ?? null;
   els.homeEyebrow.hidden = homePage && !routeError;
+  els.homeView.dataset.dailyHub = String(homePage);
+  els.homePreviewCard.hidden = homePage;
   if (homePage) {
-    renderHomePreviewCard(dailySummary);
+    els.homePreviewCard.hidden = true;
   } else {
     els.totalSquads.textContent = String(STATE.squads.length);
     els.totalPlayers.textContent = String(STATE.catalog.length);
@@ -4042,18 +4064,18 @@ function renderStats() {
   els.homeTitle.textContent = routeError
     ? routeError.title
     : homePage
-      ? "Can your all-time Ashes XI go 5-0?"
+      ? HOME_COPY.title
       : competition.homeTitle;
   els.homeTagline.hidden = Boolean(routeError) || (homePage ? false : !competition.homeTagline);
   els.homeTagline.textContent = routeError
     ? ""
     : homePage
-      ? "Draft from historic squads and back your cricket judgement."
+      ? HOME_COPY.tagline
       : competition.homeTagline;
   els.homeLede.textContent = routeError
     ? routeError.message
     : homePage
-      ? "Draft players from historic Ashes squads, build your XI and simulate a five-Test series. The Daily Challenge is the fastest way to start."
+      ? HOME_COPY.lede
       : competition.homeLede;
   if (heroActions) {
     heroActions.hidden = !homePage || loadedChallenge || Boolean(routeError);
@@ -4073,7 +4095,7 @@ function renderStats() {
     : loadedChallenge
       ? "Accept challenge"
       : homePage
-        ? "Start with the Daily Challenge"
+        ? HOME_COPY.panelTitle
       : pageKey === "challenge"
         ? "Friend challenge"
         : pageKey === "worldCup"
@@ -4428,7 +4450,7 @@ function renderGameMeta() {
       : dailyChoiceProgressText();
     els.rollSquad.hidden = STATE.view !== "game" || stage !== "intro";
     els.rollSquad.textContent = STATE.daily.loadingAction || STATE.daily.loadingSummary ? "Loading..." : "Reveal the first squad";
-    els.rollSquad.disabled = STATE.view !== "game" || stage !== "intro" || STATE.daily.loadingAction || STATE.daily.loadingSummary;
+    els.rollSquad.disabled = STATE.view !== "game" || stage !== "intro" || STATE.daily.loadingAction || STATE.daily.loadingSummary || Boolean(STATE.daily.loadError) || !currentDailyChallengeId();
     els.startSeries.hidden = STATE.view !== "game" || stage !== "recap";
     els.startSeries.disabled = STATE.view !== "game" || stage !== "recap" || STATE.daily.loadingAction;
     els.startSeries.textContent = STATE.daily.loadingAction
@@ -4862,6 +4884,8 @@ function renderSeriesSummary() {
   if (els.dailyRouteSwitchSeries) {
     els.dailyRouteSwitchSeries.hidden = !dailyChallengeActive();
     els.dailyRouteSwitchSeries.href = dailyRouteSwitchTarget;
+    els.dailyRouteSwitchSeries.classList.toggle("primary", dailyChallengeActive());
+    els.dailyRouteSwitchSeries.classList.toggle("secondary", !dailyChallengeActive());
     els.dailyRouteSwitchSeries.innerHTML = badgeLabelHtml(
       dailyRouteSwitchLabel,
       currentDailyCompetition() !== "worldcup",
@@ -4871,8 +4895,8 @@ function renderSeriesSummary() {
   if (els.challengeBack) {
     els.challengeBack.hidden = dailyChallengeActive() || !completed || (!challengeLineupLoaded() && !resultLoaded);
   }
-  els.playAgain.classList.toggle("primary", !canSendBack);
-  els.playAgain.classList.toggle("secondary", canSendBack);
+  els.playAgain.classList.toggle("primary", !canSendBack && !dailyChallengeActive());
+  els.playAgain.classList.toggle("secondary", canSendBack || dailyChallengeActive());
   els.sendResultBack.classList.toggle("primary", canSendBack);
   els.sendResultBack.classList.toggle("secondary", !canSendBack);
   els.shareResult.textContent = primaryShareButtonLabel();
@@ -5254,12 +5278,30 @@ function renderLeaderboard() {
   `;
 }
 
+async function loadDailyRoute(competition) {
+  STATE.daily.loadError = "";
+  renderAll();
+  try {
+    await openDailyChallenge(competition, { autoStart: false });
+  } catch (error) {
+    console.error("Daily challenge load failed:", error);
+    STATE.daily.loadError = "Could not load your challenge. Check your connection and try again.";
+  } finally {
+    renderAll();
+  }
+}
+
 function renderAll() {
   syncSeoMetadata();
   renderStats();
   renderView();
   renderSiteNav();
   renderGameMeta();
+  const dailyError = document.querySelector("[data-daily-load-error]");
+  if (dailyError) {
+    dailyError.hidden = !dailyChallengeActive() || !STATE.daily.loadError;
+    dailyError.querySelector("[data-daily-load-error-text]").textContent = STATE.daily.loadError;
+  }
   renderDailyNameInline();
   renderDraftMeter();
   renderChallengePanel();
@@ -6424,7 +6466,7 @@ function resetBuilder() {
 function wireControls() {
   const refreshDailySummaryOnReturn = () => {
     if (STATE.view !== "home" || dailyChallengeActive()) return;
-    if (!["home", "ashes", "worldCup"].includes(currentPublicPageKey() ?? "")) return;
+    if (!["ashes", "worldCup"].includes(currentPublicPageKey() ?? "")) return;
     void loadDailySummary({ competition: STATE.competition }).catch((error) => {
       console.error("Daily summary refresh failed:", error);
     });
@@ -6438,12 +6480,7 @@ function wireControls() {
       closeSiteNav();
     });
   });
-  els.homePrimaryCta.addEventListener("click", () => {
-    trackStandardEvent("mode_selected", { mode: "daily" });
-  });
-  els.homeSecondaryCta.addEventListener("click", () => {
-    trackStandardEvent("mode_selected", { mode: "classic" });
-  });
+  // Daily card click tracking is owned by initDailyHub().
 
   els.playGame.addEventListener("click", () => {
     if (STATE.routeError && routeUsesDedicatedPath()) {
@@ -6468,6 +6505,9 @@ function wireControls() {
   els.backHome.addEventListener("click", goHome);
   els.backBuilder.addEventListener("click", goBuilder);
   els.rollSquad.addEventListener("click", rollSquad);
+  document.querySelector("[data-daily-retry]")?.addEventListener("click", () => {
+    void loadDailyRoute(currentDailyCompetition());
+  });
   els.startSeries.addEventListener("click", startSeries);
   els.copyChallengeLink.addEventListener("click", async () => {
     try {
@@ -6589,7 +6629,7 @@ function wireControls() {
       }
       const text = formatShareText();
       const title = competitionConfig().title;
-      const file = await ensureSeriesShareAsset();
+      const file = STATE.seriesShareAsset;
 
       if (file && navigator.share && navigator.canShare?.({ files: [file] })) {
         try {
@@ -7699,7 +7739,13 @@ function formatShareText() {
     return `I just finished a ${modeLabel()} World Cup XI run and ended as ${STATE.series.statusText ?? "tournament complete"}. ${shareUrl()}`;
   }
   if (dailyChallengeActive()) {
-    return `I just finished the ${competition.title} and ${singleMatchOutcomeText(STATE.series, competition.matchLabel).toLowerCase()}. ${shareUrl()}`;
+    return formatDailyShare({
+      competition: currentDailyCompetition(),
+      date: STATE.daily.challenge?.date ?? STATE.daily.summary?.date ?? "",
+      outcome: singleMatchOutcomeText(STATE.series, competition.matchLabel),
+      url: shareUrl(),
+      practice: currentDailyAttemptMode() === "practice",
+    });
   }
 
   const seriesResult =
@@ -7899,17 +7945,13 @@ function init() {
     void loadLeaderboard();
   }
   if (routeType === "daily" || currentPageKey === "daily") {
-    void openDailyChallenge("ashes", { autoStart: true }).catch((error) => {
-      console.error("Daily summary preload failed:", error);
-      renderAll();
-    });
+    void loadDailyRoute("ashes");
   } else if (routeType === "world-cup-daily" || currentPageKey === "worldCupDaily") {
-    void openDailyChallenge("worldcup", { autoStart: true }).catch((error) => {
-      console.error("Daily summary preload failed:", error);
-      renderAll();
-    });
+    void loadDailyRoute("worldcup");
   }
-  if (["home", "ashes", "worldCup"].includes(currentPageKey ?? "")) {
+  if (currentPageKey === "home") {
+    initDailyHub({ root: els.homeView, participantId: STATE.daily.participantId, track: trackStandardEvent });
+  } else if (["ashes", "worldCup"].includes(currentPageKey ?? "")) {
     const summaryCompetition = currentPageKey === "worldCup" ? "worldcup" : "ashes";
     const onDailyRoute = routeType === "daily" || currentPageKey === "daily" || routeType === "world-cup-daily" || currentPageKey === "worldCupDaily";
     if (!onDailyRoute) {
@@ -7917,10 +7959,6 @@ function init() {
         console.error("Daily summary preload failed:", error);
       });
     }
-  } else if (STATE.competition === "ashes" && routeType !== "daily" && currentPageKey !== "daily") {
-    void loadDailySummary({ competition: "ashes" }).catch((error) => {
-      console.error("Daily summary preload failed:", error);
-    });
   }
   document.body.classList.add("app-ready");
 }

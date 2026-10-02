@@ -1,7 +1,8 @@
 import { ASHES_SQUADS } from "../data/ashes-squads.js";
 import { WORLD_CUP_SQUADS } from "../data/wc-squads.js";
 
-export const CANONICAL_SITE_ORIGIN = "https://ashes-5-0.co.uk";
+import { CANONICAL_SITE_ORIGIN } from "./site-config.js";
+export { CANONICAL_SITE_ORIGIN };
 export const TEAM_DATA_VERSION = "ashes-5-0-data-v1";
 export const CHALLENGE_RESULT_VERSION = "challenge-result-v1";
 export const RESULT_SIMULATION_VERSION = "ashes-5-0-sim-v1";

@@ -1,4 +1,4 @@
-import { CANONICAL_SITE_ORIGIN } from "../../site/shared/ashes-core.js";
+import { CANONICAL_SITE_ORIGIN } from "../../site/shared/site-config.js";
 import { PUBLIC_PAGE_DEFS, canonicalUrlForPageKey } from "../../site/shared/public-pages.js";
 import {
   insertBefore,
@@ -10,6 +10,8 @@ import {
   setBodyAttribute,
   setElementHidden,
 } from "./spa.js";
+
+import { HOME_COPY, renderDailyCards, renderDraftCards } from "../../site/shared/homepage.js";
 
 const TITLE_ATTRS = [
   "data-home-title",
@@ -53,31 +55,6 @@ function copyGrid(cards) {
   return cards.map(copyCard).join("");
 }
 
-function modeCardGrid() {
-  return `
-    <a class="mode-card mode-card-recommended" href="/daily" data-home-card="daily">
-      <span class="mode-card-badge">Recommended</span>
-      <strong>Daily Challenge</strong>
-      <p>Complete the same four-player challenge as everyone else and compare your result.</p>
-    </a>
-    <a class="mode-card" href="/ashes?mode=classic" data-home-card="classic">
-      <strong>Classic Draft</strong>
-      <p>Build a complete XI with player ratings visible while you draft.</p>
-    </a>
-    <a class="mode-card" href="/ashes?mode=memory" data-home-card="memory">
-      <strong>Memory Draft</strong>
-      <p>Build your XI without seeing player ratings. Rely on your own cricket knowledge.</p>
-    </a>
-    <a class="mode-card" href="/challenge" data-home-card="challenge">
-      <strong>Challenge a Friend</strong>
-      <p>Build a side, send the challenge and see who produces the stronger result.</p>
-    </a>
-    <a class="mode-card mode-card-worldcup" href="/world-cup" data-home-card="worldCup">
-      <strong>World Cup Mode</strong>
-      <p>Build an ODI XI, then play through the group stage, semi-final, and final.</p>
-    </a>
-  `;
-}
 
 function previewPlayersHtml(players = []) {
   return players.map((player) => `<span>${player}</span>`).join("");
@@ -147,6 +124,7 @@ function websiteStructuredData() {
 
 function applyBaseView(html, { activeView = "home", activeTitleAttr = "data-home-title", competition = "ashes" } = {}) {
   let nextHtml = setBodyAttribute(html, "data-competition", competition);
+  nextHtml = setElementAttribute(nextHtml, "data-home-view", "data-daily-hub", "false");
   nextHtml = setElementHidden(nextHtml, "data-site-nav", false);
 
   for (const titleAttr of TITLE_ATTRS) {
@@ -168,6 +146,8 @@ function applyHomeLanding(html, options = {}) {
     competition: options.competition ?? "ashes",
   });
   nextHtml = setElementHidden(nextHtml, "data-site-nav", Boolean(options.hideSiteNav));
+  nextHtml = setElementHidden(nextHtml, "data-home-hero-actions", true);
+  nextHtml = setElementHidden(nextHtml, "data-home-preview-card", false);
 
   nextHtml = replaceElementText(nextHtml, "data-home-eyebrow", options.eyebrow ?? "Ashes 5-0");
   nextHtml = setElementHidden(nextHtml, "data-home-eyebrow", Boolean(options.hideEyebrow));
@@ -652,21 +632,23 @@ function applyAshesLanding(html) {
 }
 
 function applyHomepage(html) {
-  const nextHtml = applyHomeLanding(html, {
+  let nextHtml = applyHomeLanding(html, {
     eyebrow: "Ashes 5-0",
-    title: "Can your all-time Ashes XI go 5-0?",
-    tagline: "Draft from historic squads and back your cricket judgement.",
-    lede:
-      "Draft players from historic Ashes squads, build your XI and simulate a five-Test series. The Daily Challenge is the fastest way to start.",
+    title: HOME_COPY.title,
+    tagline: HOME_COPY.tagline,
+    lede: HOME_COPY.lede,
     panelKicker: "Choose a mode",
-    panelTitle: "Start with the Daily Challenge",
+    panelTitle: HOME_COPY.panelTitle,
     playButtonHidden: true,
     controlsHidden: true,
     hideConfigGrid: true,
     hideEyebrow: true,
-    rulesHtml: modeCardGrid(),
+    rulesHtml: renderDraftCards(),
   });
-
+  nextHtml = setElementAttribute(nextHtml, "data-home-view", "data-daily-hub", "true");
+  nextHtml = replaceElementInnerHtml(nextHtml, "data-home-hero-actions", renderDailyCards());
+  nextHtml = setElementHidden(nextHtml, "data-home-hero-actions", false);
+  nextHtml = setElementHidden(nextHtml, "data-home-preview-card", true);
   return nextHtml;
 }
 
