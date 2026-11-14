@@ -319,7 +319,9 @@ test("daily leaderboard ranks winning margins and prefers entered display names"
   ], "attempt-b");
 
   assert.equal(leaderboard.totalCompletedPlayers, 4);
-  assert.equal(leaderboard.entries.length, 3);
+  assert.equal(leaderboard.entries.length, 4);
+  assert.equal(leaderboard.entries[3].displayName, "Dana");
+  assert.equal(leaderboard.totalWinners, 3);
   assert.equal(leaderboard.entries[0].displayName, "Anonymous");
   assert.equal(leaderboard.entries[0].margin, "Won by an innings and 12 runs");
   assert.equal(leaderboard.entries[1].displayName, "Bob");

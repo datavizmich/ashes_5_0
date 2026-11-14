@@ -221,7 +221,7 @@ function applyDailyLanding(html) {
         body: "4 historic squads appear one at a time. You select 1 player from each squad and cannot preview future rolls.",
       },
       {
-        title: "Shared deterministic draft",
+        title: "Same squads for everyone",
         body: `Every player receives the same sequence for ${dateText}, so results are directly comparable.`,
       },
       {
@@ -290,7 +290,7 @@ function applyWorldCupDailyLanding(html) {
         body: "4 historic World Cup squads appear one at a time. You select 1 player from each squad and cannot preview future rolls.",
       },
       {
-        title: "Shared deterministic draft",
+        title: "Same squads for everyone",
         body: `Every player receives the same sequence for ${dateText}, so results are directly comparable.`,
       },
       {
@@ -303,7 +303,7 @@ function applyWorldCupDailyLanding(html) {
   nextHtml = replaceElementInnerHtml(
     nextHtml,
     "data-board-copy",
-    'Future squads stay hidden until you lock each pick. Compare completed teams on the <a href="/world-cup/leaderboard">World Cup leaderboard</a> or read the <a href="/how-to-play">full rules</a>.',
+    'Future squads stay hidden until you lock each pick. Compare completed teams on the <a href="/world-cup/leaderboard">World Cup community picks</a> or read the <a href="/how-to-play">full rules</a>.',
   );
   nextHtml = replaceElementInnerHtml(
     nextHtml,
@@ -331,7 +331,7 @@ function applyLeaderboardLanding(html) {
     competition: "ashes",
   });
 
-  nextHtml = replaceElementText(nextHtml, "data-leaderboard-title", "Community favourites from completed Ashes XIs.");
+  nextHtml = replaceElementText(nextHtml, "data-leaderboard-title", "Most-picked Ashes players");
   nextHtml = replaceElementText(
     nextHtml,
     "data-leaderboard-lede",
@@ -340,7 +340,7 @@ function applyLeaderboardLanding(html) {
   nextHtml = replaceElementText(
     nextHtml,
     "data-leaderboard-status",
-    "Selection counts reflect completed teams. They show community favourites, not an objective ranking of the best player.",
+    "Selection counts reflect completed teams. They show community picks, not an objective ranking of the best player.",
   );
 
   return nextHtml;
@@ -353,16 +353,16 @@ function applyWorldCupLeaderboardLanding(html) {
     competition: "worldcup",
   });
 
-  nextHtml = replaceElementText(nextHtml, "data-leaderboard-title", "Community favourites from completed World Cup XIs.");
+  nextHtml = replaceElementText(nextHtml, "data-leaderboard-title", "Most-picked World Cup players");
   nextHtml = replaceElementText(
     nextHtml,
     "data-leaderboard-lede",
-    "See which World Cup ODI players are selected most often across completed XIs, daily challenges, and community drafts.",
+    "Who makes the most World Cup XIs?",
   );
   nextHtml = replaceElementText(
     nextHtml,
     "data-leaderboard-status",
-    "Selection counts reflect completed teams. They show community favourites, not an objective ranking of the best player.",
+    "Selection counts reflect completed teams. They show community picks, not an objective ranking of the best player.",
   );
 
   return nextHtml;
@@ -389,27 +389,27 @@ function applyHowToPlayLanding(html) {
     rulesHtml: copyGrid([
       {
         title: "Classic Draft",
-        body: "Build a full Ashes XI from historic squads. Player ratings stay visible while you draft.",
+        body: "Pick an Ashes XI with ratings shown.",
       },
       {
         title: "Memory Draft",
-        body: "Build the same kind of XI, but with ratings hidden while you draft. You need to rely on your own cricket knowledge.",
+        body: "Pick an Ashes XI with ratings hidden.",
       },
       {
         title: "Daily Ashes Challenge",
-        body: "Everyone receives the same predetermined sequence for the day. Seven players are locked in, you complete the remaining four picks, and your first ranked attempt is the one that counts.",
+        body: "Seven players are picked. You choose the last four. Everyone gets the same squads; your first game counts.",
       },
       {
         title: "Challenge a Friend",
-        body: "After completing an Ashes XI, generate a private link and ask a friend to draft a side in the same mode before they simulate the five-Test series.",
+        body: "Pick an XI and send a friend the link. Their side faces yours over five Tests.",
       },
       {
         title: "World Cup mode",
-        body: "World Cup mode uses historic ODI squads and a tournament path: group stage, semi-final, and final.",
+        body: "Pick from past World Cup squads, then play the groups and knockouts.",
       },
       {
-        title: "Community favourites",
-        body: "Leaderboards show which players appear most often in completed teams. They reflect community selections, not a definitive player ranking.",
+        title: "Community picks",
+        body: "See the most-picked cricketers in completed XIs.",
       },
     ]),
   });
@@ -421,9 +421,9 @@ function applyAboutLanding(html) {
     title: "The historic cricket XI game",
     tagline: "Build a side from real squads and see how it performs.",
     lede:
-      "Ashes 5-0 is an independent cricket project built around historic squads, hidden future choices and simulation-led series outcomes.",
+      "A fan-made cricket game. Pick players from past Ashes and World Cup squads, then see how your XI fares.",
     panelKicker: "About",
-    panelTitle: "What the project is",
+    panelTitle: "The game",
     panelCopy:
       'Play the <a href="/ashes">Ashes draft</a>, try the <a href="/daily">Daily Challenge</a>, set up a private <a href="/challenge">friend challenge</a>, or read the <a href="/methodology">methodology</a>.',
     playButtonHidden: true,
@@ -436,15 +436,15 @@ function applyAboutLanding(html) {
     rulesHtml: copyGrid([
       {
         title: "What is Ashes 5-0?",
-        body: "A cricket version of 82-0. Draft a team from previous Ashes or World Cup squads and see how it performs in a simulated match, series, or tournament.",
+        body: "Inspired by 82-0. Pick a team from past Ashes or World Cup squads and play a match, series or tournament.",
       },
       {
         title: "Game Modes",
-        body: "Classic mode shows ratings while you draft and Memory hides them. Daily Challenge gives everyone the same four-player finish, Challenge a Friend lets you send a private Ashes XI, and World Cup mode switches to ODI tournament play.",
+        body: "Show ratings in Classic or hide them in Memory. Try the daily games, a full World Cup or a match against a friend.",
       },
       {
         title: "Simulations and Ratings",
-        body: "Player ratings are used in the match simulations. If you think a rating should be corrected, send it through the feedback form.",
+        body: "Ratings help decide match results. Disagree with one? Let me know through Feedback.",
       },
       {
         title: "Other Projects",
@@ -452,7 +452,7 @@ function applyAboutLanding(html) {
       },
       {
         title: "Feedback",
-        body: "If you have feedback on the site, spot a bug, or want to suggest a feature, use the feedback button at the bottom of the page.",
+        body: "Found a bug or have an idea? Use Feedback below.",
       },
     ]),
   });
@@ -462,13 +462,13 @@ function applyMethodologyLanding(html) {
   return applyHomeLanding(html, {
     eyebrow: "Methodology",
     title: "How the ratings and simulations work",
-    tagline: "A high-level guide to the model behind the game.",
+    tagline: "What goes into a result.",
     lede:
-      "Ashes 5-0 uses player ratings and role-based lineup rules to compare historic players, balance XIs, and simulate series or tournaments.",
+      "Ratings, player roles and a bit of chance decide how your XI performs.",
     panelKicker: "Methodology",
-    panelTitle: "What the game currently models",
+    panelTitle: "How it works",
     panelCopy:
-      'This page explains the current high-level approach from the codebase. Read the <a href="/about">About</a> page for project context or send <a href="/feedback">feedback</a> if you spot a data issue.',
+      'Read about the <a href="/about">game</a> or <a href="/feedback">report a mistake</a>.',
     playButtonHidden: true,
     controlsHidden: true,
     hideConfigGrid: true,
@@ -479,27 +479,27 @@ function applyMethodologyLanding(html) {
     rulesHtml: copyGrid([
       {
         title: "Player ratings",
-        body: "Each player record includes batting, bowling, fielding, and experience values. Draft-facing ratings are visible in Classic mode and hidden in Memory mode.",
+        body: "Players have batting, bowling, fielding and experience ratings. Classic shows them; Memory hides them.",
       },
       {
         title: "Role and position fit",
-        body: "Every XI slot has accepted cricket roles. Drafting logic checks whether a player can fill the required slot before they can be assigned.",
+        body: "Players can only fill positions that match their roles.",
       },
       {
         title: "Era comparison",
-        body: "Historic players are compared through the shared ratings model rather than through one single raw era statistic. The goal is to make mixed-era drafts playable without pretending the model is perfect.",
+        body: "Ratings let players from different eras share a pitch. They are estimates, not a definitive ranking.",
       },
       {
         title: "Team balance",
-        body: "The game derives team strength from the finished XI, with batting, bowling, fielding, and experience combined into an overall power score.",
+        body: "Your XI’s ratings combine into batting, bowling, fielding and overall scores.",
       },
       {
         title: "Simulation model",
-        body: "Match outcomes use team strength, slot fit, and weighted random variation. Stronger teams have the edge, but the result is not completely deterministic.",
+        body: "Team strength and player roles affect the result, with some chance. Stronger sides can still lose.",
       },
       {
         title: "Corrections",
-        body: "If you spot a data issue, a role mismatch, or a rating that looks off, use the feedback form so it can be reviewed and corrected.",
+        body: "Wrong role or rating? Report it through Feedback.",
       },
     ]),
   });
@@ -551,7 +551,7 @@ function applyWorldCupLanding(html) {
     panelKicker: "How it works",
     panelTitle: "World Cup mode",
     panelCopy:
-      'Try the <a href="/world-cup/daily">World Cup Daily Challenge</a>, compare completed XIs on the <a href="/world-cup/leaderboard">World Cup leaderboard</a>, or return to <a href="/ashes">Ashes mode</a>.',
+      'Try the <a href="/world-cup/daily">World Cup Daily Challenge</a>, compare completed XIs on the <a href="/world-cup/leaderboard">World Cup community picks</a>, or return to <a href="/ashes">Ashes mode</a>.',
     playLabel: "Start World Cup",
     homeChallengeHidden: true,
     previewCard: {
@@ -596,7 +596,7 @@ function applyWorldCupLanding(html) {
     "data-home-daily",
     '<span class="feature-action-label">World Cup daily</span><span class="feature-badge" aria-hidden="true">NEW</span>',
   );
-  nextHtml = replaceElementText(nextHtml, "data-home-leaderboard", "World Cup leaderboard");
+  nextHtml = replaceElementText(nextHtml, "data-home-leaderboard", "World Cup community picks");
   return nextHtml;
 }
 
@@ -668,26 +668,26 @@ function applyChallengeLanding(html) {
   nextHtml = replaceElementText(nextHtml, "data-lineup-status", "Awaiting first pick");
   nextHtml = replaceElementText(nextHtml, "data-roster-kicker", "How it works");
   nextHtml = replaceElementText(nextHtml, "data-roster-title", "How Challenge a Friend works");
-  nextHtml = replaceElementText(nextHtml, "data-roster-summary", "Build a team, share a private link, and compare the result when your friend is done.");
+  nextHtml = replaceElementText(nextHtml, "data-roster-summary", "Pick your XI, send the link and see who wins.");
   nextHtml = replaceElementInnerHtml(
     nextHtml,
     "data-roster-grid",
     copyGrid([
       {
         title: "1. Build your XI",
-        body: "Draft a full historic Ashes XI in Classic or Memory mode and lock the side you want to send.",
+        body: "Pick your Ashes XI in Classic or Memory mode.",
       },
       {
-        title: "2. Generate and share a private link",
-        body: "Create a short URL that saves the team privately and keeps generated challenge pages excluded from indexing.",
+        title: "2. Send the link",
+        body: "Send your friend the invite link.",
       },
       {
         title: "3. Your friend drafts and plays",
-        body: "They open the link, draft their own XI in the same mode, and then play a five-Test series against your saved team.",
+        body: "Your friend picks an XI to face yours over five Tests.",
       },
       {
-        title: "4. Compare or challenge them back",
-        body: "Review the final result, send it back, and set up a rematch if you both want another go.",
+        title: "4. See who wins",
+        body: "Share the score. Fancy a rematch?",
       },
     ]),
   );

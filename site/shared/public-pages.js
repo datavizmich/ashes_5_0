@@ -34,7 +34,7 @@ export const PUBLIC_PAGE_DEFS = {
   leaderboard: {
     key: "leaderboard",
     path: "/leaderboard",
-    title: "Community Favourites | Ashes 5-0",
+    title: "Community Picks | Ashes 5-0",
     description:
       "See which Ashes players are selected most often in completed teams, daily challenges, and community drafts.",
   },
@@ -48,7 +48,7 @@ export const PUBLIC_PAGE_DEFS = {
   worldCupLeaderboard: {
     key: "worldCupLeaderboard",
     path: "/world-cup/leaderboard",
-    title: "World Cup Community Favourites | Ashes 5-0",
+    title: "World Cup Community Picks | Ashes 5-0",
     description:
       "See which World Cup ODI players are selected most often in completed XIs, daily challenges, and community drafts.",
   },
@@ -64,14 +64,14 @@ export const PUBLIC_PAGE_DEFS = {
     path: "/about",
     title: "About | Ashes 5-0",
     description:
-      "Learn about Ashes 5-0, the independent cricket project inspired by historic squads, difficult selection calls, and simulation-led results.",
+      "About Ashes 5-0, a fan-made cricket game using past Ashes and World Cup squads.",
   },
   methodology: {
     key: "methodology",
     path: "/methodology",
     title: "Methodology | Ashes 5-0",
     description:
-      "Read a high-level explanation of Ashes 5-0 ratings, era comparisons, team balance, and how the cricket simulations use team strength.",
+      "How player ratings, roles and chance shape match results in Ashes 5-0.",
   },
   feedback: {
     key: "feedback",

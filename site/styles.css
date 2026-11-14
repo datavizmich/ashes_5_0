@@ -2486,3 +2486,33 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   html { scroll-behavior: auto; }
   .daily-card, .mode-card { transition: none; }
 }
+
+.daily-progress-card { min-width: 0; border-radius: 1rem; padding: 1.2rem; background: #f5edd7; color: #17251d; }
+.daily-progress-card h2 { font-size: 1.2rem; margin: 0 0 .8rem; }
+.daily-progress-card p { line-height: 1.5; }
+.daily-progress-card ol { padding-left: 1.5rem; }
+.daily-progress-card li { padding: .5rem 0; overflow-wrap: anywhere; }
+.daily-record-note { font-size: .85rem; }
+.daily-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: .25rem; }
+.daily-week span { text-align: center; padding: .6rem .1rem; background: #e2e2d7; border-radius: .4rem; font-size: .8rem; }
+.daily-week [data-completed="true"] { background: #184b34; color: white; font-weight: 700; }
+.daily-needed, .daily-lock-panel { grid-column: 1 / -1; }
+.daily-needed { padding: .8rem; border: 1px solid currentColor; border-radius: .5rem; line-height: 1.6; }
+.daily-lock-panel { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: 1rem; padding: 1rem; border: 2px solid #e6bd45; border-radius: .75rem; }
+.daily-lock-panel small { min-width: 0; overflow-wrap: anywhere; }
+.daily-lock-panel select, .daily-lock-panel button { min-height: 48px; }
+.daily-podium { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .7rem; margin: 1rem 0; }
+.daily-podium article { display: flex; flex-direction: column; gap: .5rem; }
+.daily-your-result { outline: 2px solid #c69c2c; outline-offset: -2px; font-weight: 700; }
+.daily-full-results summary { cursor: pointer; padding: 1rem 0; font-weight: 700; }
+.daily-results-scroll { overflow: auto; max-height: 32rem; }
+.daily-comparison { padding: 1rem; border: 2px solid #c69c2c; border-radius: .75rem; margin-bottom: 1rem; }
+@media (max-width: 760px) {
+  .daily-lock-panel { align-items: stretch; flex-direction: column; }
+  .daily-lock-panel label, .daily-lock-panel select, .daily-lock-panel button { width: 100%; }
+}
+.share-options { align-self: start; }
+.share-options summary, .ranking-help summary { cursor: pointer; padding: .8rem; font-weight: 700; }
+.share-options[open] { flex-basis: 100%; }
+.share-options .controls { padding: .5rem 0; }
+.daily-lock-panel p { margin: 0; }

@@ -1,14 +1,14 @@
 // Shared by the server renderer and browser. Only trusted, static copy belongs here.
 export const HOME_COPY = Object.freeze({
-  title: "Your cricket judgement. Two daily challenges.",
-  tagline: "Seven players picked. Four choices left. Can your XI win?",
-  lede: "Play one Test in Ashes Daily or one ODI in World Cup Daily. Everyone gets the same four squad rolls within each format. Free to play, with no account required.",
-  panelTitle: "Build a full XI or challenge a friend",
+  title: "Daily cricket challenges",
+  tagline: "Four picks. One match.",
+  lede: "Pick four players, then play a Test or ODI. Same squads for everyone. Free, with no sign-up.",
+  panelTitle: "More ways to play",
 });
 
 export const DAILY_GAMES = Object.freeze([
-  Object.freeze({ key: "ashes", name: "Ashes Daily", path: "/daily", api: "/api/daily/current", mode: "daily", format: "One Test", description: "Complete your England and Australia XI.", hook: "data-home-primary-cta" }),
-  Object.freeze({ key: "worldcup", name: "World Cup Daily", path: "/world-cup/daily", api: "/api/world-cup/daily/current", mode: "worldcup_daily", format: "One ODI", description: "Complete your XI from historic World Cup squads.", hook: "data-home-secondary-cta" }),
+  Object.freeze({ key: "ashes", name: "Ashes Daily", path: "/daily", api: "/api/daily/current", mode: "daily", format: "One Test", description: "England and Australia.", hook: "data-home-primary-cta" }),
+  Object.freeze({ key: "worldcup", name: "World Cup Daily", path: "/world-cup/daily", api: "/api/world-cup/daily/current", mode: "worldcup_daily", format: "One ODI", description: "Past World Cup squads.", hook: "data-home-secondary-cta" }),
 ]);
 
 export function renderDailyCards() {
@@ -20,16 +20,28 @@ export function renderDailyCards() {
       <span class="daily-card-status" data-daily-card-status>New challenge every day</span>
       <span class="daily-card-action" data-daily-card-action>Play ${game.name} →</span>
     </a>`).join("") + `
-    <p class="daily-hub-status" data-daily-hub-status role="status">Two formats. A fresh challenge in each, every day.</p>
-    <p class="daily-hub-reset">New challenges at 00:00 UTC. Progress is remembered in this browser.</p>`;
+    <p class="daily-hub-status" data-daily-hub-status role="status">Two new games each day.</p>
+    <p class="daily-hub-reset">Resets at 00:00 UTC. Progress saved in this browser.</p>
+    <section class="daily-progress-card" aria-labelledby="daily-record-title">
+      <h2 id="daily-record-title">Your record</h2>
+      <p data-personal-record>Loading your record…</p>
+      <div class="daily-week" data-daily-week aria-label="Your last seven days"></div>
+      <p class="daily-record-note">Finish either daily to keep your streak. Any result counts.</p>
+      <p data-reset-countdown>New challenges at 00:00 UTC</p>
+    </section>
+    <section class="daily-progress-card" aria-labelledby="daily-streak-title">
+      <h2 id="daily-streak-title">Longest streaks · Top 3</h2>
+      <ol data-top-streaks><li>Loading streaks…</li></ol>
+      <p class="daily-record-note">Longest runs of daily play. Either format counts, once per UTC day. No practice or late replays.</p>
+    </section>`;
 }
 
 export function renderDraftCards() {
   return `
-    <a class="mode-card" href="/ashes?mode=classic" data-home-card="classic"><strong>Ashes Classic Draft</strong><p>Build all 11 places with ratings visible, then play a five-Test series.</p></a>
-    <a class="mode-card" href="/ashes?mode=memory" data-home-card="memory"><strong>Ashes Memory Draft</strong><p>Build all 11 places with ratings hidden. Trust your cricket knowledge.</p></a>
-    <a class="mode-card mode-card-worldcup" href="/world-cup" data-home-card="worldCup"><strong>World Cup Full Draft</strong><p>Build all 11 places, then play the group stage and knockouts.</p></a>
-    <a class="mode-card" href="/challenge" data-home-card="challenge"><strong>Challenge a Friend</strong><p>Draft an Ashes XI and send a private link for a friend to take you on.</p></a>`;
+    <a class="mode-card" href="/ashes?mode=classic" data-home-card="classic"><strong>Ashes Classic Draft</strong><p>Pick your XI with ratings shown. Play five Tests.</p></a>
+    <a class="mode-card" href="/ashes?mode=memory" data-home-card="memory"><strong>Ashes Memory Draft</strong><p>Pick your XI with ratings hidden.</p></a>
+    <a class="mode-card mode-card-worldcup" href="/world-cup" data-home-card="worldCup"><strong>World Cup Full Draft</strong><p>Pick your XI. Play the groups and knockouts.</p></a>
+    <a class="mode-card" href="/challenge" data-home-card="challenge"><strong>Challenge a Friend</strong><p>Pick an Ashes XI and take on a friend.</p></a>`;
 }
 
 export function dailyCardState(game, summary) {

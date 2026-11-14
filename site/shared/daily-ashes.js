@@ -133,6 +133,8 @@ const dailyAshes = createDailyChallengeModule({
   challengeIdPrefix: "daily-ashes",
   challengeLabelPrefix: "Daily Ashes Challenge",
   generatedOppositionLabel: "Historic Ashes challengers",
+  // Calibrated across varied daily drafts to aim for roughly 70% wins.
+  oppositionCandidateOffset: 12,
   conditions: DAILY_CONDITIONS,
   scheduledChallenges: DAILY_CHALLENGE_SCHEDULE,
 });
