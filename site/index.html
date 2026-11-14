@@ -77,26 +77,26 @@
         <header class="hero">
           <div>
             <p class="eyebrow" data-home-eyebrow hidden>Ashes 5-0</p>
-            <h2 class="hero-title" data-home-title>Your cricket judgement. Two daily challenges.</h2>
-            <p class="hero-tagline" data-home-tagline>Seven players picked. Four choices left. Can your XI win?</p>
-            <p class="lede" data-home-lede>Play one Test in Ashes Daily or one ODI in World Cup Daily. Everyone gets the same four squad rolls within each format. Free to play, with no account required.</p>
+            <h2 class="hero-title" data-home-title>Daily cricket challenges</h2>
+            <p class="hero-tagline" data-home-tagline>Four picks. One match.</p>
+            <p class="lede" data-home-lede>Pick four players, then play a Test or ODI. Same squads for everyone. Free, with no sign-up.</p>
             <div class="hero-actions" data-home-hero-actions>
     <a class="daily-card daily-card-ashes" href="/daily" data-home-primary-cta data-daily-card="ashes">
       <span class="daily-card-format">One Test · Four picks</span>
       <strong>Ashes Daily</strong>
-      <span class="daily-card-description">Complete your England and Australia XI.</span>
+      <span class="daily-card-description">England and Australia.</span>
       <span class="daily-card-status" data-daily-card-status>New challenge every day</span>
       <span class="daily-card-action" data-daily-card-action>Play Ashes Daily →</span>
     </a>
     <a class="daily-card daily-card-worldcup" href="/world-cup/daily" data-home-secondary-cta data-daily-card="worldcup">
       <span class="daily-card-format">One ODI · Four picks</span>
       <strong>World Cup Daily</strong>
-      <span class="daily-card-description">Complete your XI from historic World Cup squads.</span>
+      <span class="daily-card-description">Past World Cup squads.</span>
       <span class="daily-card-status" data-daily-card-status>New challenge every day</span>
       <span class="daily-card-action" data-daily-card-action>Play World Cup Daily →</span>
     </a>
-    <p class="daily-hub-status" data-daily-hub-status role="status">Two formats. A fresh challenge in each, every day.</p>
-    <p class="daily-hub-reset">New challenges at 00:00 UTC. Progress is remembered in this browser.</p></div>
+    <p class="daily-hub-status" data-daily-hub-status role="status">Two new games each day.</p>
+    <p class="daily-hub-reset">Resets at 00:00 UTC. Progress saved in this browser.</p></div>
             <ul class="hero-trust" data-home-trust>
               <li>Free to play</li>
               <li>No account required</li>
@@ -141,7 +141,7 @@
           <div class="panel-header">
             <div>
               <p class="panel-kicker" data-home-panel-kicker>Choose a mode</p>
-              <h2 data-home-panel-title>Build a full XI or challenge a friend</h2>
+              <h2 data-home-panel-title>More ways to play</h2>
             </div>
             <p class="panel-subtitle" data-home-panel-copy hidden></p>
           </div>
@@ -169,10 +169,10 @@
           </div>
 
           <div class="rules-grid" data-home-rules-grid>
-    <a class="mode-card" href="/ashes?mode=classic" data-home-card="classic"><strong>Ashes Classic Draft</strong><p>Build all 11 places with ratings visible, then play a five-Test series.</p></a>
-    <a class="mode-card" href="/ashes?mode=memory" data-home-card="memory"><strong>Ashes Memory Draft</strong><p>Build all 11 places with ratings hidden. Trust your cricket knowledge.</p></a>
-    <a class="mode-card mode-card-worldcup" href="/world-cup" data-home-card="worldCup"><strong>World Cup Full Draft</strong><p>Build all 11 places, then play the group stage and knockouts.</p></a>
-    <a class="mode-card" href="/challenge" data-home-card="challenge"><strong>Challenge a Friend</strong><p>Draft an Ashes XI and send a private link for a friend to take you on.</p></a></div>
+    <a class="mode-card" href="/ashes?mode=classic" data-home-card="classic"><strong>Ashes Classic Draft</strong><p>Pick your XI with ratings shown. Play five Tests.</p></a>
+    <a class="mode-card" href="/ashes?mode=memory" data-home-card="memory"><strong>Ashes Memory Draft</strong><p>Pick your XI with ratings hidden.</p></a>
+    <a class="mode-card mode-card-worldcup" href="/world-cup" data-home-card="worldCup"><strong>World Cup Full Draft</strong><p>Pick your XI. Play the groups and knockouts.</p></a>
+    <a class="mode-card" href="/challenge" data-home-card="challenge"><strong>Challenge a Friend</strong><p>Pick an Ashes XI and take on a friend.</p></a></div>
 
           <div class="controls home-controls" data-home-controls>
             <button class="primary play-button" data-play-game type="button">Start a solo game</button>
@@ -194,7 +194,7 @@
               <span class="feature-action-label">Daily challenge</span>
               <span class="feature-badge" aria-hidden="true">NEW</span>
             </button>
-            <button class="secondary" data-home-leaderboard type="button">Player leaderboard</button>
+            <button class="secondary" data-home-leaderboard type="button">Community picks</button>
             <button class="secondary feature-action-badge-only" data-home-competition type="button">
               World Cup mode
               <span class="feature-badge" aria-hidden="true">NEW</span>
@@ -210,7 +210,7 @@
 
         <header class="hero">
           <div>
-            <p class="eyebrow">Player leaderboard</p>
+            <p class="eyebrow">Community picks</p>
             <h2 class="hero-title" data-leaderboard-title>See which Ashes players appear most often in completed XIs.</h2>
             <p class="lede" data-leaderboard-lede>
               See which players are chosen most often across completed solo XIs, Daily Challenges, challenge teams and community drafts.
@@ -268,7 +268,7 @@
           </div>
 
           <div class="table-wrap leaderboard-table-wrap" data-leaderboard-table>
-            <div class="placeholder">Loading community statistics.</div>
+            <div class="placeholder">Loading picks…</div>
           </div>
         </section>
       </section>
@@ -359,6 +359,7 @@
         <div class="daily-load-error" data-daily-load-error hidden role="status">
           <p data-daily-load-error-text></p>
           <button class="secondary" type="button" data-daily-retry>Try again</button>
+          <a class="secondary button-link" data-daily-error-today href="/daily">Play today’s challenge</a>
         </div>
 
         <section class="content">
@@ -516,11 +517,13 @@
             </a>
             <button class="primary" data-send-result-back type="button" hidden>Send result back</button>
             <button class="secondary" data-challenge-back type="button" hidden>Challenge them back</button>
-            <button class="secondary" data-series-leaderboard type="button">Player leaderboard</button>
+            <button class="secondary" data-series-leaderboard type="button">Community picks</button>
             <button class="secondary" data-share-result type="button">Share</button>
+            <details class="share-options"><summary>More sharing options</summary><div class="controls">
             <button class="secondary" data-whatsapp-share type="button">Share on WhatsApp</button>
             <button class="secondary" data-copy-link type="button">Copy link</button>
             <button class="secondary" data-download-share type="button">Download image</button>
+            </div></details>
             <button class="secondary" data-reset-builder type="button">Reset builder</button>
           </div>
           <p class="share-status" data-share-status aria-live="polite"></p>

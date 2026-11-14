@@ -1,3 +1,4 @@
+import { recentDailyDays, nextDailyResetText } from "../shared/daily-progress.js";
 import { DAILY_GAMES, dailyCardState } from "../shared/homepage.js";
 import { readDailyHistory, recordDailyCompletion, dailyHistoryStats } from "../shared/daily-history.js";
 
@@ -28,6 +29,56 @@ export function initDailyHub({ root, participantId, track = () => {} }) {
   const utcDate = () => new Date().toISOString().slice(0, 10);
   const status = root.querySelector("[data-daily-hub-status]");
 
+  function renderRecord(personal, message = "") {
+    const history = personal?.history ?? readDailyHistory();
+    const stats = personal ?? dailyHistoryStats(history, utcDate());
+    const record = root.querySelector("[data-personal-record]");
+    if (record) record.textContent = message || `${stats.current} day streak · Best: ${stats.best} ${stats.best === 1 ? "day" : "days"} · ${stats.gamesPlayed ?? stats.daysPlayed} ${personal ? (stats.gamesPlayed === 1 ? "game" : "games") : (stats.daysPlayed === 1 ? "day" : "days")} played`;
+    const week = root.querySelector("[data-daily-week]");
+    if (week) {
+      week.replaceChildren(...recentDailyDays(history, utcDate()).map(day => {
+        const cell = document.createElement("span");
+        cell.textContent = `${day.label} ${day.completed ? "✓" : "–"}`;
+        cell.dataset.completed = String(day.completed);
+        cell.setAttribute("aria-label", `${day.date}: ${day.completed ? "completed" : "not completed"}`);
+        return cell;
+      }));
+    }
+  }
+
+  async function refreshProgress() {
+    const list = root.querySelector("[data-top-streaks]");
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+      let payload;
+      try {
+        const response = await fetch(`/api/daily/progress?participantId=${encodeURIComponent(participantId)}`, {signal: controller.signal, cache: "no-store"});
+        payload = await response.json();
+        if (!response.ok || !payload.ok) throw new Error("Unavailable");
+      } finally { clearTimeout(timeout); }
+      renderRecord(payload.personal);
+      if (list) {
+        list.replaceChildren();
+        for (const entry of payload.topStreaks) {
+          const item = document.createElement("li");
+          item.textContent = `${entry.displayName} — ${entry.days} ${entry.days === 1 ? "day" : "days"}`;
+          list.append(item);
+        }
+        if (!payload.topStreaks.length) list.textContent = "No streaks yet. Play a daily to start one.";
+      }
+    } catch {
+      renderRecord(null, "Can’t load your record. Saved days shown below.");
+      if (list) list.textContent = "Can’t load streaks right now.";
+    }
+  }
+
+  function updateCountdown() {
+    const node = root.querySelector("[data-reset-countdown]");
+    if (node) node.textContent = nextDailyResetText();
+  }
+  updateCountdown();
+
   async function refresh({ force = false } = {}) {
     if (pending) return pending;
     if (!force && lastDate === utcDate() && Date.now() - lastLoaded < 60_000) return;
@@ -51,14 +102,13 @@ export function initDailyHub({ root, participantId, track = () => {} }) {
             simulationComplete: summary.rankedAttempt?.simulationComplete});
         }
         card.querySelector("[data-daily-card-action]").textContent = view.action;
-        card.querySelector("[data-daily-card-status]").textContent = current ? view.status : "Open the game to check your progress";
+        card.querySelector("[data-daily-card-status]").textContent = current ? view.status : "Open to check progress";
         card.dataset.completed = String(current && view.completed);
       });
-      const stats = dailyHistoryStats(readDailyHistory(), utcDate());
-      const streak = stats.current ? ` ${stats.current} ${stats.current === 1 ? "day" : "days"} played in a row.` : "";
       if (status) status.textContent = known === DAILY_GAMES.length
-        ? `${completed} of 2 daily challenges completed today.${streak}`
-        : "Progress could not be checked for every game. Both challenges can still be opened.";
+        ? `${completed} of 2 completed today.`
+        : "Can’t check progress. Both games are still available.";
+      await refreshProgress();
       lastDate = utcDate();
       lastLoaded = Date.now();
     })().finally(() => { pending = null; });
@@ -79,6 +129,7 @@ export function initDailyHub({ root, participantId, track = () => {} }) {
   });
   // Date rollover without an endlessly polling network request.
   setInterval(() => {
+    updateCountdown();
     if (document.visibilityState === "visible" && lastDate !== utcDate()) void refresh();
   }, 60_000);
   void refresh();

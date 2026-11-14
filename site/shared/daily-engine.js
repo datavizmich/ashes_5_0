@@ -25,6 +25,7 @@ export function createDailyChallengeModule({
   challengeIdPrefix,
   challengeLabelPrefix,
   generatedOppositionLabel,
+  oppositionCandidateOffset = 3,
   conditions,
   scheduledChallenges,
 }) {
@@ -37,6 +38,21 @@ export function createDailyChallengeModule({
     [0, 1, 2, 5, 7, 8, 9],
     [0, 1, 4, 5, 7, 8, 9],
     [0, 1, 2, 5, 7, 8, 10],
+  ];
+  // Keep existing challenge IDs reproducible so saved attempts still resume.
+  // New layouts begin with the next daily reset after this change.
+  const variedSlotsStartDate = "2026-11-15";
+  const variedTemplateSlotSets = [
+    ...dailyGeneratedTemplateSlotSets,
+    ...[
+      [0, 3, 6, 9], // Opener, batter, all-rounder, pace.
+      [1, 4, 7, 10], // Opener, batter, spinner, pace.
+      [0, 2, 7, 8], // Opener, number three, spinner, pace.
+      [1, 3, 5, 9], // Opener, batter, keeper, pace.
+      [2, 5, 6, 10], // Number three, keeper, all-rounder, pace.
+      [0, 4, 6, 7], // Opener, batter, all-rounder, spinner.
+      [1, 2, 8, 10], // Opener, number three, two pace bowlers.
+    ].map((openSlots) => XI_SLOTS.map((_, index) => index).filter((index) => !openSlots.includes(index))),
   ];
 
   function isoDate(value) {
@@ -211,17 +227,20 @@ export function createDailyChallengeModule({
     return null;
   }
 
-  function pickOppositionStableIds(excludedStableIds, seedText) {
+  function pickOppositionStableIds(excludedStableIds, seedText, gentlerOpposition = false) {
     const rng = createSeededRandom(seedText);
     const lineup = [];
     const usedStableIds = new Set(excludedStableIds);
 
     for (let slotIndex = 0; slotIndex < XI_SLOTS.length; slotIndex += 1) {
       const slot = XI_SLOTS[slotIndex];
-      const candidates = bestPlayers
+      const rankedCandidates = bestPlayers
         .filter((player) => !usedStableIds.has(player.stableId) && slotAcceptsPlayer(slot, player))
-        .sort((left, right) => playerSlotScore(right, slot) - playerSlotScore(left, slot) || playerOverall(right) - playerOverall(left))
-        .slice(0, 18);
+        .sort((left, right) => playerSlotScore(right, slot) - playerSlotScore(left, slot) || playerOverall(right) - playerOverall(left));
+      // Ease future dailies slightly while retaining strong, role-correct teams.
+      // Keep at least one candidate when a specialist role has a small pool.
+      const firstCandidate = gentlerOpposition ? Math.min(oppositionCandidateOffset, Math.max(0, rankedCandidates.length - 1)) : 0;
+      const candidates = rankedCandidates.slice(firstCandidate, firstCandidate + 18);
 
       const chosen = weightedPick(
         candidates,
@@ -372,10 +391,13 @@ export function createDailyChallengeModule({
     if (!dateText) return null;
     const cached = dailyChallengeCache.get(dateText);
     if (cached) return cached;
+    const templateSlotSets = dateText >= variedSlotsStartDate
+      ? variedTemplateSlotSets
+      : dailyGeneratedTemplateSlotSets;
 
     for (let variant = 0; variant < 48; variant += 1) {
       const templateRng = createSeededRandom(`${dateText}|template|${variant}`);
-      const slotIndexes = shuffle(dailyGeneratedTemplateSlotSets, templateRng)[0] ?? dailyGeneratedTemplateSlotSets[0];
+      const slotIndexes = shuffle(templateSlotSets, templateRng)[0] ?? templateSlotSets[0];
       const fixedAssignments = pickFixedAssignments(slotIndexes, `${dateText}|fixed|${variant}`);
       if (!fixedAssignments) continue;
 
@@ -385,7 +407,11 @@ export function createDailyChallengeModule({
       const excludedStableIds = new Set(fixedAssignments.map((assignment) => assignment.stableId));
       rolls.forEach((roll) => roll.eligibleStableIds.forEach((stableId) => excludedStableIds.add(stableId)));
 
-      const oppositionStableIds = pickOppositionStableIds(excludedStableIds, `${dateText}|opposition|${variant}`);
+      const oppositionStableIds = pickOppositionStableIds(
+        excludedStableIds,
+        `${dateText}|opposition|${variant}`,
+        dateText >= variedSlotsStartDate,
+      );
       if (!oppositionStableIds) continue;
 
       const definition = buildChallengeDefinition(dateText, {
@@ -716,39 +742,39 @@ export function createDailyChallengeModule({
     const attempts = Array.isArray(completedRankedAttempts)
       ? completedRankedAttempts
       : [];
-    const totalCompletedPlayers = attempts.filter((attempt) => {
-      if (!attempt) return false;
-      if (attempt.simulationComplete) return true;
-      return Boolean(attempt.result?.matches?.length);
-    }).length;
-    const winners = attempts
-      .map((attempt) => {
-        const match = attempt.result?.matches?.[0] ?? null;
-        const margin = parseWinMargin(match?.summary);
-        if (!margin) return null;
+    const entries = attempts
+      .filter(attempt => attempt && attempt.attemptMode !== "practice" && !attempt.hiddenFromPublic)
+      .map(attempt => {
+        const match = attempt.result?.matches?.[0];
+        if (!match || attempt.simulationComplete === false) return null;
+        const win = parseWinMargin(match.summary);
+        const loss = parseWinMargin(String(match.summary ?? "").replace(/^Lost /i, "Won "));
+        const outcome = win ? "win" : match.result === "loss" || loss ? "loss" : "draw";
         return {
           attemptId: attempt.id,
           displayName: normalizeLeaderboardName(attempt.displayName),
-          margin: margin.label,
-          marginKind: margin.kind,
-          marginAmount: margin.amount,
+          margin: sanitizePlainText(match.summary, 120) || (outcome === "draw" ? "Match drawn" : "Completed"),
+          marginKind: win?.kind ?? loss?.kind ?? "draw",
+          marginAmount: win?.amount ?? loss?.amount ?? 0,
+          outcome,
           isCurrentUser: attempt.id === currentAttemptId,
-          sortRank: margin.sortRank,
+          sortRank: outcome === "win" ? 10 + win.sortRank : outcome === "draw" ? 5 : -(loss?.sortRank ?? 0),
           completedAt: attempt.completedAt ?? attempt.updatedAt ?? attempt.createdAt ?? "",
         };
       })
       .filter(Boolean)
       .sort((left, right) =>
         right.sortRank - left.sortRank
-        || right.marginAmount - left.marginAmount
+        || (left.outcome === "loss" ? left.marginAmount - right.marginAmount : right.marginAmount - left.marginAmount)
         || left.completedAt.localeCompare(right.completedAt)
-        || left.displayName.localeCompare(right.displayName),
-      );
+        || left.attemptId.localeCompare(right.attemptId),
+      )
+      .map((entry, index) => ({ ...entry, rank: index + 1 }));
 
     return {
-      totalCompletedPlayers,
-      totalWinners: winners.length,
-      entries: winners.slice(0, 5),
+      totalCompletedPlayers: entries.length,
+      totalWinners: entries.filter(entry => entry.outcome === "win").length,
+      entries,
     };
   }
 

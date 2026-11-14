@@ -3,7 +3,7 @@ export function formatDailyShare({ competition, date, outcome, url, practice = f
   return [
     `Ashes 5-0 · ${name} · ${date}${practice ? " · Practice" : ""}`,
     outcome,
-    "7 players picked. 4 choices. How would your XI do?",
+    practice ? "7 players picked. 4 choices. How would your XI do?" : "Can you beat my result? Play the same four picks and compare results.",
     url,
   ].filter(Boolean).join("\n");
 }
